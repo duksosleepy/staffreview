@@ -1,0 +1,6 @@
+[tools]
+node = "latest"
+pnpm = "latest"
+
+[env]
+MISE_NPM_PACKAGE_MANAGER = "pnpm"

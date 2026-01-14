@@ -1,13 +1,13 @@
-@import 'tailwindcss';
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap");
 
 :root {
   /* Office Design System Colors */
-  --color-bg-primary: #26232B;
+  --color-bg-primary: #26232b;
   --color-bg-secondary: #292630;
   --color-bg-tertiary: #2e2b35;
-  --color-accent-primary: #FF0000;
-  --color-accent-secondary: #DD2832;
+  --color-accent-primary: #ff0000;
+  --color-accent-secondary: #dd2832;
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-border: #3d3a45;
@@ -18,8 +18,8 @@
   --color-text-dark: #6b7280;
 
   /* Typography */
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-body: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: "Roboto", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 * {
@@ -39,7 +39,8 @@ body {
 
 /* Professional Animations */
 @keyframes pulse-subtle {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -68,9 +69,16 @@ body {
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-4px); }
-  75% { transform: translateX(4px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
 }
 
 /* Utility Animation Classes */

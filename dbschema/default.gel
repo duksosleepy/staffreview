@@ -1,0 +1,174 @@
+module default {
+    type Employee {
+        required employee_id: str {
+            constraint exclusive;
+        }
+        required email: str;
+    }
+
+    # ===================================================
+    # Sheet: Container for multiple checklist records
+    # ===================================================
+    type Sheet {
+        # Sheet belongs to an employee
+        required employee: Employee {
+            on target delete delete source;
+        }
+
+        # Sheet name/title
+        name: str;
+
+        # Computed backlink to checklist records
+        multi records := .<sheet[is ChecklistRecord];
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # Indexes
+        index on (.employee);
+    }
+
+    type ChecklistItem {
+        # Tên task/category
+        required name: str;
+        standard_score: int32 {
+            constraint min_value(0);
+            constraint max_value(100);
+        }
+        # Self-referencing link cho cấu trúc phân cấp
+        parent: ChecklistItem {
+            on target delete allow;
+        }
+
+        # Computed backlink đến children
+        multi children := .<parent[is ChecklistItem];
+
+        # Thứ tự trong cùng parent level
+        order: int32 {
+            default := 0;
+            constraint min_value(0);
+        }
+
+        # Flag: parent category hay child task
+        is_category: bool {
+            default := false;
+        }
+
+        # Computed backlink đến records
+        multi records := .<checklist_item[is ChecklistRecord];
+
+        # Soft delete
+        deleted_at: datetime;
+        is_deleted: bool {
+            default := false;
+        }
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # Constraints
+        constraint exclusive on ((.name, .parent));
+
+        # Indexes
+        index on (.parent);
+        index on (.order);
+        index on (.is_category);
+        index on (.is_deleted);
+    }
+    type ChecklistRecord {
+        # Link to the sheet this record belongs to
+        required sheet: Sheet {
+            on target delete delete source;
+        }
+
+        # Link đến checklist item (task) đang được đánh giá
+        required checklist_item: ChecklistItem {
+            on target delete delete source;
+        }
+
+        # Link to employee performing the assessment
+        required employee: Employee {
+            on target delete delete source;
+        }
+
+        # Ngày đánh giá
+        required assessment_date: cal::local_date;
+
+        # Checkbox fields - Approval workflow
+        # X = checked/approved, None = not checked
+        employee_checked: bool {
+            default := false;
+        }
+
+        cht_checked: bool {
+            default := false;
+        }
+
+        asm_checked: bool {
+            default := false;
+        }
+
+        # Achievement percentage (TL (%) ĐẠT)
+        achievement_percentage: float32 {
+            default := 0.0;
+            constraint min_value(0);
+            constraint max_value(100);
+        }
+
+        # Number of successful completions
+        successful_completions: int32 {
+            default := 0;
+            constraint min_value(0);
+        }
+
+        # Implementation issues (text field)
+        implementation_issues: str;
+
+        # Score achieved (Số điểm Đạt được)
+        score_achieved: float32 {
+            default := 0.0;
+            constraint min_value(0);
+        }
+
+        # ✅ CẢI THIỆN: Final classification (Xếp loại)
+        # This is the RESULT of this specific assessment
+        final_classification: str {
+            constraint one_of('A', 'B', 'C', 'D', 'X');
+        }
+
+        # Soft delete
+        deleted_at: datetime;
+        is_deleted: bool {
+            default := false;
+        }
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+
+        constraint exclusive on ((.checklist_item, .employee, .assessment_date));
+
+        # Indexes
+        index on (.sheet);
+        index on (.checklist_item);
+        index on (.employee);
+        index on (.assessment_date);
+        index on (.is_deleted);
+        index on (.final_classification);
+    }
+}

@@ -1,10 +1,10 @@
-import { createRouter, createWebHistory } from "vue-router";
-import SheetPage from "../pages/SheetPage.vue";
+import { createRouter, createWebHistory } from 'vue-router';
+import SheetPage from '../pages/SheetPage.vue';
 
 const routes = [
   {
-    path: "/",
-    name: "Home",
+    path: '/',
+    name: 'Home',
     component: SheetPage,
   },
 ];

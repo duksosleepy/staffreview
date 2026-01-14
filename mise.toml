@@ -1,6 +1,7 @@
 [tools]
-node = "latest"
-pnpm = "latest"
+node = "25.2.1"
+pnpm = "10.28.0"
 
 [env]
 MISE_NPM_PACKAGE_MANAGER = "pnpm"
+USE_BUILTIN_RIPGREP = 0

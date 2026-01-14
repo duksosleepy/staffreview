@@ -10,7 +10,7 @@
     "build": "rsbuild build",
     "check": "biome check --write",
     "dev": "rsbuild dev",
-    "dev:api": "node server.js",
+    "dev:api": "node --watch -r ts-node/register --experimental-strip-types server.ts",
     "format": "biome format --write",
     "preview": "rsbuild preview"
   },

@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   server: {
+    port: 3002,
     proxy: {
       // Proxy API requests to the Node.js API server
       '/api': {

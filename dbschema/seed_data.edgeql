@@ -14,174 +14,154 @@ insert Employee {
 
 
 # ============================================================================
-# 2. INSERT CHECKLIST CATEGORIES (Parent items with is_category = true)
+# 2. INSERT CHECKLISTS (Parent containers for ChecklistItems)
 # ============================================================================
 
-# Category 1: CHECK LIST HẰNG NGÀY (Daily Checklist)
-insert ChecklistItem {
+# Checklist 1: CHECK LIST HẰNG NGÀY (Daily Checklist)
+insert Checklist {
     name := "CHECK LIST HẰNG NGÀY",
-    is_category := true,
-    order := 1
+    description := "Danh sách công việc cần kiểm tra hằng ngày"
 };
 
-# Category 2: CHECK LIST HẰNG TUẦN (Weekly Checklist)
-insert ChecklistItem {
+# Checklist 2: CHECK LIST HẰNG TUẦN (Weekly Checklist)
+insert Checklist {
     name := "CHECK LIST HẰNG TUẦN",
-    is_category := true,
-    order := 2
+    description := "Danh sách công việc cần kiểm tra hằng tuần"
 };
 
-# Category 3: CHECK LIST HẰNG THÁNG (Monthly Checklist)
-insert ChecklistItem {
+# Checklist 3: CHECK LIST HẰNG THÁNG (Monthly Checklist)
+insert Checklist {
     name := "CHECK LIST HẰNG THÁNG",
-    is_category := true,
-    order := 3
+    description := "Danh sách công việc cần kiểm tra hằng tháng"
 };
 
-# Category 4: XỬ LÝ KHI CÓ PHÁT SINH (Handle When Issues Arise)
-insert ChecklistItem {
+# Checklist 4: XỬ LÝ KHI CÓ PHÁT SINH (Handle When Issues Arise)
+insert Checklist {
     name := "XỬ LÝ KHI CÓ PHÁT SINH",
-    is_category := true,
-    order := 4
+    description := "Danh sách công việc xử lý khi có phát sinh"
 };
 
 
 # ============================================================================
-# 3. INSERT CHECKLIST TASKS (Child items under categories)
+# 3. INSERT CHECKLIST ITEMS (Tasks under checklists)
 # ============================================================================
 
-# ---------- Tasks under "CHECK LIST HẰNG NGÀY" ----------
+# ---------- Items under "CHECK LIST HẰNG NGÀY" ----------
 insert ChecklistItem {
     name := "Đánh giá sàng lọc những nhân sự có khả năng thăng tiến để tạo đội ngũ kế thừa; Tuyển dụng nhân sự thay thế.",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
     standard_score := 2,
-    is_category := false,
     order := 1
 };
 
 insert ChecklistItem {
     name := "Đi làm đúng giờ, đúng lịch ca làm việc và lấy vân tay theo đúng quy định",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
     standard_score := 3,
-    is_category := false,
     order := 2
 };
 
 insert ChecklistItem {
     name := "Đồng phục/ tác phong đúng quy định",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
     standard_score := 4,
-    is_category := false,
     order := 3
 };
 
 insert ChecklistItem {
     name := "Kiểm soát việc thực hiện nội quy/quy định của NV",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
     standard_score := 5,
-    is_category := false,
     order := 4
 };
 
 insert ChecklistItem {
     name := "Theo dõi chi phí quầy (đủ số lượng sử dụng tại CH/TT)",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG NGÀY" limit 1),
     standard_score := 5,
-    is_category := false,
     order := 5
 };
 
 
-# ---------- Tasks under "CHECK LIST HẰNG TUẦN" ----------
+# ---------- Items under "CHECK LIST HẰNG TUẦN" ----------
 insert ChecklistItem {
     name := "Theo dõi chỉ số điện, nước",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG TUẦN" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG TUẦN" limit 1),
     standard_score := 2,
-    is_category := false,
     order := 1
 };
 
 insert ChecklistItem {
     name := "Họp nhân viên bán hàng/NT/CHT 01 lần/ tuần.",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG TUẦN" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG TUẦN" limit 1),
     standard_score := 2,
-    is_category := false,
     order := 2
 };
 
 insert ChecklistItem {
     name := "Kiểm soát việc lưu trữ số sách giấy tờ, chứng từ, Giấy phép kinh doanh, Giấy phép PCCC.",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG TUẦN" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG TUẦN" limit 1),
     standard_score := 4,
-    is_category := false,
     order := 3
 };
 
 
-# ---------- Tasks under "CHECK LIST HẰNG THÁNG" ----------
+# ---------- Items under "CHECK LIST HẰNG THÁNG" ----------
 insert ChecklistItem {
     name := "Check lịch làm việc cho Nhân viên để đạt doanh thu.",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
     standard_score := 1,
-    is_category := false,
     order := 1
 };
 
 insert ChecklistItem {
     name := "Đánh giá check list công việc của NV/NT/CHT",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
     standard_score := 2,
-    is_category := false,
     order := 2
 };
 
 insert ChecklistItem {
     name := "Tuyển dụng và đào tạo nhân sự mới",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
     standard_score := 3,
-    is_category := false,
     order := 3
 };
 
 insert ChecklistItem {
     name := "Kiểm tra báo cáo trình trạng hàng hóa hư hỏng về Cty. Đôn đốc các phòng ban",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
     standard_score := 4,
-    is_category := false,
     order := 4
 };
 
 insert ChecklistItem {
     name := "Xác nhận thay tem/tag CTKM, báo cáo đầy đủ và kịp thời",
-    parent := (select detached ChecklistItem filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
+    checklist := (select Checklist filter .name = "CHECK LIST HẰNG THÁNG" limit 1),
     standard_score := 1,
-    is_category := false,
     order := 5
 };
 
 
-# ---------- Tasks under "XỬ LÝ KHI CÓ PHÁT SINH" ----------
+# ---------- Items under "XỬ LÝ KHI CÓ PHÁT SINH" ----------
 insert ChecklistItem {
     name := "Xử lý khiếu nại, đổi trả sản phẩm.",
-    parent := (select detached ChecklistItem filter .name = "XỬ LÝ KHI CÓ PHÁT SINH" limit 1),
+    checklist := (select Checklist filter .name = "XỬ LÝ KHI CÓ PHÁT SINH" limit 1),
     standard_score := 1,
-    is_category := false,
     order := 1
 };
 
 insert ChecklistItem {
     name := "Hỗ trợ thi công setup/ out quầy",
-    parent := (select detached ChecklistItem filter .name = "XỬ LÝ KHI CÓ PHÁT SINH" limit 1),
+    checklist := (select Checklist filter .name = "XỬ LÝ KHI CÓ PHÁT SINH" limit 1),
     standard_score := 1,
-    is_category := false,
     order := 2
 };
 
 insert ChecklistItem {
     name := "Báo cáo sự cố khi có phát sinh",
-    parent := (select detached ChecklistItem filter .name = "XỬ LÝ KHI CÓ PHÁT SINH" limit 1),
+    checklist := (select Checklist filter .name = "XỬ LÝ KHI CÓ PHÁT SINH" limit 1),
     standard_score := 1,
-    is_category := false,
     order := 3
 };
 
@@ -209,7 +189,7 @@ insert ChecklistRecord {
         limit 1
     ),
     checklist_item := (
-        select detached ChecklistItem
+        select ChecklistItem
         filter .name = "Đánh giá sàng lọc những nhân sự có khả năng thăng tiến để tạo đội ngũ kế thừa; Tuyển dụng nhân sự thay thế."
         limit 1
     ),
@@ -230,7 +210,7 @@ insert ChecklistRecord {
         limit 1
     ),
     checklist_item := (
-        select detached ChecklistItem
+        select ChecklistItem
         filter .name = "Đi làm đúng giờ, đúng lịch ca làm việc và lấy vân tay theo đúng quy định"
         limit 1
     ),
@@ -243,7 +223,6 @@ insert ChecklistRecord {
 };
 
 # Record 3: Assessment on 2026-01-12
-# Note: Employee ID is None in Excel, but we'll still create record for employee "1"
 insert ChecklistRecord {
     sheet := (
         select Sheet
@@ -252,7 +231,7 @@ insert ChecklistRecord {
         limit 1
     ),
     checklist_item := (
-        select detached ChecklistItem
+        select ChecklistItem
         filter .name = "Đồng phục/ tác phong đúng quy định"
         limit 1
     ),
@@ -273,7 +252,7 @@ insert ChecklistRecord {
         limit 1
     ),
     checklist_item := (
-        select detached ChecklistItem
+        select ChecklistItem
         filter .name = "Kiểm soát việc thực hiện nội quy/quy định của NV"
         limit 1
     ),
@@ -294,7 +273,7 @@ insert ChecklistRecord {
         limit 1
     ),
     checklist_item := (
-        select detached ChecklistItem
+        select ChecklistItem
         filter .name = "Theo dõi chi phí quầy (đủ số lượng sử dụng tại CH/TT)"
         limit 1
     ),
@@ -314,25 +293,25 @@ insert ChecklistRecord {
 # # Check all employees
 # select Employee { employee_id, email };
 
-# # Check all categories
-# select ChecklistItem {
+# # Check all checklists with their items
+# select Checklist {
 #     name,
-#     is_category,
-#     order,
-#     standard_score
-# }
-# filter .is_category = true
-# order by .order;
+#     description,
+#     items: {
+#         name,
+#         standard_score,
+#         order
+#     } order by .order
+# };
 
-# # Check all tasks with their parent categories
+# # Check all checklist items with their parent checklist
 # select ChecklistItem {
 #     name,
 #     standard_score,
 #     order,
-#     parent: { name }
+#     checklist: { name }
 # }
-# filter .is_category = false
-# order by .parent.order then .order;
+# order by .checklist.name then .order;
 
 # # Check all sheets
 # select Sheet {
@@ -345,7 +324,7 @@ insert ChecklistRecord {
 # select ChecklistRecord {
 #     assessment_date,
 #     employee: { employee_id },
-#     checklist_item: { name },
+#     checklist_item: { name, checklist: { name } },
 #     employee_checked,
 #     cht_checked,
 #     asm_checked,

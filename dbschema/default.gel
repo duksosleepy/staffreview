@@ -33,7 +33,34 @@ module default {
         index on (.employee);
     }
 
+    # ===================================================
+    # Checklist: Parent container for ChecklistItems
+    # ===================================================
+    type Checklist {
+        required name: str;
+        description: str;
+
+        # Computed backlink to checklist items
+        multi items := .<checklist[is ChecklistItem];
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # Indexes
+        index on (.name);
+    }
+
     type ChecklistItem {
+        # Link to parent Checklist
+        required checklist: Checklist {
+            on target delete delete source;
+        }
+
         # Tên task/category
         required name: str;
         standard_score: int32 {
@@ -54,11 +81,6 @@ module default {
             constraint min_value(0);
         }
 
-        # Flag: parent category hay child task
-        is_category: bool {
-            default := false;
-        }
-
         # Computed backlink đến records
         multi records := .<checklist_item[is ChecklistRecord];
 
@@ -77,12 +99,12 @@ module default {
         }
 
         # Constraints
-        constraint exclusive on ((.name, .parent));
+        constraint exclusive on ((.name, .parent, .checklist));
 
         # Indexes
+        index on (.checklist);
         index on (.parent);
         index on (.order);
-        index on (.is_category);
         index on (.is_deleted);
     }
     type ChecklistRecord {

@@ -1,22 +1,33 @@
-CREATE MIGRATION m1ht34c4lquxvq4g3bxwrsxg575vpuea32y2sewbfnpmvzdw7x5iaa
+CREATE MIGRATION m1nsvn6q4isxfdszulx7mvc36vdqnd4xm45prf4j2vxobg44xc2iyq
     ONTO initial
 {
   CREATE FUTURE no_linkful_computed_splats;
+  CREATE TYPE default::Checklist {
+      CREATE REQUIRED PROPERTY name: std::str;
+      CREATE INDEX ON (.name);
+      CREATE PROPERTY created_at: std::datetime {
+          SET default := (std::datetime_current());
+      };
+      CREATE PROPERTY description: std::str;
+      CREATE PROPERTY updated_at: std::datetime {
+          SET default := (std::datetime_current());
+      };
+  };
   CREATE TYPE default::ChecklistItem {
+      CREATE REQUIRED LINK checklist: default::Checklist {
+          ON TARGET DELETE DELETE SOURCE;
+      };
       CREATE LINK parent: default::ChecklistItem {
           ON TARGET DELETE ALLOW;
       };
       CREATE REQUIRED PROPERTY name: std::str;
-      CREATE CONSTRAINT std::exclusive ON ((.name, .parent));
+      CREATE CONSTRAINT std::exclusive ON ((.name, .parent, .checklist));
+      CREATE INDEX ON (.checklist);
       CREATE PROPERTY order: std::int32 {
           SET default := 0;
           CREATE CONSTRAINT std::min_value(0);
       };
       CREATE INDEX ON (.order);
-      CREATE PROPERTY is_category: std::bool {
-          SET default := false;
-      };
-      CREATE INDEX ON (.is_category);
       CREATE INDEX ON (.parent);
       CREATE PROPERTY is_deleted: std::bool {
           SET default := false;
@@ -34,6 +45,9 @@ CREATE MIGRATION m1ht34c4lquxvq4g3bxwrsxg575vpuea32y2sewbfnpmvzdw7x5iaa
       CREATE PROPERTY updated_at: std::datetime {
           SET default := (std::datetime_current());
       };
+  };
+  ALTER TYPE default::Checklist {
+      CREATE MULTI LINK items := (.<checklist[IS default::ChecklistItem]);
   };
   CREATE TYPE default::Employee {
       CREATE REQUIRED PROPERTY email: std::str;

@@ -1,5 +1,19 @@
 const API_URL = '/api/query';
 
+export type Checklist = {
+  id: string;
+  name: string;
+  description: string | null;
+};
+
+export type ChecklistItem = {
+  id: string;
+  name: string;
+  standard_score: number | null;
+  order: number;
+  checklist: Checklist;
+};
+
 export type ChecklistRecord = {
   id: string;
   assessment_date: string;
@@ -15,7 +29,7 @@ export type ChecklistRecord = {
   checklist_item: {
     name: string;
     standard_score: number | null;
-    parent: { name: string } | null;
+    checklist: { name: string };
   };
 };
 
@@ -30,10 +44,10 @@ export async function fetchChecklistRecords(): Promise<ChecklistRecord[]> {
           achievement_percentage, successful_completions, implementation_issues,
           score_achieved, final_classification,
           employee: { employee_id },
-          checklist_item: { name, standard_score, parent: { name } }
+          checklist_item: { name, standard_score, checklist: { name } }
         }
         filter .is_deleted = false
-        order by .checklist_item.parent.order then .checklist_item.order then .assessment_date
+        order by .checklist_item.checklist.name then .checklist_item.order then .assessment_date
       `,
     }),
   });

@@ -48,6 +48,9 @@ importers:
       '@gel/generate':
         specifier: ^0.7.1
         version: 0.7.1(gel@2.2.0)
+      '@rsbuild/core':
+        specifier: ^1.7.2
+        version: 1.7.2
       '@rsbuild/plugin-vue':
         specifier: ^1.2.2
         version: 1.2.2(@rsbuild/core@1.7.2)(vue@3.5.26(typescript@5.9.3))

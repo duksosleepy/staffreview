@@ -1,28 +1,38 @@
-
 services:
-  app:
+  frontend:
     image: app
     container_name: app
     environment:
-      - EDGEDB_DSN=edgedb://edgedb:5656?tls_security=insecure
+      - GEL_DSN=gel://admin:geldata@gel:5656
     volumes:
-      - .:/usr/src/app  # Bind the current directory to the container
+      - .:/usr/src/app
     networks:
       - internal
-  edgedb:
-    image: edgedb/edgedb
-    container_name: edgedb
-    env_file:
-      - "./.env"
+
+  api:
+    image: app
+    container_name: app
+    environment:
+      - GEL_DSN=gel://admin:geldata@gel:5656
     volumes:
-      - dbdata:/var/lib/edgedb/data # Data persistence
-      - "./dbschema:/dbschema"      # Schema persistence
+      - .:/usr/src/app
+    networks:
+      - internal
+
+  gel:
+    image: geldata/gel
+    environment:
+      GEL_SERVER_SECURITY: insecure_dev_mode
+      GEL_SERVER_PASSWORD: geldata
+    volumes:
+      - gel-data:/var/lib/gel/data
+      - "./dbschema:/dbschema"
     ports:
-      - 5656:5656
+      - "5656:5656"
     networks:
       - internal
 volumes:
-  dbdata:
+  gel-data:
 networks:
   internal:
     driver: bridge

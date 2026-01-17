@@ -65,16 +65,9 @@ function buildCellData(items: ChecklistItemWithRecord[]) {
   cells[0] = {
     0: { v: 'ID Nhân viên', s: headerStyle },
     1: { v: 'TÊN CHECKLIST / ITEM', s: headerStyle },
-    2: { v: 'ĐIỂM CHUẨN', s: headerStyle },
-    3: { v: 'NGÀY', s: headerStyle },
-    4: { v: 'NHÂN VIÊN', s: headerStyle },
-    5: { v: 'CHT', s: headerStyle },
-    6: { v: 'ASM', s: headerStyle },
-    7: { v: 'TL (%) ĐẠT', s: headerStyle },
-    8: { v: 'Số lần thực hiện Đạt', s: headerStyle },
-    9: { v: 'Vấn đề thực hiện', s: headerStyle },
-    10: { v: 'Số điểm Đạt được', s: headerStyle },
-    11: { v: 'Xếp loại', s: headerStyle },
+    2: { v: 'NHÂN VIÊN', s: headerStyle },
+    3: { v: 'CHT', s: headerStyle },
+    4: { v: 'ASM', s: headerStyle },
   };
 
   // Reset row mapping
@@ -103,13 +96,6 @@ function buildCellData(items: ChecklistItemWithRecord[]) {
       2: { v: '', s: checklistHeaderStyle },
       3: { v: '', s: checklistHeaderStyle },
       4: { v: '', s: checklistHeaderStyle },
-      5: { v: '', s: checklistHeaderStyle },
-      6: { v: '', s: checklistHeaderStyle },
-      7: { v: '', s: checklistHeaderStyle },
-      8: { v: '', s: checklistHeaderStyle },
-      9: { v: '', s: checklistHeaderStyle },
-      10: { v: '', s: checklistHeaderStyle },
-      11: { v: '', s: checklistHeaderStyle },
     };
     currentRow++;
 
@@ -122,16 +108,9 @@ function buildCellData(items: ChecklistItemWithRecord[]) {
       cells[currentRow] = {
         0: { v: r?.employee?.employee_id ?? '' },
         1: { v: `    ${item.name}` },
-        2: { v: item.standard_score ?? '' },
-        3: { v: r?.assessment_date ?? '' },
-        4: { v: r?.employee_checked ? 1 : 0 },
-        5: { v: r?.cht_checked ? 1 : 0 },
-        6: { v: r?.asm_checked ? 1 : 0 },
-        7: { v: r?.achievement_percentage ?? '' },
-        8: { v: r?.successful_completions ?? '' },
-        9: { v: r?.implementation_issues ?? '' },
-        10: { v: r?.score_achieved ?? '' },
-        11: { v: r?.final_classification ?? '' },
+        2: { v: r?.employee_checked ? 1 : 0 },
+        3: { v: r?.cht_checked ? 1 : 0 },
+        4: { v: r?.asm_checked ? 1 : 0 },
       };
       currentRow++;
     }
@@ -211,16 +190,9 @@ onMounted(async () => {
         columnData: {
           0: { w: 120 },
           1: { w: 280 },
-          2: { w: 90 },
-          3: { w: 100 },
-          4: { w: 90 },
-          5: { w: 75 },
-          6: { w: 75 },
-          7: { w: 100 },
-          8: { w: 150 },
-          9: { w: 180 },
-          10: { w: 130 },
-          11: { w: 90 },
+          2: { w: 100 },
+          3: { w: 75 },
+          4: { w: 75 },
         },
         cellData: cells,
       },
@@ -236,28 +208,19 @@ onMounted(async () => {
         expandedGroups.set(checklistName, false);
       }
 
-      // Apply checkbox validation to columns E, F, G (indices 4, 5, 6) for all data rows
+      // Apply checkbox validation to columns C, D, E (indices 2, 3, 4) for all data rows
       const endRow = totalRows;
+      const rangeC = sheet.getRange(`C2:C${endRow}`);
+      rangeC?.setDataValidation(
+        api.newDataValidation().requireCheckbox('1', '0').build(),
+      );
+      const rangeD = sheet.getRange(`D2:D${endRow}`);
+      rangeD?.setDataValidation(
+        api.newDataValidation().requireCheckbox('1', '0').build(),
+      );
       const rangeE = sheet.getRange(`E2:E${endRow}`);
       rangeE?.setDataValidation(
         api.newDataValidation().requireCheckbox('1', '0').build(),
-      );
-      const rangeF = sheet.getRange(`F2:F${endRow}`);
-      rangeF?.setDataValidation(
-        api.newDataValidation().requireCheckbox('1', '0').build(),
-      );
-      const rangeG = sheet.getRange(`G2:G${endRow}`);
-      rangeG?.setDataValidation(
-        api.newDataValidation().requireCheckbox('1', '0').build(),
-      );
-
-      // Column D - NGÀY (date picker)
-      const rangeD = sheet.getRange(`D2:D${endRow}`);
-      rangeD?.setDataValidation(
-        api
-          .newDataValidation()
-          .requireDateBetween(new Date('1900-01-01'), new Date('2100-12-31'))
-          .build(),
       );
     }
 

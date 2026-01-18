@@ -363,6 +363,7 @@ onMounted(async () => {
       sheet1: {
         id: 'sheet1',
         name: 'Checklist',
+        columnCount: 5,
         freeze: { xSplit: 0, ySplit: 1, startRow: 1, startColumn: 0 },
         rowData: { 0: { h: 42, hd: 0 } },
         columnData: {

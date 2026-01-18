@@ -193,4 +193,196 @@ module default {
         index on (.is_deleted);
         index on (.final_classification);
     }
+
+    # ===================================================
+    # SHEET 2: Detail Checklist (skeleton-detail.xlsx)
+    # ===================================================
+
+    # Category types for detail checklist
+    scalar type DetailCategoryType extending enum<daily, weekly, monthly>;
+
+    # DetailCategory: Categories like HẰNG NGÀY, HẰNG TUẦN, HẰNG THÁNG
+    type DetailCategory {
+        required name: str {
+            constraint exclusive;
+        }
+        required category_type: DetailCategoryType;
+        description: str;
+
+        # Display order
+        order: int32 {
+            default := 0;
+            constraint min_value(0);
+        }
+
+        # Computed backlink to items
+        multi items := .<category[is DetailChecklistItem];
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # Indexes
+        index on (.category_type);
+        index on (.order);
+    }
+
+    # DetailChecklistItem: Individual items with full metadata
+    type DetailChecklistItem {
+        # Link to parent category
+        required category: DetailCategory {
+            on target delete delete source;
+        }
+
+        # Item number (STT)
+        required item_number: int32 {
+            constraint min_value(1);
+        }
+
+        # NỘI DUNG - Item description/name
+        required name: str;
+
+        # NGƯỜI KS/ĐÁNH GIÁ CUỐI CÙNG - Evaluator
+        evaluator: str;
+
+        # PHẠM VI ÁP DỤNG - Scope of application
+        scope: str;
+
+        # KHUNG GIỜ - Time frame
+        time_frame: str;
+
+        # MỨC PHẠT - Penalty levels (can be text like "50% TN" or numbers)
+        penalty_level_1: str;
+        penalty_level_2: str;
+        penalty_level_3: str;
+
+        # ĐIỂM ĐÁNH GIÁ - Score (1-3)
+        required score: int32 {
+            default := 1;
+            constraint min_value(1);
+            constraint max_value(3);
+        }
+
+        # Display order within category
+        order: int32 {
+            default := 0;
+            constraint min_value(0);
+        }
+
+        # Notes/Ghi chú
+        notes: str;
+
+        # Computed backlink to records
+        multi records := .<detail_item[is DetailMonthlyRecord];
+
+        # Soft delete
+        deleted_at: datetime;
+        is_deleted: bool {
+            default := false;
+        }
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # Constraints - unique item number within category
+        constraint exclusive on ((.item_number, .category));
+
+        # Indexes
+        index on (.category);
+        index on (.order);
+        index on (.is_deleted);
+    }
+
+    # DetailMonthlyRecord: Monthly tracking record with daily checks
+    type DetailMonthlyRecord {
+        # Link to the detail item being tracked
+        required detail_item: DetailChecklistItem {
+            on target delete delete source;
+        }
+
+        # Link to employee
+        required employee: Employee {
+            on target delete delete source;
+        }
+
+        # Month and Year for this record
+        required month: int32 {
+            constraint min_value(1);
+            constraint max_value(12);
+        }
+        required year: int32 {
+            constraint min_value(2020);
+        }
+
+        # Daily checks - array of 31 booleans (index 0 = day 1, index 30 = day 31)
+        # True = checked/completed, False/null = not checked
+        daily_checks: array<bool>;
+
+        # Summary fields (computed or stored)
+        # TL (%) ĐẠT - Achievement percentage
+        achievement_percentage: float32 {
+            default := 0.0;
+            constraint min_value(0);
+            constraint max_value(100);
+        }
+
+        # Số lần thực hiện Đạt - Number of successful completions
+        successful_completions: int32 {
+            default := 0;
+            constraint min_value(0);
+        }
+
+        # Có thực hiện như không Đạt - Implementation issues count
+        implementation_issues_count: int32 {
+            default := 0;
+            constraint min_value(0);
+        }
+
+        # Số điểm Đạt được - Score achieved
+        score_achieved: float32 {
+            default := 0.0;
+            constraint min_value(0);
+        }
+
+        # Xếp loại - Classification (A, B, C, D, KHONG_DAT)
+        classification: str {
+            constraint one_of('A', 'B', 'C', 'D', 'KHONG_DAT');
+        }
+
+        # Ghi chú - Notes
+        notes: str;
+
+        # Soft delete
+        deleted_at: datetime;
+        is_deleted: bool {
+            default := false;
+        }
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # Constraint - one record per item per employee per month/year
+        constraint exclusive on ((.detail_item, .employee, .month, .year));
+
+        # Indexes
+        index on (.detail_item);
+        index on (.employee);
+        index on ((.month, .year));
+        index on (.is_deleted);
+        index on (.classification);
+    }
 }

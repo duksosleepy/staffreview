@@ -6,7 +6,12 @@ import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-v
 import type { FUniver, Univer } from '@univerjs/presets';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { onMounted, onUnmounted, ref } from 'vue';
-import { type ChecklistItemWithRecord, fetchAllChecklistItems } from '@/lib/gel-client';
+import {
+  type ChecklistItemWithRecord,
+  type DetailChecklistItemWithRecord,
+  fetchAllChecklistItems,
+  fetchAllDetailChecklistItems,
+} from '@/lib/gel-client';
 
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
@@ -15,43 +20,35 @@ const containerRef = ref<HTMLDivElement | null>(null);
 let univerInstance: Univer | null = null;
 let univerAPI: FUniver | null = null;
 
-// Track expanded state for each checklist group
-const expandedGroups = new Map<string, boolean>();
+// ===================================================
+// SHEET 1: Simple Checklist
+// ===================================================
 
-// Map to store which rows belong to which checklist (for expand/collapse)
+const expandedGroups1 = new Map<string, boolean>();
+
 type RowMapping = {
-  checklistRows: Map<number, string>; // rowIndex -> checklistName (for header rows)
-  childRowRanges: Map<string, { start: number; count: number }>; // checklistName -> child row range
+  checklistRows: Map<number, string>;
+  childRowRanges: Map<string, { start: number; count: number }>;
 };
-let rowMapping: RowMapping = {
+let rowMapping1: RowMapping = {
   checklistRows: new Map(),
   childRowRanges: new Map(),
 };
 
-// Group items by Checklist name
 function groupItemsByChecklist(items: ChecklistItemWithRecord[]) {
   const grouped = new Map<string, ChecklistItemWithRecord[]>();
-
   for (const item of items) {
     const checklistName = item.checklist.name;
     if (!grouped.has(checklistName)) {
       grouped.set(checklistName, []);
     }
-    const group = grouped.get(checklistName);
-    if (group) {
-      group.push(item);
-    }
+    grouped.get(checklistName)?.push(item);
   }
-
   return grouped;
 }
 
-// Build cell data with Checklist headers and child items
-function buildCellData(items: ChecklistItemWithRecord[]) {
-  const cells: Record<
-    number,
-    Record<number, { v: string | number; s?: object }>
-  > = {};
+function buildSheet1CellData(items: ChecklistItemWithRecord[]) {
+  const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
 
   const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' } };
   const checklistHeaderStyle = {
@@ -61,7 +58,6 @@ function buildCellData(items: ChecklistItemWithRecord[]) {
     cl: { rgb: '#FFFFFF' },
   };
 
-  // Column Headers (row 0)
   cells[0] = {
     0: { v: 'ID Nhân viên', s: headerStyle },
     1: { v: 'TÊN CHECKLIST / ITEM', s: headerStyle },
@@ -70,25 +66,13 @@ function buildCellData(items: ChecklistItemWithRecord[]) {
     4: { v: 'ASM', s: headerStyle },
   };
 
-  // Reset row mapping
-  rowMapping = {
-    checklistRows: new Map(),
-    childRowRanges: new Map(),
-  };
-
-  // Group items by checklist
+  rowMapping1 = { checklistRows: new Map(), childRowRanges: new Map() };
   const grouped = groupItemsByChecklist(items);
-
   let currentRow = 1;
 
-  // Build rows: Checklist header + child items
   for (const [checklistName, checklistItems] of grouped) {
-    // Initialize as collapsed
-    expandedGroups.set(checklistName, false);
-
-    // Checklist header row (expandable)
-    const checklistRowIndex = currentRow;
-    rowMapping.checklistRows.set(checklistRowIndex, checklistName);
+    expandedGroups1.set(checklistName, false);
+    rowMapping1.checklistRows.set(currentRow, checklistName);
 
     cells[currentRow] = {
       0: { v: '', s: checklistHeaderStyle },
@@ -99,10 +83,7 @@ function buildCellData(items: ChecklistItemWithRecord[]) {
     };
     currentRow++;
 
-    // Store child row range
     const childStartRow = currentRow;
-
-    // Child items (with record data or defaults)
     for (const item of checklistItems) {
       const r = item.record;
       cells[currentRow] = {
@@ -115,7 +96,7 @@ function buildCellData(items: ChecklistItemWithRecord[]) {
       currentRow++;
     }
 
-    rowMapping.childRowRanges.set(checklistName, {
+    rowMapping1.childRowRanges.set(checklistName, {
       start: childStartRow,
       count: checklistItems.length,
     });
@@ -124,38 +105,197 @@ function buildCellData(items: ChecklistItemWithRecord[]) {
   return { cells, totalRows: currentRow };
 }
 
-// Toggle expand/collapse for a checklist group
-function toggleGroup(checklistName: string, headerRowIndex: number) {
+function toggleGroup1(checklistName: string, headerRowIndex: number) {
   if (!univerAPI) return;
 
   const workbook = univerAPI.getActiveWorkbook();
-  const sheet = workbook?.getActiveSheet();
+  const sheet = workbook?.getSheetBySheetId('sheet1');
   if (!sheet) return;
 
-  const isExpanded = expandedGroups.get(checklistName) ?? false;
-  const range = rowMapping.childRowRanges.get(checklistName);
-
+  const isExpanded = expandedGroups1.get(checklistName) ?? false;
+  const range = rowMapping1.childRowRanges.get(checklistName);
   if (!range) return;
 
   if (isExpanded) {
-    // Collapse: hide child rows
     sheet.hideRows(range.start, range.count);
-    expandedGroups.set(checklistName, false);
-    // Update icon to ▶ (column B = index 1)
+    expandedGroups1.set(checklistName, false);
     sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▶ ${checklistName}`);
   } else {
-    // Expand: show child rows
     sheet.showRows(range.start, range.count);
-    expandedGroups.set(checklistName, true);
-    // Update icon to ▼ (column B = index 1)
+    expandedGroups1.set(checklistName, true);
     sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▼ ${checklistName}`);
   }
+}
+
+// ===================================================
+// SHEET 2: Detail Checklist
+// ===================================================
+
+const expandedGroups2 = new Map<string, boolean>();
+let rowMapping2: RowMapping = {
+  checklistRows: new Map(),
+  childRowRanges: new Map(),
+};
+
+function groupItemsByCategory(items: DetailChecklistItemWithRecord[]) {
+  const grouped = new Map<string, DetailChecklistItemWithRecord[]>();
+  for (const item of items) {
+    const categoryName = item.category.name;
+    if (!grouped.has(categoryName)) {
+      grouped.set(categoryName, []);
+    }
+    grouped.get(categoryName)?.push(item);
+  }
+  return grouped;
+}
+
+function getDaysInMonth(month: number, year: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function buildSheet2CellData(
+  items: DetailChecklistItemWithRecord[],
+  month: number,
+  year: number,
+) {
+  const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
+  const daysInMonth = getDaysInMonth(month, year);
+
+  const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, fs: 10 };
+  const categoryHeaderStyle = {
+    bl: 1,
+    vt: 2,
+    bg: { rgb: '#4A90D9' },
+    cl: { rgb: '#FFFFFF' },
+    fs: 11,
+  };
+  const subHeaderStyle = { bl: 1, vt: 2, bg: { rgb: '#F5F5F5' }, fs: 9 };
+
+  const dayColStart = 9;
+  const summaryColStart = dayColStart + daysInMonth;
+
+  // Row 0: Headers
+  cells[0] = {
+    0: { v: 'STT', s: headerStyle },
+    1: { v: 'NỘI DUNG', s: headerStyle },
+    2: { v: 'NGƯỜI KS', s: headerStyle },
+    3: { v: 'PHẠM VI', s: headerStyle },
+    4: { v: 'KHUNG GIỜ', s: headerStyle },
+    5: { v: 'Lần 1', s: subHeaderStyle },
+    6: { v: 'Lần 2', s: subHeaderStyle },
+    7: { v: 'Lần 3', s: subHeaderStyle },
+    8: { v: 'ĐIỂM', s: headerStyle },
+  };
+
+  // Day headers
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells[0][dayColStart + day - 1] = { v: day, s: subHeaderStyle };
+  }
+
+  // Summary headers
+  cells[0][summaryColStart] = { v: 'TL(%)ĐẠT', s: headerStyle };
+  cells[0][summaryColStart + 1] = { v: 'Số lần Đạt', s: headerStyle };
+  cells[0][summaryColStart + 2] = { v: 'Có TH ko Đạt', s: headerStyle };
+  cells[0][summaryColStart + 3] = { v: 'Số điểm', s: headerStyle };
+  cells[0][summaryColStart + 4] = { v: 'Xếp loại', s: headerStyle };
+  cells[0][summaryColStart + 5] = { v: 'Ghi chú', s: headerStyle };
+
+  rowMapping2 = { checklistRows: new Map(), childRowRanges: new Map() };
+  const grouped = groupItemsByCategory(items);
+  let currentRow = 1;
+
+  for (const [categoryName, categoryItems] of grouped) {
+    expandedGroups2.set(categoryName, false);
+    rowMapping2.checklistRows.set(currentRow, categoryName);
+
+    // Category header row
+    const categoryRow: Record<number, { v: string | number; s?: object }> = {
+      0: { v: '', s: categoryHeaderStyle },
+      1: { v: `▶ ${categoryName}`, s: categoryHeaderStyle },
+    };
+    for (let col = 2; col <= summaryColStart + 5; col++) {
+      categoryRow[col] = { v: '', s: categoryHeaderStyle };
+    }
+    cells[currentRow] = categoryRow;
+    currentRow++;
+
+    const childStartRow = currentRow;
+
+    for (const item of categoryItems) {
+      const r = item.record;
+      const dailyChecks = r?.daily_checks ?? [];
+
+      const row: Record<number, { v: string | number; s?: object }> = {
+        0: { v: item.item_number },
+        1: { v: `    ${item.name}` },
+        2: { v: item.evaluator ?? '' },
+        3: { v: item.scope ?? '' },
+        4: { v: item.time_frame ?? '' },
+        5: { v: item.penalty_level_1 ?? '' },
+        6: { v: item.penalty_level_2 ?? '' },
+        7: { v: item.penalty_level_3 ?? '' },
+        8: { v: item.score },
+      };
+
+      for (let day = 0; day < daysInMonth; day++) {
+        row[dayColStart + day] = { v: dailyChecks[day] ? 1 : 0 };
+      }
+
+      row[summaryColStart] = { v: r?.achievement_percentage ?? 0 };
+      row[summaryColStart + 1] = { v: r?.successful_completions ?? 0 };
+      row[summaryColStart + 2] = { v: r?.implementation_issues_count ?? 0 };
+      row[summaryColStart + 3] = { v: r?.score_achieved ?? 0 };
+      row[summaryColStart + 4] = { v: r?.classification ?? '' };
+      row[summaryColStart + 5] = { v: r?.notes ?? item.notes ?? '' };
+
+      cells[currentRow] = row;
+      currentRow++;
+    }
+
+    rowMapping2.childRowRanges.set(categoryName, {
+      start: childStartRow,
+      count: categoryItems.length,
+    });
+  }
+
+  return { cells, totalRows: currentRow, daysInMonth, summaryColStart };
+}
+
+function toggleGroup2(categoryName: string, headerRowIndex: number) {
+  if (!univerAPI) return;
+
+  const workbook = univerAPI.getActiveWorkbook();
+  const sheet = workbook?.getSheetBySheetId('sheet2');
+  if (!sheet) return;
+
+  const isExpanded = expandedGroups2.get(categoryName) ?? false;
+  const range = rowMapping2.childRowRanges.get(categoryName);
+  if (!range) return;
+
+  if (isExpanded) {
+    sheet.hideRows(range.start, range.count);
+    expandedGroups2.set(categoryName, false);
+    sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▶ ${categoryName}`);
+  } else {
+    sheet.showRows(range.start, range.count);
+    expandedGroups2.set(categoryName, true);
+    sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▼ ${categoryName}`);
+  }
+}
+
+function getColumnLetter(index: number): string {
+  let result = '';
+  let n = index;
+  while (n >= 0) {
+    result = String.fromCharCode((n % 26) + 65) + result;
+    n = Math.floor(n / 26) - 1;
+  }
+  return result;
 }
 
 onMounted(async () => {
   if (!containerRef.value) return;
 
-  // Initialize Univer FIRST (synchronously with the DOM element)
   const { univer, univerAPI: api } = createUniver({
     locale: LocaleType.EN_US,
     locales: {
@@ -173,18 +313,56 @@ onMounted(async () => {
   univerInstance = univer;
   univerAPI = api;
 
-  // Fetch all checklist items (with records if they exist) AFTER Univer is initialized
-  const items = await fetchAllChecklistItems();
+  // Fetch data for both sheets
+  const [sheet1Items, sheet2Items] = await Promise.all([
+    fetchAllChecklistItems(),
+    fetchAllDetailChecklistItems().catch(() => [] as DetailChecklistItemWithRecord[]),
+  ]);
 
-  // Build cell data with grouping
-  const { cells, totalRows } = buildCellData(items);
+  // Build Sheet 1 data
+  const { cells: cells1, totalRows: totalRows1 } = buildSheet1CellData(sheet1Items);
 
-  // Create workbook with fetched data
+  // Build Sheet 2 data
+  const currentDate = new Date();
+  const month = currentDate.getMonth() + 1;
+  const year = currentDate.getFullYear();
+  const {
+    cells: cells2,
+    totalRows: totalRows2,
+    daysInMonth,
+    summaryColStart,
+  } = buildSheet2CellData(sheet2Items, month, year);
+
+  const dayColStart = 9;
+
+  // Build column data for Sheet 2
+  const columnData2: Record<number, { w: number }> = {
+    0: { w: 50 },
+    1: { w: 300 },
+    2: { w: 100 },
+    3: { w: 120 },
+    4: { w: 120 },
+    5: { w: 70 },
+    6: { w: 70 },
+    7: { w: 70 },
+    8: { w: 50 },
+  };
+  for (let day = 0; day < daysInMonth; day++) {
+    columnData2[dayColStart + day] = { w: 30 };
+  }
+  columnData2[summaryColStart] = { w: 70 };
+  columnData2[summaryColStart + 1] = { w: 80 };
+  columnData2[summaryColStart + 2] = { w: 90 };
+  columnData2[summaryColStart + 3] = { w: 70 };
+  columnData2[summaryColStart + 4] = { w: 70 };
+  columnData2[summaryColStart + 5] = { w: 150 };
+
+  // Create workbook with BOTH sheets
   const workbook = api.createWorkbook({
     sheets: {
       sheet1: {
         id: 'sheet1',
-        name: 'Sheet1',
+        name: 'Checklist',
         freeze: { xSplit: 0, ySplit: 1, startRow: 1, startColumn: 0 },
         rowData: { 0: { h: 42, hd: 0 } },
         columnData: {
@@ -194,44 +372,75 @@ onMounted(async () => {
           3: { w: 75 },
           4: { w: 75 },
         },
-        cellData: cells,
+        cellData: cells1,
+      },
+      sheet2: {
+        id: 'sheet2',
+        name: 'Chi tiết',
+        rowCount: Math.max(totalRows2 + 100, 1000),
+        columnCount: summaryColStart + 10,
+        freeze: { xSplit: 2, ySplit: 1, startRow: 1, startColumn: 2 },
+        rowData: { 0: { h: 42, hd: 0 } },
+        columnData: columnData2,
+        cellData: cells2,
       },
     },
   });
 
   if (workbook) {
-    const sheet = workbook.getActiveSheet();
-    if (sheet) {
-      // Initially collapse all groups (hide child rows)
-      for (const [checklistName, range] of rowMapping.childRowRanges) {
-        sheet.hideRows(range.start, range.count);
-        expandedGroups.set(checklistName, false);
+    // Setup Sheet 1
+    const sheet1 = workbook.getSheetBySheetId('sheet1');
+    if (sheet1) {
+      for (const [checklistName, range] of rowMapping1.childRowRanges) {
+        sheet1.hideRows(range.start, range.count);
+        expandedGroups1.set(checklistName, false);
       }
 
-      // Apply checkbox validation to columns C, D, E (indices 2, 3, 4) for all data rows
-      const endRow = totalRows;
-      const rangeC = sheet.getRange(`C2:C${endRow}`);
-      rangeC?.setDataValidation(
-        api.newDataValidation().requireCheckbox('1', '0').build(),
-      );
-      const rangeD = sheet.getRange(`D2:D${endRow}`);
-      rangeD?.setDataValidation(
-        api.newDataValidation().requireCheckbox('1', '0').build(),
-      );
-      const rangeE = sheet.getRange(`E2:E${endRow}`);
-      rangeE?.setDataValidation(
-        api.newDataValidation().requireCheckbox('1', '0').build(),
-      );
+      const endRow1 = totalRows1;
+      sheet1
+        .getRange(`C2:C${endRow1}`)
+        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
+      sheet1
+        .getRange(`D2:D${endRow1}`)
+        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
+      sheet1
+        .getRange(`E2:E${endRow1}`)
+        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
     }
 
-    // Add click event listener for expand/collapse
+    // Setup Sheet 2
+    const sheet2 = workbook.getSheetBySheetId('sheet2');
+    if (sheet2) {
+      for (const [categoryName, range] of rowMapping2.childRowRanges) {
+        sheet2.hideRows(range.start, range.count);
+        expandedGroups2.set(categoryName, false);
+      }
+
+      // Apply checkbox validation to day columns
+      for (let day = 0; day < daysInMonth; day++) {
+        const colLetter = getColumnLetter(dayColStart + day);
+        sheet2
+          .getRange(`${colLetter}2:${colLetter}${totalRows2}`)
+          ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
+      }
+    }
+
+    // Add click event listener for expand/collapse on both sheets
     api.addEvent(api.Event.CellClicked, (params) => {
       const { row } = params;
+      const activeSheet = workbook.getActiveSheet();
+      const sheetId = activeSheet?.getSheetId();
 
-      // Check if clicked row is a checklist header row
-      const checklistName = rowMapping.checklistRows.get(row);
-      if (checklistName) {
-        toggleGroup(checklistName, row);
+      if (sheetId === 'sheet1') {
+        const checklistName = rowMapping1.checklistRows.get(row);
+        if (checklistName) {
+          toggleGroup1(checklistName, row);
+        }
+      } else if (sheetId === 'sheet2') {
+        const categoryName = rowMapping2.checklistRows.get(row);
+        if (categoryName) {
+          toggleGroup2(categoryName, row);
+        }
       }
     });
   }

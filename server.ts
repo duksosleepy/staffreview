@@ -11,6 +11,7 @@ const client = createClient();
 
 type QueryRequestBody = {
   query: string;
+  variables?: Record<string, unknown>;
 };
 
 const parseBody = (req: IncomingMessage): Promise<string> =>
@@ -38,8 +39,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
   if (req.method === 'POST' && req.url === '/api/query') {
     try {
       const body = await parseBody(req);
-      const { query } = JSON.parse(body) as QueryRequestBody;
-      const result = await client.query(query);
+      const { query, variables } = JSON.parse(body) as QueryRequestBody;
+      const result = variables
+        ? await client.query(query, variables)
+        : await client.query(query);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify(result));
     } catch (e) {

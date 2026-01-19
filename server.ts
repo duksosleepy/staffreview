@@ -3,7 +3,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
-import { createClient } from 'gel';
+import { createClient, LocalDate } from 'gel';
 
 const port = Number.parseInt(process.env.PORT || '3001', 10);
 const dev = process.env.NODE_ENV !== 'production';
@@ -13,6 +13,32 @@ type QueryRequestBody = {
   query: string;
   variables?: Record<string, unknown>;
 };
+
+// Convert date strings (YYYY-MM-DD) to LocalDate objects for EdgeDB
+function convertVariables(
+  variables?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (!variables) return undefined;
+
+  const converted: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(variables)) {
+    if (
+      typeof value === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      key.toLowerCase().includes('date')
+    ) {
+      // Convert date string to LocalDate
+      converted[key] = new LocalDate(
+        Number.parseInt(value.slice(0, 4), 10),
+        Number.parseInt(value.slice(5, 7), 10),
+        Number.parseInt(value.slice(8, 10), 10),
+      );
+    } else {
+      converted[key] = value;
+    }
+  }
+  return converted;
+}
 
 const parseBody = (req: IncomingMessage): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -40,8 +66,9 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const body = await parseBody(req);
       const { query, variables } = JSON.parse(body) as QueryRequestBody;
-      const result = variables
-        ? await client.query(query, variables)
+      const convertedVariables = convertVariables(variables);
+      const result = convertedVariables
+        ? await client.query(query, convertedVariables)
         : await client.query(query);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify(result));

@@ -17,8 +17,30 @@ import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
 
 const containerRef = ref<HTMLDivElement | null>(null);
+const loadingOverlayRef = ref<HTMLDivElement | null>(null);
 let univerInstance: Univer | null = null;
 let univerAPI: FUniver | null = null;
+
+// Date selection for Sheet1 - managed via date picker cell in spreadsheet
+const selectedDate = ref<string>('');
+const isLoadingSheet1 = ref(false);
+let isInitialLoad = true; // Flag to prevent event firing during initial load
+
+// Constants for date picker cell location in Sheet1
+const DATE_PICKER_ROW = 0;
+const DATE_PICKER_VALUE_COL = 1; // The dropdown cell is in column B (index 1)
+const DATA_START_ROW = 2; // Data starts after header row (row 1)
+
+// Convert Excel serial date number to ISO date string (YYYY-MM-DD)
+function serialToDate(serial: number): string {
+  const excelEpoch = new Date(1899, 11, 30);
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const date = new Date(excelEpoch.getTime() + serial * msPerDay);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // ===================================================
 // SHEET 1: Simple Checklist
@@ -47,9 +69,38 @@ function groupItemsByChecklist(items: ChecklistItemWithRecord[]) {
   return grouped;
 }
 
-function buildSheet1CellData(items: ChecklistItemWithRecord[]) {
-  const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
+function buildSheet1CellData(
+  items: ChecklistItemWithRecord[],
+  dateValue: string,
+) {
+  const cells: Record<
+    number,
+    Record<number, { v: string | number; s?: object }>
+  > = {};
 
+  // Row 0: Date picker row with label and dropdown cell (using default Univer styles)
+  const datePickerLabelStyle = {
+    bl: 1, // Bold
+    vt: 2, // Vertical align middle
+    ht: 2, // Right align
+  };
+
+  // Format date as M/D/YYYY for Univer date picker compatibility
+  let formattedDate = '';
+  if (dateValue) {
+    const [year, month, day] = dateValue.split('-').map(Number);
+    formattedDate = `${month}/${day}/${year}`;
+  }
+
+  cells[DATE_PICKER_ROW] = {
+    0: { v: 'Ngày đánh giá:', s: datePickerLabelStyle },
+    1: { v: formattedDate },
+    2: { v: '' },
+    3: { v: '' },
+    4: { v: '' },
+  };
+
+  // Row 1: Column headers
   const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' } };
   const checklistHeaderStyle = {
     bl: 1,
@@ -58,7 +109,7 @@ function buildSheet1CellData(items: ChecklistItemWithRecord[]) {
     cl: { rgb: '#FFFFFF' },
   };
 
-  cells[0] = {
+  cells[1] = {
     0: { v: 'ID Nhân viên', s: headerStyle },
     1: { v: 'TÊN CHECKLIST / ITEM', s: headerStyle },
     2: { v: 'NHÂN VIÊN', s: headerStyle },
@@ -68,7 +119,7 @@ function buildSheet1CellData(items: ChecklistItemWithRecord[]) {
 
   rowMapping1 = { checklistRows: new Map(), childRowRanges: new Map() };
   const grouped = groupItemsByChecklist(items);
-  let currentRow = 1;
+  let currentRow = DATA_START_ROW;
 
   for (const [checklistName, checklistItems] of grouped) {
     expandedGroups1.set(checklistName, false);
@@ -127,6 +178,83 @@ function toggleGroup1(checklistName: string, headerRowIndex: number) {
   }
 }
 
+// Show loading overlay on the spreadsheet
+function showLoadingOverlay() {
+  isLoadingSheet1.value = true;
+  if (loadingOverlayRef.value) {
+    loadingOverlayRef.value.style.display = 'flex';
+  }
+}
+
+// Hide loading overlay
+function hideLoadingOverlay() {
+  isLoadingSheet1.value = false;
+  if (loadingOverlayRef.value) {
+    loadingOverlayRef.value.style.display = 'none';
+  }
+}
+
+// Refresh Sheet1 data for a specific date
+async function refreshSheet1(date?: string) {
+  if (!univerAPI) return;
+
+  showLoadingOverlay();
+  try {
+    const items = await fetchAllChecklistItems(date);
+    const { cells, totalRows } = buildSheet1CellData(items, date || '');
+
+    const workbook = univerAPI.getActiveWorkbook();
+    const sheet = workbook?.getSheetBySheetId('sheet1');
+    if (!sheet) return;
+
+    // Clear existing data (except date picker row and header row)
+    const currentRowCount = sheet.getRowCount();
+    if (currentRowCount > DATA_START_ROW) {
+      for (let row = DATA_START_ROW; row < currentRowCount; row++) {
+        for (let col = 0; col < 5; col++) {
+          sheet.getRange(row, col, 1, 1)?.setValue('');
+        }
+      }
+    }
+
+    // Set new data (skip date picker row - row 0, and header row - row 1)
+    for (const [rowIndex, rowData] of Object.entries(cells)) {
+      const row = Number.parseInt(rowIndex, 10);
+      if (row < DATA_START_ROW) continue; // Skip date picker and header rows
+      for (const [colIndex, cellData] of Object.entries(rowData)) {
+        const col = Number.parseInt(colIndex, 10);
+        sheet.getRange(row, col, 1, 1)?.setValue(cellData.v);
+      }
+    }
+
+    // Hide child rows and reset expand state
+    for (const [checklistName, range] of rowMapping1.childRowRanges) {
+      sheet.hideRows(range.start, range.count);
+      expandedGroups1.set(checklistName, false);
+    }
+
+    // Re-apply checkbox validation (now starting from row 3 due to date picker row)
+    const checkboxStartRow = DATA_START_ROW + 1;
+    sheet
+      .getRange(`C${checkboxStartRow}:C${totalRows}`)
+      ?.setDataValidation(
+        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
+      );
+    sheet
+      .getRange(`D${checkboxStartRow}:D${totalRows}`)
+      ?.setDataValidation(
+        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
+      );
+    sheet
+      .getRange(`E${checkboxStartRow}:E${totalRows}`)
+      ?.setDataValidation(
+        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
+      );
+  } finally {
+    hideLoadingOverlay();
+  }
+}
+
 // ===================================================
 // SHEET 2: Detail Checklist
 // ===================================================
@@ -158,7 +286,10 @@ function buildSheet2CellData(
   month: number,
   year: number,
 ) {
-  const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
+  const cells: Record<
+    number,
+    Record<number, { v: string | number; s?: object }>
+  > = {};
   const daysInMonth = getDaysInMonth(month, year);
 
   const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, fs: 10 };
@@ -313,14 +444,24 @@ onMounted(async () => {
   univerInstance = univer;
   univerAPI = api;
 
+  // Set default to today's date
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  selectedDate.value = todayStr;
+
   // Fetch data for both sheets
   const [sheet1Items, sheet2Items] = await Promise.all([
-    fetchAllChecklistItems(),
-    fetchAllDetailChecklistItems().catch(() => [] as DetailChecklistItemWithRecord[]),
+    fetchAllChecklistItems(selectedDate.value || undefined),
+    fetchAllDetailChecklistItems().catch(
+      () => [] as DetailChecklistItemWithRecord[],
+    ),
   ]);
 
-  // Build Sheet 1 data
-  const { cells: cells1, totalRows: totalRows1 } = buildSheet1CellData(sheet1Items);
+  // Build Sheet 1 data with selected date
+  const { cells: cells1, totalRows: totalRows1 } = buildSheet1CellData(
+    sheet1Items,
+    selectedDate.value,
+  );
 
   // Build Sheet 2 data
   const currentDate = new Date();
@@ -364,11 +505,14 @@ onMounted(async () => {
         id: 'sheet1',
         name: 'Checklist',
         columnCount: 5,
-        freeze: { xSplit: 0, ySplit: 1, startRow: 1, startColumn: 0 },
-        rowData: { 0: { h: 42, hd: 0 } },
+        freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 }, // Freeze date picker + header
+        rowData: {
+          0: { h: 36, hd: 0 }, // Date picker row
+          1: { h: 42, hd: 0 }, // Header row
+        },
         columnData: {
           0: { w: 120 },
-          1: { w: 280 },
+          1: { w: 180 }, // Date dropdown cell
           2: { w: 100 },
           3: { w: 75 },
           4: { w: 75 },
@@ -392,21 +536,45 @@ onMounted(async () => {
     // Setup Sheet 1
     const sheet1 = workbook.getSheetBySheetId('sheet1');
     if (sheet1) {
+      // Hide child rows for collapsed groups
       for (const [checklistName, range] of rowMapping1.childRowRanges) {
         sheet1.hideRows(range.start, range.count);
         expandedGroups1.set(checklistName, false);
       }
 
+      // Set up date picker with DATE validation (shows calendar popup)
+      const minDate = new Date(2020, 0, 1);
+      const maxDate = new Date(2030, 11, 31);
+      sheet1
+        .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
+        ?.setDataValidation(
+          api.newDataValidation().requireDateBetween(minDate, maxDate).build(),
+        );
+
+      // Set initial date value using the correct format for Univer
+      const todayFormatted = `${today.getMonth() + 1}/${today.getDate()}/${today.getFullYear()}`;
+      sheet1
+        .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
+        ?.setValue(todayFormatted);
+
+      // Apply checkbox validation (now starting from row 3)
+      const checkboxStartRow = DATA_START_ROW + 1;
       const endRow1 = totalRows1;
       sheet1
-        .getRange(`C2:C${endRow1}`)
-        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
+        .getRange(`C${checkboxStartRow}:C${endRow1}`)
+        ?.setDataValidation(
+          api.newDataValidation().requireCheckbox('1', '0').build(),
+        );
       sheet1
-        .getRange(`D2:D${endRow1}`)
-        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
+        .getRange(`D${checkboxStartRow}:D${endRow1}`)
+        ?.setDataValidation(
+          api.newDataValidation().requireCheckbox('1', '0').build(),
+        );
       sheet1
-        .getRange(`E2:E${endRow1}`)
-        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
+        .getRange(`E${checkboxStartRow}:E${endRow1}`)
+        ?.setDataValidation(
+          api.newDataValidation().requireCheckbox('1', '0').build(),
+        );
     }
 
     // Setup Sheet 2
@@ -422,7 +590,9 @@ onMounted(async () => {
         const colLetter = getColumnLetter(dayColStart + day);
         sheet2
           .getRange(`${colLetter}2:${colLetter}${totalRows2}`)
-          ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
+          ?.setDataValidation(
+            api.newDataValidation().requireCheckbox('1', '0').build(),
+          );
       }
     }
 
@@ -444,7 +614,59 @@ onMounted(async () => {
         }
       }
     });
+
+    // Listen for cell edit end to detect date picker changes
+    api.addEvent(api.Event.SheetEditEnded, async (params) => {
+      if (isInitialLoad || isLoadingSheet1.value) return;
+
+      const { row, column, worksheet: editedSheet, isConfirm } = params;
+
+      // Only process if edit was confirmed (not cancelled)
+      if (!isConfirm) return;
+
+      // Check if the edited cell is the date picker cell in Sheet1
+      if (
+        editedSheet?.getSheetId() === 'sheet1' &&
+        row === DATE_PICKER_ROW &&
+        column === DATE_PICKER_VALUE_COL
+      ) {
+        // Get the new value from the cell
+        const sheet = workbook.getSheetBySheetId('sheet1');
+        const cellValue = sheet
+          ?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
+          ?.getValue();
+
+        if (cellValue) {
+          let isoDate = '';
+
+          if (typeof cellValue === 'number') {
+            // Excel serial date number
+            isoDate = serialToDate(cellValue);
+          } else if (typeof cellValue === 'string') {
+            // Parse M/D/YYYY or other date string formats
+            const dateStr = cellValue.toString();
+            // Try to parse the date string
+            const parsed = new Date(dateStr);
+            if (!Number.isNaN(parsed.getTime())) {
+              const year = parsed.getFullYear();
+              const month = String(parsed.getMonth() + 1).padStart(2, '0');
+              const day = String(parsed.getDate()).padStart(2, '0');
+              isoDate = `${year}-${month}-${day}`;
+            }
+          }
+
+          // Only refresh if the date actually changed
+          if (isoDate && isoDate !== selectedDate.value) {
+            selectedDate.value = isoDate;
+            await refreshSheet1(isoDate);
+          }
+        }
+      }
+    });
   }
+
+  // Mark initial load as complete
+  isInitialLoad = false;
 });
 
 onUnmounted(() => {
@@ -455,12 +677,25 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col h-screen w-full bg-[#26232B]">
-    <header class="flex justify-between items-center px-8 py-4 bg-[#292630] border-b border-[#3d3a45] shadow-lg">
+    <header class="flex justify-between items-center px-8 py-3 bg-[#292630] border-b border-[#3d3a45] shadow-lg">
       <h1 class="m-0 font-['Inter'] text-2xl font-semibold text-white tracking-tight">Quản lí</h1>
     </header>
     <div class="flex-1 p-4 overflow-hidden">
-      <div class="h-full bg-[#292630] border border-[#3d3a45] rounded-lg shadow-xl overflow-hidden">
+      <div class="relative h-full bg-[#292630] border border-[#3d3a45] rounded-lg shadow-xl overflow-hidden">
+        <!-- Spreadsheet container -->
         <div ref="containerRef" class="w-full h-full"></div>
+
+        <!-- Loading overlay -->
+        <div
+          ref="loadingOverlayRef"
+          class="absolute inset-0 bg-black/50 backdrop-blur-sm items-center justify-center z-50 hidden"
+          style="display: none"
+        >
+          <div class="flex flex-col items-center gap-3 p-6 bg-[#292630] rounded-xl border border-[#3d3a45] shadow-2xl">
+            <div class="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-sm text-gray-300 font-medium">Đang tải dữ liệu...</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

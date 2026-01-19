@@ -78,15 +78,42 @@ export async function fetchChecklistRecords(): Promise<ChecklistRecord[]> {
   return response.json();
 }
 
-// Fetch all checklist items with their latest record (or null if none)
-export async function fetchAllChecklistItems(): Promise<
-  ChecklistItemWithRecord[]
-> {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `
+// Fetch all checklist items with their record for a specific date (or latest if no date provided)
+export async function fetchAllChecklistItems(
+  date?: string,
+): Promise<ChecklistItemWithRecord[]> {
+  // If date is provided, filter by that specific date
+  // If no date, get the latest record for each item
+  const query = date
+    ? `
+        select ChecklistItem {
+          id,
+          name,
+          standard_score,
+          order,
+          checklist: { name },
+          record := assert_single((
+            select .records {
+              id,
+              assessment_date,
+              employee_checked,
+              cht_checked,
+              asm_checked,
+              achievement_percentage,
+              successful_completions,
+              implementation_issues,
+              score_achieved,
+              final_classification,
+              employee: { employee_id }
+            }
+            filter .is_deleted = false and .assessment_date = <cal::local_date>$date
+            limit 1
+          ))
+        }
+        filter .is_deleted = false
+        order by .checklist.name then .order
+      `
+    : `
         select ChecklistItem {
           id,
           name,
@@ -114,12 +141,41 @@ export async function fetchAllChecklistItems(): Promise<
         }
         filter .is_deleted = false
         order by .checklist.name then .order
-      `,
+      `;
+
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query,
+      variables: date ? { date } : undefined,
     }),
   });
 
   if (!response.ok) throw new Error('Failed to fetch data');
   return response.json();
+}
+
+// Fetch available assessment dates (for date picker)
+export async function fetchAvailableAssessmentDates(): Promise<string[]> {
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `
+        select array_agg(distinct (
+          select ChecklistRecord.assessment_date
+          filter ChecklistRecord.is_deleted = false
+        ))
+      `,
+    }),
+  });
+
+  if (!response.ok) throw new Error('Failed to fetch assessment dates');
+  const result: string[][] = await response.json();
+  // Result is [[dates...]], extract inner array and sort descending
+  const dates = result[0] ?? [];
+  return dates.sort((a, b) => b.localeCompare(a));
 }
 
 // ===================================================

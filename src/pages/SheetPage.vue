@@ -5,7 +5,7 @@ import { UniverSheetsDataValidationPreset } from '@univerjs/preset-sheets-data-v
 import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-validation/locales/en-US';
 import type { FUniver, Univer } from '@univerjs/presets';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import {
   type ChecklistItemWithRecord,
   type DetailChecklistItemWithRecord,
@@ -78,11 +78,25 @@ function buildSheet1CellData(
     Record<number, { v: string | number; s?: object }>
   > = {};
 
-  // Row 0: Date picker row with label and dropdown cell (using default Univer styles)
+  // Row 0: Date picker row with label and dropdown cell
   const datePickerLabelStyle = {
     bl: 1, // Bold
     vt: 2, // Vertical align middle
     ht: 2, // Right align
+  };
+
+  // Style for the date picker cell - similar to data validation dropdown cells
+  const datePickerCellStyle = {
+    vt: 2, // Vertical align middle
+    ht: 1, // Left align (like dropdown values)
+    bg: { rgb: '#F8F9FA' }, // Light gray background to indicate interactive cell
+    bd: {
+      // Border around the cell to look like a dropdown
+      t: { s: 1, cl: { rgb: '#DADCE0' } }, // Top border
+      b: { s: 1, cl: { rgb: '#DADCE0' } }, // Bottom border
+      l: { s: 1, cl: { rgb: '#DADCE0' } }, // Left border
+      r: { s: 1, cl: { rgb: '#DADCE0' } }, // Right border
+    },
   };
 
   // Format date as M/D/YYYY for Univer date picker compatibility
@@ -92,29 +106,35 @@ function buildSheet1CellData(
     formattedDate = `${month}/${day}/${year}`;
   }
 
+  // Get the employee ID from the first item with a record
+  const employeeId =
+    items.find((item) => item.record?.employee?.employee_id)?.record?.employee
+      ?.employee_id ?? '';
+
   cells[DATE_PICKER_ROW] = {
     0: { v: 'Ngày đánh giá:', s: datePickerLabelStyle },
-    1: { v: formattedDate },
-    2: { v: '' },
-    3: { v: '' },
-    4: { v: '' },
+    1: { v: formattedDate, s: datePickerCellStyle },
+    2: { v: 'ID Nhân viên:', s: datePickerLabelStyle },
+    3: { v: employeeId, s: datePickerCellStyle },
   };
 
-  // Row 1: Column headers
+  // Row 1: Column headers (removed ID Nhân viên column)
   const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' } };
+  const headerStyleWrap = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, tb: 3 }; // tb: 3 = text wrap
   const checklistHeaderStyle = {
     bl: 1,
     vt: 2,
     bg: { rgb: '#4A90D9' },
     cl: { rgb: '#FFFFFF' },
+    tb: 3, // Text wrap enabled (tb: 1=overflow, 2=clip, 3=wrap)
   };
+  const itemNameStyle = { vt: 2, tb: 3 }; // Text wrap for item names
 
   cells[1] = {
-    0: { v: 'ID Nhân viên', s: headerStyle },
-    1: { v: 'TÊN CHECKLIST / ITEM', s: headerStyle },
-    2: { v: 'NHÂN VIÊN', s: headerStyle },
-    3: { v: 'CHT', s: headerStyle },
-    4: { v: 'ASM', s: headerStyle },
+    0: { v: 'TÊN CHECKLIST / ITEM', s: headerStyleWrap },
+    1: { v: 'NHÂN VIÊN', s: headerStyle },
+    2: { v: 'CHT', s: headerStyle },
+    3: { v: 'ASM', s: headerStyle },
   };
 
   rowMapping1 = { checklistRows: new Map(), childRowRanges: new Map() };
@@ -126,11 +146,10 @@ function buildSheet1CellData(
     rowMapping1.checklistRows.set(currentRow, checklistName);
 
     cells[currentRow] = {
-      0: { v: '', s: checklistHeaderStyle },
-      1: { v: `▶ ${checklistName}`, s: checklistHeaderStyle },
+      0: { v: `▶ ${checklistName}`, s: checklistHeaderStyle },
+      1: { v: '', s: checklistHeaderStyle },
       2: { v: '', s: checklistHeaderStyle },
       3: { v: '', s: checklistHeaderStyle },
-      4: { v: '', s: checklistHeaderStyle },
     };
     currentRow++;
 
@@ -138,11 +157,10 @@ function buildSheet1CellData(
     for (const item of checklistItems) {
       const r = item.record;
       cells[currentRow] = {
-        0: { v: r?.employee?.employee_id ?? '' },
-        1: { v: `    ${item.name}` },
-        2: { v: r?.employee_checked ? 1 : 0 },
-        3: { v: r?.cht_checked ? 1 : 0 },
-        4: { v: r?.asm_checked ? 1 : 0 },
+        0: { v: `    ${item.name}`, s: itemNameStyle },
+        1: { v: r?.employee_checked ? 1 : 0 },
+        2: { v: r?.cht_checked ? 1 : 0 },
+        3: { v: r?.asm_checked ? 1 : 0 },
       };
       currentRow++;
     }
@@ -170,11 +188,11 @@ function toggleGroup1(checklistName: string, headerRowIndex: number) {
   if (isExpanded) {
     sheet.hideRows(range.start, range.count);
     expandedGroups1.set(checklistName, false);
-    sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▶ ${checklistName}`);
+    sheet.getRange(headerRowIndex, 0, 1, 1)?.setValue(`▶ ${checklistName}`);
   } else {
     sheet.showRows(range.start, range.count);
     expandedGroups1.set(checklistName, true);
-    sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▼ ${checklistName}`);
+    sheet.getRange(headerRowIndex, 0, 1, 1)?.setValue(`▼ ${checklistName}`);
   }
 }
 
@@ -211,11 +229,17 @@ async function refreshSheet1(date?: string) {
     const currentRowCount = sheet.getRowCount();
     if (currentRowCount > DATA_START_ROW) {
       for (let row = DATA_START_ROW; row < currentRowCount; row++) {
-        for (let col = 0; col < 5; col++) {
+        for (let col = 0; col < 4; col++) {
           sheet.getRange(row, col, 1, 1)?.setValue('');
         }
       }
     }
+
+    // Update employee ID in the header row
+    const employeeId =
+      items.find((item) => item.record?.employee?.employee_id)?.record?.employee
+        ?.employee_id ?? '';
+    sheet.getRange(DATE_PICKER_ROW, 3, 1, 1)?.setValue(employeeId);
 
     // Set new data (skip date picker row - row 0, and header row - row 1)
     for (const [rowIndex, rowData] of Object.entries(cells)) {
@@ -233,8 +257,13 @@ async function refreshSheet1(date?: string) {
       expandedGroups1.set(checklistName, false);
     }
 
-    // Re-apply checkbox validation (now starting from row 3 due to date picker row)
+    // Re-apply checkbox validation (columns B, C, D for checkboxes)
     const checkboxStartRow = DATA_START_ROW + 1;
+    sheet
+      .getRange(`B${checkboxStartRow}:B${totalRows}`)
+      ?.setDataValidation(
+        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
+      );
     sheet
       .getRange(`C${checkboxStartRow}:C${totalRows}`)
       ?.setDataValidation(
@@ -242,11 +271,6 @@ async function refreshSheet1(date?: string) {
       );
     sheet
       .getRange(`D${checkboxStartRow}:D${totalRows}`)
-      ?.setDataValidation(
-        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
-      );
-    sheet
-      .getRange(`E${checkboxStartRow}:E${totalRows}`)
       ?.setDataValidation(
         univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
       );
@@ -293,6 +317,7 @@ function buildSheet2CellData(
   const daysInMonth = getDaysInMonth(month, year);
 
   const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, fs: 10 };
+  const headerStyleWrap = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, fs: 10, tb: 3 }; // Text wrap
   const categoryHeaderStyle = {
     bl: 1,
     vt: 2,
@@ -300,7 +325,16 @@ function buildSheet2CellData(
     cl: { rgb: '#FFFFFF' },
     fs: 11,
   };
+  const categoryHeaderStyleWrap = {
+    bl: 1,
+    vt: 2,
+    bg: { rgb: '#4A90D9' },
+    cl: { rgb: '#FFFFFF' },
+    fs: 11,
+    tb: 3, // Text wrap
+  };
   const subHeaderStyle = { bl: 1, vt: 2, bg: { rgb: '#F5F5F5' }, fs: 9 };
+  const itemContentStyle = { vt: 2, tb: 3 }; // Text wrap for NỘI DUNG column
 
   const dayColStart = 9;
   const summaryColStart = dayColStart + daysInMonth;
@@ -308,7 +342,7 @@ function buildSheet2CellData(
   // Row 0: Headers
   cells[0] = {
     0: { v: 'STT', s: headerStyle },
-    1: { v: 'NỘI DUNG', s: headerStyle },
+    1: { v: 'NỘI DUNG', s: headerStyleWrap },
     2: { v: 'NGƯỜI KS', s: headerStyle },
     3: { v: 'PHẠM VI', s: headerStyle },
     4: { v: 'KHUNG GIỜ', s: headerStyle },
@@ -342,7 +376,7 @@ function buildSheet2CellData(
     // Category header row
     const categoryRow: Record<number, { v: string | number; s?: object }> = {
       0: { v: '', s: categoryHeaderStyle },
-      1: { v: `▶ ${categoryName}`, s: categoryHeaderStyle },
+      1: { v: `▶ ${categoryName}`, s: categoryHeaderStyleWrap },
     };
     for (let col = 2; col <= summaryColStart + 5; col++) {
       categoryRow[col] = { v: '', s: categoryHeaderStyle };
@@ -358,7 +392,7 @@ function buildSheet2CellData(
 
       const row: Record<number, { v: string | number; s?: object }> = {
         0: { v: item.item_number },
-        1: { v: `    ${item.name}` },
+        1: { v: `    ${item.name}`, s: itemContentStyle },
         2: { v: item.evaluator ?? '' },
         3: { v: item.scope ?? '' },
         4: { v: item.time_frame ?? '' },
@@ -498,24 +532,24 @@ onMounted(async () => {
   columnData2[summaryColStart + 4] = { w: 70 };
   columnData2[summaryColStart + 5] = { w: 150 };
 
-  // Create workbook with BOTH sheets
+  // Create workbook with BOTH sheets (sheet1 first)
   const workbook = api.createWorkbook({
+    sheetOrder: ['sheet1', 'sheet2'], // Explicit order: Sheet 1 first
     sheets: {
       sheet1: {
         id: 'sheet1',
         name: 'Checklist',
-        columnCount: 5,
+        columnCount: 4,
         freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 }, // Freeze date picker + header
         rowData: {
           0: { h: 36, hd: 0 }, // Date picker row
           1: { h: 42, hd: 0 }, // Header row
         },
         columnData: {
-          0: { w: 120 },
-          1: { w: 180 }, // Date dropdown cell
-          2: { w: 100 },
-          3: { w: 75 },
-          4: { w: 75 },
+          0: { w: 400 }, // Checklist/Item name (3x width)
+          1: { w: 100 }, // Employee checked
+          2: { w: 100 }, // CHT checked
+          3: { w: 120 }, // ASM checked / Employee ID value
         },
         cellData: cells1,
       },
@@ -533,6 +567,9 @@ onMounted(async () => {
   });
 
   if (workbook) {
+    // Set Sheet 1 as the active/default sheet using sheet ID string
+    workbook.setActiveSheet('sheet1');
+
     // Setup Sheet 1
     const sheet1 = workbook.getSheetBySheetId('sheet1');
     if (sheet1) {
@@ -557,9 +594,14 @@ onMounted(async () => {
         .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
         ?.setValue(todayFormatted);
 
-      // Apply checkbox validation (now starting from row 3)
+      // Apply checkbox validation (columns B, C, D for checkboxes)
       const checkboxStartRow = DATA_START_ROW + 1;
       const endRow1 = totalRows1;
+      sheet1
+        .getRange(`B${checkboxStartRow}:B${endRow1}`)
+        ?.setDataValidation(
+          api.newDataValidation().requireCheckbox('1', '0').build(),
+        );
       sheet1
         .getRange(`C${checkboxStartRow}:C${endRow1}`)
         ?.setDataValidation(
@@ -567,11 +609,6 @@ onMounted(async () => {
         );
       sheet1
         .getRange(`D${checkboxStartRow}:D${endRow1}`)
-        ?.setDataValidation(
-          api.newDataValidation().requireCheckbox('1', '0').build(),
-        );
-      sheet1
-        .getRange(`E${checkboxStartRow}:E${endRow1}`)
         ?.setDataValidation(
           api.newDataValidation().requireCheckbox('1', '0').build(),
         );
@@ -665,8 +702,14 @@ onMounted(async () => {
     });
   }
 
-  // Mark initial load as complete
+  // Mark initial load as complete and ensure Sheet 1 is active after all setup
   isInitialLoad = false;
+
+  // Use nextTick to ensure Sheet 1 is shown after UI is fully rendered
+  await nextTick();
+  if (workbook) {
+    workbook.setActiveSheet('sheet1');
+  }
 });
 
 onUnmounted(() => {

@@ -12,7 +12,12 @@
 [branch.config]
 
 # Enable CORS for local development
-cors_allow_origins = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]
+cors_allow_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
 
 # session_idle_transaction_timeout     = "30 seconds"
 # query_execution_timeout              = "1 minute"
@@ -32,8 +37,8 @@ cors_allow_origins = ["http://localhost:3000", "http://localhost:5173", "http://
 # auto_rebuild_query_cache_timeout    = "30 seconds"
 
 # [instance.config]
-# http_max_connections                = 100
-
+http_max_connections = 100
+listen_addresses = ["172.14.0.11", "127.0.0.1"]
 ## Email providers (SMTP)
 # [[branch.config."cfg::SMTPProviderConfig"]]
 # name                  = "mailtrap_sandbox"

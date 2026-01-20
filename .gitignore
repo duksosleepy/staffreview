@@ -5,6 +5,7 @@
 
 # Dist
 node_modules
+*/node_modules
 dist/
 
 # Profile
@@ -19,3 +20,5 @@ dist/
 storybook-static
 .env
 *.xlsx
+.venv
+uv.lock

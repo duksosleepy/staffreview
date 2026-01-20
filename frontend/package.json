@@ -1,0 +1,39 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=25.2.1"
+  },
+  "scripts": {
+    "build": "rsbuild build",
+    "dev": "rsbuild dev",
+    "preview": "rsbuild preview"
+  },
+  "dependencies": {
+    "@ark-ui/vue": "^5.30.0",
+    "@univerjs/preset-sheets-core": "^0.15.1",
+    "@univerjs/preset-sheets-data-validation": "^0.15.1",
+    "@univerjs/presets": "^0.15.1",
+    "@univerjs/sheets-data-validation": "^0.15.1",
+    "@univerjs/sheets-data-validation-ui": "^0.15.1",
+    "better-auth": "^1.4.10",
+    "gel": "^2.2.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.26",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@gel/generate": "^0.7.1",
+    "@rsbuild/core": "^1.7.2",
+    "@rsbuild/plugin-vue": "^1.2.2",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^25.0.8",
+    "dotenv-cli": "^11.0.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

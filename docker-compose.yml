@@ -1,21 +1,21 @@
 services:
   frontend:
     image: app
-    container_name: app
+    container_name: staffreview-frontend
     environment:
       - GEL_DSN=gel://admin:geldata@gel:5656
     volumes:
-      - .:/usr/src/app
+      - ./frontend:/usr/src/app
     networks:
       - internal
 
   api:
     image: app
-    container_name: app
+    container_name: staffreview-api
     environment:
       - GEL_DSN=gel://admin:geldata@gel:5656
     volumes:
-      - .:/usr/src/app
+      - ./server:/usr/src/app
     networks:
       - internal
 

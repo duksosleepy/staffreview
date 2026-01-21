@@ -14,6 +14,7 @@ import {
 } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
 import { usePermission } from '@/composables/usePermission';
+import UserMenu from '@/components/UserMenu.vue';
 
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
@@ -738,40 +739,47 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col h-screen w-full bg-[#26232B]">
-    <header class="flex justify-between items-center px-8 py-3 bg-[#292630] border-b border-[#3d3a45] shadow-lg">
-      <h1 class="m-0 font-['Inter'] text-2xl font-semibold text-white tracking-tight">Quan li</h1>
-
-      <!-- User info and logout -->
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2 text-sm text-gray-300">
-          <span class="font-medium">{{ auth.userName }}</span>
-          <span class="px-2 py-0.5 bg-indigo-600 text-white text-xs font-medium rounded uppercase">
-            {{ auth.role }}
-          </span>
+    <!-- Enhanced Header with Glassmorphism -->
+    <header class="glass flex justify-between items-center px-4 sm:px-8 py-3 border-b border-white/10">
+      <!-- Logo & Title -->
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 items-center justify-center shadow-lg shadow-teal-500/20">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
         </div>
-        <button
-          type="button"
-          class="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-[#3d3a45] rounded transition-colors"
-          @click="auth.logout"
-        >
-          Dang xuat
-        </button>
+        <div>
+          <h1 class="m-0 font-['Inter'] text-lg sm:text-xl font-semibold text-white tracking-tight">
+            Quan ly
+          </h1>
+          <p class="hidden sm:block text-xs text-gray-400 mt-0.5">He thong kiem tra cong viec</p>
+        </div>
       </div>
+
+      <!-- User Menu -->
+      <UserMenu
+        :user-name="auth.userName"
+        :user-email="auth.userEmail"
+        :role="auth.role"
+        @logout="auth.logout"
+      />
     </header>
-    <div class="flex-1 p-4 overflow-hidden">
-      <div class="relative h-full bg-[#292630] border border-[#3d3a45] rounded-lg shadow-xl overflow-hidden">
+
+    <!-- Main Content Area -->
+    <div class="flex-1 p-2 sm:p-4 overflow-hidden">
+      <div class="relative h-full glass-card rounded-xl sm:rounded-2xl overflow-hidden">
         <!-- Spreadsheet container -->
         <div ref="containerRef" class="w-full h-full"></div>
 
         <!-- Loading overlay -->
         <div
           ref="loadingOverlayRef"
-          class="absolute inset-0 bg-black/50 backdrop-blur-sm items-center justify-center z-50 hidden"
+          class="absolute inset-0 bg-black/60 backdrop-blur-sm items-center justify-center z-50 hidden"
           style="display: none"
         >
-          <div class="flex flex-col items-center gap-3 p-6 bg-[#292630] rounded-xl border border-[#3d3a45] shadow-2xl">
-            <div class="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-            <span class="text-sm text-gray-300 font-medium">Đang tải dữ liệu...</span>
+          <div class="flex flex-col items-center gap-4 p-8 glass rounded-2xl">
+            <div class="w-10 h-10 border-3 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-sm text-gray-300 font-medium">Dang tai du lieu...</span>
           </div>
         </div>
       </div>

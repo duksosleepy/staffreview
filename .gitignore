@@ -11,7 +11,7 @@ conf/
 files/
 # Profile
 .rspack-profile-*/
-
+pg_data/
 # IDE
 .vscode/*
 !.vscode/extensions.json

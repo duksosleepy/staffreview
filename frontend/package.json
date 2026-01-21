@@ -16,10 +16,6 @@
     "@univerjs/preset-sheets-core": "^0.15.1",
     "@univerjs/preset-sheets-data-validation": "^0.15.1",
     "@univerjs/presets": "^0.15.1",
-    "@univerjs/sheets-data-validation": "^0.15.1",
-    "@univerjs/sheets-data-validation-ui": "^0.15.1",
-    "better-auth": "^1.4.10",
-    "gel": "^2.2.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.26",
     "vue-router": "^4.5.0"

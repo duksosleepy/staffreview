@@ -1,38 +1,4 @@
 module default {
-    type Employee {
-        required employee_id: str {
-            constraint exclusive;
-        }
-        required email: str;
-    }
-
-    # ===================================================
-    # Sheet: Container for multiple checklist records
-    # ===================================================
-    type Sheet {
-        # Sheet belongs to an employee
-        required employee: Employee {
-            on target delete delete source;
-        }
-
-        # Sheet name/title
-        name: str;
-
-        # Computed backlink to checklist records
-        multi records := .<sheet[is ChecklistRecord];
-
-        # Timestamps
-        created_at: datetime {
-            default := datetime_current();
-        }
-        updated_at: datetime {
-            default := datetime_current();
-        }
-
-        # Indexes
-        index on (.employee);
-    }
-
     # ===================================================
     # Checklist: Parent container for ChecklistItems
     # ===================================================
@@ -108,20 +74,13 @@ module default {
         index on (.is_deleted);
     }
     type ChecklistRecord {
-        # Link to the sheet this record belongs to
-        required sheet: Sheet {
-            on target delete delete source;
-        }
-
-        # Link đến checklist item (task) đang được đánh giá
+        # Link to checklist item being evaluated
         required checklist_item: ChecklistItem {
             on target delete delete source;
         }
 
-        # Link to employee performing the assessment
-        required employee: Employee {
-            on target delete delete source;
-        }
+        # Staff ID from Casdoor JWT (sub claim)
+        required staff_id: str;
 
         # Ngày đánh giá
         required assessment_date: cal::local_date;
@@ -183,12 +142,11 @@ module default {
         }
 
 
-        constraint exclusive on ((.checklist_item, .employee, .assessment_date));
+        constraint exclusive on ((.checklist_item, .staff_id, .assessment_date));
 
         # Indexes
-        index on (.sheet);
         index on (.checklist_item);
-        index on (.employee);
+        index on (.staff_id);
         index on (.assessment_date);
         index on (.is_deleted);
         index on (.final_classification);
@@ -309,10 +267,8 @@ module default {
             on target delete delete source;
         }
 
-        # Link to employee
-        required employee: Employee {
-            on target delete delete source;
-        }
+        # Staff ID from Casdoor JWT (sub claim)
+        required staff_id: str;
 
         # Month and Year for this record
         required month: int32 {
@@ -375,12 +331,12 @@ module default {
             default := datetime_current();
         }
 
-        # Constraint - one record per item per employee per month/year
-        constraint exclusive on ((.detail_item, .employee, .month, .year));
+        # Constraint - one record per item per staff per month/year
+        constraint exclusive on ((.detail_item, .staff_id, .month, .year));
 
         # Indexes
         index on (.detail_item);
-        index on (.employee);
+        index on (.staff_id);
         index on ((.month, .year));
         index on (.is_deleted);
         index on (.classification);

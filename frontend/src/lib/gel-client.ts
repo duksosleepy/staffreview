@@ -1,4 +1,20 @@
-const API_URL = '/api/query';
+/**
+ * Secure API client for checklist data
+ *
+ * All data fetching goes through secure server endpoints that:
+ * 1. Authenticate the user via httpOnly JWT cookie
+ * 2. Apply role-based filtering server-side
+ * 3. Never expose raw query capability
+ *
+ * Security: User cannot tamper with requests to access other users' data
+ * because filtering is done server-side based on the JWT token.
+ */
+
+const API_BASE = "/api/checklist";
+
+// ===================================================
+// Types
+// ===================================================
 
 export type Checklist = {
   id: string;
@@ -25,7 +41,7 @@ export type ChecklistRecord = {
   implementation_issues: string | null;
   score_achieved: number | null;
   final_classification: string | null;
-  employee: { employee_id: string };
+  staff_id: string;
   checklist_item: {
     name: string;
     standard_score: number | null;
@@ -33,7 +49,6 @@ export type ChecklistRecord = {
   };
 };
 
-// Type for ChecklistItem with optional record data
 export type ChecklistItemWithRecord = {
   id: string;
   name: string;
@@ -51,138 +66,11 @@ export type ChecklistItemWithRecord = {
     implementation_issues: string | null;
     score_achieved: number | null;
     final_classification: string | null;
-    employee: { employee_id: string };
+    staff_id: string;
   } | null;
 };
 
-export async function fetchChecklistRecords(): Promise<ChecklistRecord[]> {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `
-        select ChecklistRecord {
-          id, assessment_date, employee_checked, cht_checked, asm_checked,
-          achievement_percentage, successful_completions, implementation_issues,
-          score_achieved, final_classification,
-          employee: { employee_id },
-          checklist_item: { name, standard_score, checklist: { name } }
-        }
-        filter .is_deleted = false
-        order by .checklist_item.checklist.name then .checklist_item.order then .assessment_date
-      `,
-    }),
-  });
-
-  if (!response.ok) throw new Error('Failed to fetch data');
-  return response.json();
-}
-
-// Fetch all checklist items with their record for a specific date (or latest if no date provided)
-export async function fetchAllChecklistItems(
-  date?: string,
-): Promise<ChecklistItemWithRecord[]> {
-  // If date is provided, filter by that specific date
-  // If no date, get the latest record for each item
-  const query = date
-    ? `
-        select ChecklistItem {
-          id,
-          name,
-          standard_score,
-          order,
-          checklist: { name },
-          record := assert_single((
-            select .records {
-              id,
-              assessment_date,
-              employee_checked,
-              cht_checked,
-              asm_checked,
-              achievement_percentage,
-              successful_completions,
-              implementation_issues,
-              score_achieved,
-              final_classification,
-              employee: { employee_id }
-            }
-            filter .is_deleted = false and .assessment_date = <cal::local_date>$date
-            limit 1
-          ))
-        }
-        filter .is_deleted = false
-        order by .checklist.name then .order
-      `
-    : `
-        select ChecklistItem {
-          id,
-          name,
-          standard_score,
-          order,
-          checklist: { name },
-          record := assert_single((
-            select .records {
-              id,
-              assessment_date,
-              employee_checked,
-              cht_checked,
-              asm_checked,
-              achievement_percentage,
-              successful_completions,
-              implementation_issues,
-              score_achieved,
-              final_classification,
-              employee: { employee_id }
-            }
-            filter .is_deleted = false
-            order by .assessment_date desc
-            limit 1
-          ))
-        }
-        filter .is_deleted = false
-        order by .checklist.name then .order
-      `;
-
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      variables: date ? { date } : undefined,
-    }),
-  });
-
-  if (!response.ok) throw new Error('Failed to fetch data');
-  return response.json();
-}
-
-// Fetch available assessment dates (for date picker)
-export async function fetchAvailableAssessmentDates(): Promise<string[]> {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `
-        select array_agg(distinct (
-          select ChecklistRecord.assessment_date
-          filter ChecklistRecord.is_deleted = false
-        ))
-      `,
-    }),
-  });
-
-  if (!response.ok) throw new Error('Failed to fetch assessment dates');
-  const result: string[][] = await response.json();
-  // Result is [[dates...]], extract inner array and sort descending
-  const dates = result[0] ?? [];
-  return dates.sort((a, b) => b.localeCompare(a));
-}
-
-// ===================================================
-// SHEET 2: Detail Checklist Types and Functions
-// ===================================================
-
-export type DetailCategoryType = 'daily' | 'weekly' | 'monthly';
+export type DetailCategoryType = "daily" | "weekly" | "monthly";
 
 export type DetailCategory = {
   id: string;
@@ -190,22 +78,6 @@ export type DetailCategory = {
   category_type: DetailCategoryType;
   description: string | null;
   order: number;
-};
-
-export type DetailChecklistItem = {
-  id: string;
-  item_number: number;
-  name: string;
-  evaluator: string | null;
-  scope: string | null;
-  time_frame: string | null;
-  penalty_level_1: string | null;
-  penalty_level_2: string | null;
-  penalty_level_3: string | null;
-  score: number;
-  order: number;
-  notes: string | null;
-  category: { id: string; name: string; category_type: DetailCategoryType };
 };
 
 export type DetailMonthlyRecord = {
@@ -219,10 +91,9 @@ export type DetailMonthlyRecord = {
   score_achieved: number | null;
   classification: string | null;
   notes: string | null;
-  employee: { employee_id: string };
+  staff_id: string;
 };
 
-// Type for DetailChecklistItem with optional monthly record
 export type DetailChecklistItemWithRecord = {
   id: string;
   item_number: number;
@@ -240,85 +111,111 @@ export type DetailChecklistItemWithRecord = {
   record: DetailMonthlyRecord | null;
 };
 
-// Fetch all detail categories
-export async function fetchDetailCategories(): Promise<DetailCategory[]> {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `
-        select DetailCategory {
-          id,
-          name,
-          category_type,
-          description,
-          order
-        }
-        order by .order
-      `,
-    }),
-  });
+// ===================================================
+// API Error Handling
+// ===================================================
 
-  if (!response.ok) throw new Error('Failed to fetch detail categories');
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    if (response.status === 401) {
+      // Redirect to login on auth error
+      window.location.href = "/login";
+      throw new ApiError(401, "Unauthorized");
+    }
+    throw new ApiError(response.status, `API error: ${response.statusText}`);
+  }
   return response.json();
 }
 
-// Fetch all detail checklist items with their latest record for a specific month/year
+// ===================================================
+// Secure API Functions
+// ===================================================
+
+/**
+ * Fetch checklist items with records for a specific date
+ * Server automatically filters by user's role and employee_id
+ */
+export async function fetchAllChecklistItems(
+  date?: string,
+): Promise<ChecklistItemWithRecord[]> {
+  const url = new URL(`${API_BASE}/items`, window.location.origin);
+  if (date) {
+    url.searchParams.set("date", date);
+  }
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "include",
+  });
+
+  return handleResponse<ChecklistItemWithRecord[]>(response);
+}
+
+/**
+ * Fetch available assessment dates
+ * Server automatically filters to show only dates the user has access to
+ */
+export async function fetchAvailableAssessmentDates(): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/assessment-dates`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  return handleResponse<string[]>(response);
+}
+
+/**
+ * Fetch detail checklist items with monthly records
+ * Server automatically filters by user's role and employee_id
+ */
 export async function fetchAllDetailChecklistItems(
   month?: number,
   year?: number,
 ): Promise<DetailChecklistItemWithRecord[]> {
-  const currentDate = new Date();
-  const targetMonth = month ?? currentDate.getMonth() + 1;
-  const targetYear = year ?? currentDate.getFullYear();
+  const url = new URL(`${API_BASE}/detail-items`, window.location.origin);
+  if (month !== undefined) {
+    url.searchParams.set("month", month.toString());
+  }
+  if (year !== undefined) {
+    url.searchParams.set("year", year.toString());
+  }
 
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `
-        select DetailChecklistItem {
-          id,
-          item_number,
-          name,
-          evaluator,
-          scope,
-          time_frame,
-          penalty_level_1,
-          penalty_level_2,
-          penalty_level_3,
-          score,
-          order,
-          notes,
-          category: { id, name, category_type },
-          record := assert_single((
-            select .records {
-              id,
-              month,
-              year,
-              daily_checks,
-              achievement_percentage,
-              successful_completions,
-              implementation_issues_count,
-              score_achieved,
-              classification,
-              notes,
-              employee: { employee_id }
-            }
-            filter .is_deleted = false and .month = <int32>$month and .year = <int32>$year
-            limit 1
-          ))
-        }
-        filter .is_deleted = false
-        order by .category.order then .order then .item_number
-      `,
-      variables: {
-        month: targetMonth,
-        year: targetYear,
-      },
-    }),
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "include",
   });
 
-  if (!response.ok) throw new Error('Failed to fetch detail checklist items');
-  return response.json();
+  return handleResponse<DetailChecklistItemWithRecord[]>(response);
+}
+
+/**
+ * Fetch detail categories (metadata only, no user filtering)
+ */
+export async function fetchDetailCategories(): Promise<DetailCategory[]> {
+  const response = await fetch(`${API_BASE}/categories`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  return handleResponse<DetailCategory[]>(response);
+}
+
+// Legacy function - kept for backwards compatibility but now uses secure endpoint
+export async function fetchChecklistRecords(): Promise<ChecklistRecord[]> {
+  // This functionality is now handled by fetchAllChecklistItems
+  // Returns empty array - use fetchAllChecklistItems instead
+  console.warn(
+    "fetchChecklistRecords is deprecated. Use fetchAllChecklistItems instead.",
+  );
+  return [];
 }

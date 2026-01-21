@@ -9,6 +9,7 @@ import pino from "pino";
 import { ZodError } from "zod";
 import type { Env } from "./lib/env.js";
 import { apiRoutes } from "./routes/index.js";
+import { authRoutes } from "./routes/auth.js";
 
 // Environment configuration
 const port = Number.parseInt(process.env.PORT || "3001", 10);
@@ -50,7 +51,9 @@ const app = new Hono<Env>()
     return c.text("Staff Review API Server");
   })
   // Mount API routes
-  .route("/api", apiRoutes);
+  .route("/api", apiRoutes)
+  // Mount auth routes
+  .route("/auth", authRoutes);
 
 // Centralized error handler
 app.onError((err, c) => {

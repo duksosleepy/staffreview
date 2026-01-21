@@ -12,9 +12,15 @@ import {
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
 } from '@/lib/gel-client';
+import { useAuthStore } from '@/stores/auth';
+import { usePermission } from '@/composables/usePermission';
 
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
+
+// Auth
+const auth = useAuthStore();
+const { canCheckCht, canCheckAsm } = usePermission();
 
 const containerRef = ref<HTMLDivElement | null>(null);
 const loadingOverlayRef = ref<HTMLDivElement | null>(null);
@@ -106,16 +112,15 @@ function buildSheet1CellData(
     formattedDate = `${month}/${day}/${year}`;
   }
 
-  // Get the employee ID from the first item with a record
-  const employeeId =
-    items.find((item) => item.record?.employee?.employee_id)?.record?.employee
-      ?.employee_id ?? '';
+  // Get user info from auth store
+  const userName = auth.user?.name ?? '';
+  const userRole = auth.user?.role?.toUpperCase() ?? '';
 
   cells[DATE_PICKER_ROW] = {
-    0: { v: 'Ngày đánh giá:', s: datePickerLabelStyle },
+    0: { v: 'Ngay danh gia:', s: datePickerLabelStyle },
     1: { v: formattedDate, s: datePickerCellStyle },
-    2: { v: 'ID Nhân viên:', s: datePickerLabelStyle },
-    3: { v: employeeId, s: datePickerCellStyle },
+    2: { v: 'Nhan vien:', s: datePickerLabelStyle },
+    3: { v: `${userName} (${userRole})`, s: datePickerCellStyle },
   };
 
   // Row 1: Column headers (removed ID Nhân viên column)
@@ -225,21 +230,19 @@ async function refreshSheet1(date?: string) {
     const sheet = workbook?.getSheetBySheetId('sheet1');
     if (!sheet) return;
 
-    // Clear existing data (except date picker row and header row)
-    const currentRowCount = sheet.getRowCount();
-    if (currentRowCount > DATA_START_ROW) {
-      for (let row = DATA_START_ROW; row < currentRowCount; row++) {
-        for (let col = 0; col < 4; col++) {
-          sheet.getRange(row, col, 1, 1)?.setValue('');
-        }
+    // Clear existing data rows (except date picker row and header row)
+    // Use a reasonable max to clear previous data
+    const maxRowsToClear = 500;
+    for (let row = DATA_START_ROW; row < maxRowsToClear; row++) {
+      for (let col = 0; col < 4; col++) {
+        sheet.getRange(row, col, 1, 1)?.setValue('');
       }
     }
 
-    // Update employee ID in the header row
-    const employeeId =
-      items.find((item) => item.record?.employee?.employee_id)?.record?.employee
-        ?.employee_id ?? '';
-    sheet.getRange(DATE_PICKER_ROW, 3, 1, 1)?.setValue(employeeId);
+    // Update user info in the header row
+    const userName = auth.user?.name ?? '';
+    const userRole = auth.user?.role?.toUpperCase() ?? '';
+    sheet.getRange(DATE_PICKER_ROW, 3, 1, 1)?.setValue(`${userName} (${userRole})`);
 
     // Set new data (skip date picker row - row 0, and header row - row 1)
     for (const [rowIndex, rowData] of Object.entries(cells)) {
@@ -612,6 +615,9 @@ onMounted(async () => {
         ?.setDataValidation(
           api.newDataValidation().requireCheckbox('1', '0').build(),
         );
+
+      // Note: Role-based edit restrictions are enforced via BeforeSheetEditStart event
+      // Visual styling for locked columns would require custom cell rendering
     }
 
     // Setup Sheet 2
@@ -650,6 +656,24 @@ onMounted(async () => {
           toggleGroup2(categoryName, row);
         }
       }
+    });
+
+    // Role-based edit protection - prevent editing restricted columns
+    api.addEvent(api.Event.BeforeSheetEditStart, (params) => {
+      const { row, column, worksheet } = params;
+      const sheetId = worksheet?.getSheetId();
+
+      if (sheetId === 'sheet1' && row >= DATA_START_ROW) {
+        // Column 2 = CHT, Column 3 = ASM
+        if (column === 2 && !canCheckCht.value) {
+          return false; // Cancel edit
+        }
+        if (column === 3 && !canCheckAsm.value) {
+          return false; // Cancel edit
+        }
+      }
+
+      return true; // Allow edit
     });
 
     // Listen for cell edit end to detect date picker changes
@@ -721,7 +745,24 @@ onUnmounted(() => {
 <template>
   <div class="flex flex-col h-screen w-full bg-[#26232B]">
     <header class="flex justify-between items-center px-8 py-3 bg-[#292630] border-b border-[#3d3a45] shadow-lg">
-      <h1 class="m-0 font-['Inter'] text-2xl font-semibold text-white tracking-tight">Quản lí</h1>
+      <h1 class="m-0 font-['Inter'] text-2xl font-semibold text-white tracking-tight">Quan li</h1>
+
+      <!-- User info and logout -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 text-sm text-gray-300">
+          <span class="font-medium">{{ auth.userName }}</span>
+          <span class="px-2 py-0.5 bg-indigo-600 text-white text-xs font-medium rounded uppercase">
+            {{ auth.role }}
+          </span>
+        </div>
+        <button
+          type="button"
+          class="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-[#3d3a45] rounded transition-colors"
+          @click="auth.logout"
+        >
+          Dang xuat
+        </button>
+      </div>
     </header>
     <div class="flex-1 p-4 overflow-hidden">
       <div class="relative h-full bg-[#292630] border border-[#3d3a45] rounded-lg shadow-xl overflow-hidden">

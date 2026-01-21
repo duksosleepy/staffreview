@@ -38,9 +38,11 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
   const requiresAuth = to.meta.requiresAuth !== false;
   const isAuthPage = to.meta.isAuthPage === true;
 
-  // Redirect to login if not authenticated and route requires auth
+  // Redirect directly to Casdoor SSO if not authenticated and route requires auth
   if (requiresAuth && !auth.isAuthenticated) {
-    return { name: "Login", query: { redirect: to.fullPath } };
+    // Redirect to backend auth endpoint which will redirect to Casdoor
+    window.location.href = "/auth/login";
+    return false;
   }
 
   // Redirect to home if already authenticated and trying to access auth pages

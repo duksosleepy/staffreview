@@ -67,8 +67,6 @@ export const requireRole = (...roles: Role[]) => {
 
 // Middleware factory to require specific permissions
 export const requirePermission = (...permissions: Permission[]) => {
-  const { ROLE_PERMISSIONS } = require("../types/auth.js");
-
   return createMiddleware<{
     Variables: { user: AuthUser };
   }>(async (c, next) => {

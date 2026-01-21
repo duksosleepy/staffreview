@@ -81,8 +81,10 @@ export const authRoutes = new Hono<Env>()
       return c.redirect(frontendUrl);
     } catch (error) {
       const log = c.get("log");
-      log?.error({ error }, "Auth callback failed");
-      throw new HTTPException(500, { message: "Authentication failed" });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      log?.error({ errorMessage, errorStack }, "Auth callback failed");
+      throw new HTTPException(500, { message: `Authentication failed: ${errorMessage}` });
     }
   })
 

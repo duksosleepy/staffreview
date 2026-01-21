@@ -112,15 +112,10 @@ function buildSheet1CellData(
     formattedDate = `${month}/${day}/${year}`;
   }
 
-  // Get user info from auth store
-  const userName = auth.user?.name ?? '';
-  const userRole = auth.user?.role?.toUpperCase() ?? '';
-
+  // Row 0: Date picker only (user info is shown in page header)
   cells[DATE_PICKER_ROW] = {
     0: { v: 'Ngay danh gia:', s: datePickerLabelStyle },
     1: { v: formattedDate, s: datePickerCellStyle },
-    2: { v: 'Nhan vien:', s: datePickerLabelStyle },
-    3: { v: `${userName} (${userRole})`, s: datePickerCellStyle },
   };
 
   // Row 1: Column headers (removed ID Nhân viên column)
@@ -239,11 +234,6 @@ async function refreshSheet1(date?: string) {
       }
     }
 
-    // Update user info in the header row
-    const userName = auth.user?.name ?? '';
-    const userRole = auth.user?.role?.toUpperCase() ?? '';
-    sheet.getRange(DATE_PICKER_ROW, 3, 1, 1)?.setValue(`${userName} (${userRole})`);
-
     // Set new data (skip date picker row - row 0, and header row - row 1)
     for (const [rowIndex, rowData] of Object.entries(cells)) {
       const row = Number.parseInt(rowIndex, 10);
@@ -277,6 +267,7 @@ async function refreshSheet1(date?: string) {
       ?.setDataValidation(
         univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
       );
+
   } finally {
     hideLoadingOverlay();
   }
@@ -535,6 +526,15 @@ onMounted(async () => {
   columnData2[summaryColStart + 4] = { w: 70 };
   columnData2[summaryColStart + 5] = { w: 150 };
 
+  // Build column data for Sheet 1 with role-based visibility
+  // hd: 1 = hidden, hd: 0 = visible
+  const sheet1ColumnData: Record<number, { w: number; hd?: number }> = {
+    0: { w: 400 }, // Checklist/Item name
+    1: { w: 100 }, // Employee checked
+    2: { w: 100, hd: canCheckCht.value ? 0 : 1 }, // CHT - hidden for employees
+    3: { w: 120, hd: canCheckAsm.value ? 0 : 1 }, // ASM - hidden for employees and CHT
+  };
+
   // Create workbook with BOTH sheets (sheet1 first)
   const workbook = api.createWorkbook({
     sheetOrder: ['sheet1', 'sheet2'], // Explicit order: Sheet 1 first
@@ -548,12 +548,7 @@ onMounted(async () => {
           0: { h: 36, hd: 0 }, // Date picker row
           1: { h: 42, hd: 0 }, // Header row
         },
-        columnData: {
-          0: { w: 400 }, // Checklist/Item name (3x width)
-          1: { w: 100 }, // Employee checked
-          2: { w: 100 }, // CHT checked
-          3: { w: 120 }, // ASM checked / Employee ID value
-        },
+        columnData: sheet1ColumnData,
         cellData: cells1,
       },
       sheet2: {
@@ -616,8 +611,7 @@ onMounted(async () => {
           api.newDataValidation().requireCheckbox('1', '0').build(),
         );
 
-      // Note: Role-based edit restrictions are enforced via BeforeSheetEditStart event
-      // Visual styling for locked columns would require custom cell rendering
+      // Note: CHT/ASM column visibility is set in sheet1ColumnData configuration above
     }
 
     // Setup Sheet 2

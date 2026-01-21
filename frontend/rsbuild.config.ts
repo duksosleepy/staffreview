@@ -18,6 +18,11 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
+      // Proxy auth requests to the Node.js API server
+      '/auth': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
 });

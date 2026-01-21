@@ -22,8 +22,8 @@ services:
   gel:
     image: geldata/gel
     environment:
-      GEL_SERVER_SECURITY: insecure_dev_mode
-      GEL_SERVER_PASSWORD: geldata
+      GEL_SERVER_SECURITY: strict
+      GEL_SERVER_PASSWORD: ${GEL_PASSWORD:-geldata}
     volumes:
       - gel-data:/var/lib/gel/data
       - "./dbschema:/dbschema"
@@ -31,6 +31,7 @@ services:
       - "5656:5656"
     networks:
       - internal
+    restart: unless-stopped
 volumes:
   gel-data:
 networks:

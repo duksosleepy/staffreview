@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
+import { LocalDate } from "gel";
 import type { Env } from "../lib/env.js";
 import { authMiddleware } from "../middleware/auth.js";
 import type { AuthUser } from "../types/auth.js";
@@ -16,18 +17,24 @@ const MonthYearQuerySchema = z.object({
 });
 
 /**
- * Build staff_id filter clause based on user role
+ * Build staff_id filter parameters based on user role
  * - Employee: can only see their own records
  * - CHT: can see all records (they review employees)
  * - ASM: can see all records (they review everyone)
  */
-function buildStaffFilter(user: AuthUser): string {
+function buildStaffFilter(user: AuthUser) {
   if (user.role === "employee") {
     // Employee can only see records where staff_id matches their sub
-    return `and .staff_id = "${user.sub}"`;
+    return {
+      filterCondition: "and .staff_id = <str>$staffId",
+      params: { staffId: user.sub }
+    };
   }
   // CHT and ASM can see all records
-  return "";
+  return {
+    filterCondition: "",
+    params: {}
+  };
 }
 
 export const checklistRoutes = new Hono<Env>()
@@ -50,7 +57,7 @@ export const checklistRoutes = new Hono<Env>()
 
     log?.debug({ userId: user.sub, role: user.role, date }, "Fetching checklist items");
 
-    const staffFilter = buildStaffFilter(user);
+    const { filterCondition, params } = buildStaffFilter(user);
 
     const query = date
       ? `
@@ -76,7 +83,7 @@ export const checklistRoutes = new Hono<Env>()
               }
               filter .is_deleted = false
                 and .assessment_date = <cal::local_date>$date
-                ${staffFilter}
+                ${filterCondition}
               limit 1
             ))
           }
@@ -105,7 +112,7 @@ export const checklistRoutes = new Hono<Env>()
                 staff_id
               }
               filter .is_deleted = false
-                ${staffFilter}
+                ${filterCondition}
               order by .assessment_date desc
               limit 1
             ))
@@ -115,8 +122,12 @@ export const checklistRoutes = new Hono<Env>()
         `;
 
     const result = date
-      ? await db.query(query, { date })
-      : await db.query(query);
+      ? await db.query(query, { ...params, date: new LocalDate(
+          Number.parseInt(date.split("-")[0], 10),
+          Number.parseInt(date.split("-")[1], 10),
+          Number.parseInt(date.split("-")[2], 10)
+        ) })
+      : await db.query(query, params);
 
     return c.json(result);
   })
@@ -134,19 +145,25 @@ export const checklistRoutes = new Hono<Env>()
     }
 
     // Build filter for staff_id
-    const staffFilter = user.role === "employee"
-      ? `and ChecklistRecord.staff_id = "${user.sub}"`
-      : "";
+    const { filterCondition, params } = user.role === "employee"
+      ? {
+          filterCondition: "and ChecklistRecord.staff_id = <str>$staffId",
+          params: { staffId: user.sub }
+        }
+      : {
+          filterCondition: "",
+          params: {}
+        };
 
     const query = `
       select array_agg(distinct (
         select ChecklistRecord.assessment_date
         filter ChecklistRecord.is_deleted = false
-          ${staffFilter}
+          ${filterCondition}
       ))
     `;
 
-    const result: string[][] = await db.query(query);
+    const result: string[][] = await db.query(query, params);
     const dates = result[0] ?? [];
 
     return c.json(dates.sort((a, b) => b.localeCompare(a)));
@@ -175,7 +192,7 @@ export const checklistRoutes = new Hono<Env>()
       "Fetching detail checklist items"
     );
 
-    const staffFilter = buildStaffFilter(user);
+    const { filterCondition, params: staffParams } = buildStaffFilter(user);
 
     const query = `
       select DetailChecklistItem {
@@ -209,7 +226,7 @@ export const checklistRoutes = new Hono<Env>()
           filter .is_deleted = false
             and .month = <int32>$month
             and .year = <int32>$year
-            ${staffFilter}
+            ${filterCondition}
           limit 1
         ))
       }
@@ -220,6 +237,7 @@ export const checklistRoutes = new Hono<Env>()
     const result = await db.query(query, {
       month: targetMonth,
       year: targetYear,
+      ...staffParams,
     });
 
     return c.json(result);

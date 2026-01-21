@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { createClient } from "gel";
 import { Hono } from "hono";
@@ -5,6 +6,7 @@ import { cors } from "hono/cors";
 import { createFactory } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "hono/logger";
+import { secureHeaders } from "hono/secure-headers";
 import pino from "pino";
 import { ZodError } from "zod";
 import type { Env } from "./lib/env.js";
@@ -36,6 +38,8 @@ const injectDependencies = factory.createMiddleware(async (c, next) => {
 
 // Create app with middleware and mount routes
 const app = new Hono<Env>()
+  // Security headers
+  .use("*", secureHeaders())
   // Global middleware
   .use("*", logger())
   .use(

@@ -7,7 +7,8 @@
 node_modules
 */node_modules
 dist/
-
+conf/
+files/
 # Profile
 .rspack-profile-*/
 

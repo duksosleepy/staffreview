@@ -38,40 +38,60 @@ export const buildAuthorizationUrl = (state: string): string => {
 export const exchangeCodeForTokens = async (
   code: string,
 ): Promise<OIDCTokenResponse> => {
+  const params = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: oidcConfig.clientId,
+    client_secret: oidcConfig.clientSecret,
+    code,
+    redirect_uri: oidcConfig.redirectUri,
+  });
+
   const response = await fetch(
     `${oidcConfig.endpoint}/api/login/oauth/access_token`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        grant_type: "authorization_code",
-        client_id: oidcConfig.clientId,
-        client_secret: oidcConfig.clientSecret,
-        code,
-        redirect_uri: oidcConfig.redirectUri,
-      }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
     },
   );
 
-  if (!response.ok) {
-    throw new Error(`Token exchange failed: ${response.statusText}`);
+  const data = await response.json();
+
+  // Casdoor returns error in JSON body, not HTTP status
+  if (data.error) {
+    throw new Error(`Token exchange failed: ${data.error_description || data.error}`);
   }
 
-  return response.json();
+  return data;
+};
+
+// Helper to extract string value from role/group (handles both string and object formats)
+const extractRoleString = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    return value.toLowerCase();
+  }
+  // Casdoor returns roles as objects like { name: "admin" }
+  if (value && typeof value === "object" && "name" in value) {
+    const name = (value as { name: unknown }).name;
+    if (typeof name === "string") {
+      return name.toLowerCase();
+    }
+  }
+  return null;
 };
 
 // Extract role from OIDC user info
 export const extractRole = (userInfo: OIDCUserInfo): Role => {
   // Check roles array first
   if (userInfo.roles?.length) {
-    const role = userInfo.roles[0].toLowerCase();
-    if (isValidRole(role)) return role;
+    const role = extractRoleString(userInfo.roles[0]);
+    if (role && isValidRole(role)) return role;
   }
 
   // Check groups array
   if (userInfo.groups?.length) {
-    const group = userInfo.groups[0].toLowerCase();
-    if (isValidRole(group)) return group;
+    const group = extractRoleString(userInfo.groups[0]);
+    if (group && isValidRole(group)) return group;
   }
 
   // Check tag field (some IDPs use this)

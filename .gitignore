@@ -2,7 +2,7 @@
 .DS_Store
 *.local
 *.log*
-
+noted.txt
 # Dist
 node_modules
 */node_modules

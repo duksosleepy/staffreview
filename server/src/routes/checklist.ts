@@ -16,6 +16,15 @@ const MonthYearQuerySchema = z.object({
   year: z.coerce.number().min(2000).max(2100).optional(),
 });
 
+// Request body validation for upsert
+const UpsertChecklistRecordSchema = z.object({
+  checklist_item_id: z.string().uuid(),
+  assessment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+  employee_checked: z.boolean().optional(),
+  cht_checked: z.boolean().optional(),
+  asm_checked: z.boolean().optional(),
+});
+
 /**
  * Build staff_id filter parameters based on user role
  * - Employee: can only see their own records
@@ -263,4 +272,96 @@ export const checklistRoutes = new Hono<Env>()
 
     const result = await db.query(query);
     return c.json(result);
+  })
+
+  /**
+   * POST /api/checklist/records/upsert
+   * Create or update a ChecklistRecord for the current user
+   * Uses INSERT ... UNLESS CONFLICT to handle upsert
+   */
+  .post("/records/upsert", zValidator("json", UpsertChecklistRecordSchema), async (c) => {
+    const body = c.req.valid("json");
+    const db = c.get("db");
+    const user = c.get("user");
+    const log = c.get("log");
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    // Role-based permission check for checkbox fields
+    // - Employee: can only set employee_checked
+    // - CHT: can set employee_checked and cht_checked
+    // - ASM: can set all checkboxes
+    const allowedFields: string[] = ["employee_checked"];
+    if (user.role === "cht" || user.role === "asm") {
+      allowedFields.push("cht_checked");
+    }
+    if (user.role === "asm") {
+      allowedFields.push("asm_checked");
+    }
+
+    // Build the SET clause for fields that are provided and allowed
+    const setClauses: string[] = [];
+    const params: Record<string, unknown> = {
+      checklistItemId: body.checklist_item_id,
+      staffId: user.sub,
+      assessmentDate: new LocalDate(
+        Number.parseInt(body.assessment_date.split("-")[0], 10),
+        Number.parseInt(body.assessment_date.split("-")[1], 10),
+        Number.parseInt(body.assessment_date.split("-")[2], 10)
+      ),
+    };
+
+    if (body.employee_checked !== undefined && allowedFields.includes("employee_checked")) {
+      setClauses.push("employee_checked := <bool>$employeeChecked");
+      params.employeeChecked = body.employee_checked;
+    }
+    if (body.cht_checked !== undefined && allowedFields.includes("cht_checked")) {
+      setClauses.push("cht_checked := <bool>$chtChecked");
+      params.chtChecked = body.cht_checked;
+    }
+    if (body.asm_checked !== undefined && allowedFields.includes("asm_checked")) {
+      setClauses.push("asm_checked := <bool>$asmChecked");
+      params.asmChecked = body.asm_checked;
+    }
+
+    // Always update the updated_at timestamp
+    setClauses.push("updated_at := datetime_current()");
+
+    log?.debug(
+      { userId: user.sub, role: user.role, checklistItemId: body.checklist_item_id, date: body.assessment_date },
+      "Upserting checklist record"
+    );
+
+    // Use INSERT ... UNLESS CONFLICT for upsert
+    const query = `
+      with
+        item := (select ChecklistItem filter .id = <uuid>$checklistItemId),
+      insert ChecklistRecord {
+        checklist_item := item,
+        staff_id := <str>$staffId,
+        assessment_date := <cal::local_date>$assessmentDate,
+        ${body.employee_checked !== undefined && allowedFields.includes("employee_checked") ? "employee_checked := <bool>$employeeChecked," : ""}
+        ${body.cht_checked !== undefined && allowedFields.includes("cht_checked") ? "cht_checked := <bool>$chtChecked," : ""}
+        ${body.asm_checked !== undefined && allowedFields.includes("asm_checked") ? "asm_checked := <bool>$asmChecked," : ""}
+        created_at := datetime_current(),
+        updated_at := datetime_current()
+      }
+      unless conflict on ((.checklist_item, .staff_id, .assessment_date))
+      else (
+        update ChecklistRecord
+        set {
+          ${setClauses.join(",\n          ")}
+        }
+      )
+    `;
+
+    try {
+      const result = await db.query(query, params);
+      return c.json({ success: true, data: result });
+    } catch (error) {
+      log?.error({ error, params }, "Failed to upsert checklist record");
+      return c.json({ error: "Failed to save record" }, 500);
+    }
   });

@@ -210,6 +210,57 @@ export async function fetchDetailCategories(): Promise<DetailCategory[]> {
   return handleResponse<DetailCategory[]>(response);
 }
 
+// ===================================================
+// Upsert Functions (Create or Update)
+// ===================================================
+
+export type UpsertChecklistRecordPayload = {
+  checklist_item_id: string;
+  assessment_date: string; // YYYY-MM-DD
+  employee_checked?: boolean;
+  cht_checked?: boolean;
+  asm_checked?: boolean;
+};
+
+export type UpsertChecklistRecordResponse = {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+};
+
+/**
+ * Create or update a ChecklistRecord for the current user
+ * - If a record exists for the (checklist_item, staff_id, assessment_date), update it
+ * - Otherwise, create a new record
+ * - Server enforces role-based permissions (employee can only set employee_checked, etc.)
+ */
+export async function upsertChecklistRecord(
+  payload: UpsertChecklistRecordPayload,
+): Promise<UpsertChecklistRecordResponse> {
+  const response = await fetch(`${API_BASE}/records/upsert`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      window.location.href = "/login";
+      throw new ApiError(401, "Unauthorized");
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new ApiError(
+      response.status,
+      errorData.error || `API error: ${response.statusText}`,
+    );
+  }
+
+  return response.json();
+}
+
 // Legacy function - kept for backwards compatibility but now uses secure endpoint
 export async function fetchChecklistRecords(): Promise<ChecklistRecord[]> {
   // This functionality is now handled by fetchAllChecklistItems

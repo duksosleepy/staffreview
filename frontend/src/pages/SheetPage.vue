@@ -11,6 +11,7 @@ import {
   type DetailChecklistItemWithRecord,
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
+  upsertChecklistRecord,
 } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
 import { usePermission } from '@/composables/usePermission';
@@ -63,6 +64,9 @@ let rowMapping1: RowMapping = {
   checklistRows: new Map(),
   childRowRanges: new Map(),
 };
+
+// Mapping from row number to ChecklistItem ID for Sheet1 data rows
+let rowToItemId1 = new Map<number, string>();
 
 function groupItemsByChecklist(items: ChecklistItemWithRecord[]) {
   const grouped = new Map<string, ChecklistItemWithRecord[]>();
@@ -139,6 +143,7 @@ function buildSheet1CellData(
   };
 
   rowMapping1 = { checklistRows: new Map(), childRowRanges: new Map() };
+  rowToItemId1 = new Map(); // Reset the item ID mapping
   const grouped = groupItemsByChecklist(items);
   let currentRow = DATA_START_ROW;
 
@@ -163,6 +168,8 @@ function buildSheet1CellData(
         2: { v: r?.cht_checked ? 1 : 0 },
         3: { v: r?.asm_checked ? 1 : 0 },
       };
+      // Map this row to the ChecklistItem ID
+      rowToItemId1.set(currentRow, item.id);
       currentRow++;
     }
 
@@ -671,7 +678,7 @@ onMounted(async () => {
       return true; // Allow edit
     });
 
-    // Listen for cell edit end to detect date picker changes
+    // Listen for cell edit end to detect date picker changes and checkbox changes
     api.addEvent(api.Event.SheetEditEnded, async (params) => {
       if (isInitialLoad || isLoadingSheet1.value) return;
 
@@ -680,41 +687,89 @@ onMounted(async () => {
       // Only process if edit was confirmed (not cancelled)
       if (!isConfirm) return;
 
-      // Check if the edited cell is the date picker cell in Sheet1
-      if (
-        editedSheet?.getSheetId() === 'sheet1' &&
-        row === DATE_PICKER_ROW &&
-        column === DATE_PICKER_VALUE_COL
-      ) {
-        // Get the new value from the cell
-        const sheet = workbook.getSheetBySheetId('sheet1');
-        const cellValue = sheet
-          ?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
-          ?.getValue();
+      const sheetId = editedSheet?.getSheetId();
 
-        if (cellValue) {
-          let isoDate = '';
+      // Handle Sheet1 events
+      if (sheetId === 'sheet1') {
+        // Check if the edited cell is the date picker cell
+        if (row === DATE_PICKER_ROW && column === DATE_PICKER_VALUE_COL) {
+          // Get the new value from the cell
+          const sheet = workbook.getSheetBySheetId('sheet1');
+          const cellValue = sheet
+            ?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
+            ?.getValue();
 
-          if (typeof cellValue === 'number') {
-            // Excel serial date number
-            isoDate = serialToDate(cellValue);
-          } else if (typeof cellValue === 'string') {
-            // Parse M/D/YYYY or other date string formats
-            const dateStr = cellValue.toString();
-            // Try to parse the date string
-            const parsed = new Date(dateStr);
-            if (!Number.isNaN(parsed.getTime())) {
-              const year = parsed.getFullYear();
-              const month = String(parsed.getMonth() + 1).padStart(2, '0');
-              const day = String(parsed.getDate()).padStart(2, '0');
-              isoDate = `${year}-${month}-${day}`;
+          if (cellValue) {
+            let isoDate = '';
+
+            if (typeof cellValue === 'number') {
+              // Excel serial date number
+              isoDate = serialToDate(cellValue);
+            } else if (typeof cellValue === 'string') {
+              // Parse M/D/YYYY or other date string formats
+              const dateStr = cellValue.toString();
+              // Try to parse the date string
+              const parsed = new Date(dateStr);
+              if (!Number.isNaN(parsed.getTime())) {
+                const year = parsed.getFullYear();
+                const month = String(parsed.getMonth() + 1).padStart(2, '0');
+                const day = String(parsed.getDate()).padStart(2, '0');
+                isoDate = `${year}-${month}-${day}`;
+              }
+            }
+
+            // Only refresh if the date actually changed
+            if (isoDate && isoDate !== selectedDate.value) {
+              selectedDate.value = isoDate;
+              await refreshSheet1(isoDate);
             }
           }
+        }
 
-          // Only refresh if the date actually changed
-          if (isoDate && isoDate !== selectedDate.value) {
-            selectedDate.value = isoDate;
-            await refreshSheet1(isoDate);
+        // Handle checkbox changes in data rows (columns B=1, C=2, D=3)
+        if (row >= DATA_START_ROW && column >= 1 && column <= 3) {
+          const itemId = rowToItemId1.get(row);
+          if (!itemId) return; // This row is a group header, not a data row
+
+          // Get the current checkbox value
+          const sheet = workbook.getSheetBySheetId('sheet1');
+          const cellValue = sheet?.getRange(row, column, 1, 1)?.getValue();
+          const isChecked = cellValue === 1 || cellValue === '1' || cellValue === true;
+
+          // Make sure we have a valid date
+          const assessmentDate = selectedDate.value;
+          if (!assessmentDate) {
+            console.warn('No assessment date selected, cannot save checkbox change');
+            return;
+          }
+
+          // Build the payload based on which column was changed
+          const payload: {
+            checklist_item_id: string;
+            assessment_date: string;
+            employee_checked?: boolean;
+            cht_checked?: boolean;
+            asm_checked?: boolean;
+          } = {
+            checklist_item_id: itemId,
+            assessment_date: assessmentDate,
+          };
+
+          if (column === 1) {
+            payload.employee_checked = isChecked;
+          } else if (column === 2) {
+            payload.cht_checked = isChecked;
+          } else if (column === 3) {
+            payload.asm_checked = isChecked;
+          }
+
+          // Call the API to save the change
+          try {
+            await upsertChecklistRecord(payload);
+          } catch (error) {
+            console.error('Failed to save checkbox change:', error);
+            // Optionally: revert the checkbox value on error
+            // sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
           }
         }
       }

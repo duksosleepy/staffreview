@@ -6,6 +6,7 @@ import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-v
 import type { FUniver, Univer } from '@univerjs/presets';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { useDebounceFn } from '@vueuse/core';
 import {
   type ChecklistItemWithRecord,
   type DetailChecklistItemWithRecord,
@@ -226,34 +227,53 @@ function hideLoadingOverlay() {
 
 // Refresh Sheet1 data for a specific date
 async function refreshSheet1(date?: string) {
-  if (!univerAPI) return;
+  console.log('[DEBUG] refreshSheet1 called with date:', date);
+  if (!univerAPI) {
+    console.log('[DEBUG] refreshSheet1: univerAPI is null, returning');
+    return;
+  }
 
   showLoadingOverlay();
   try {
+    console.log('[DEBUG] Fetching checklist items...');
     const items = await fetchAllChecklistItems(date);
+    console.log('[DEBUG] Fetched', items.length, 'items');
     const { cells, totalRows } = buildSheet1CellData(items, date || '');
+    console.log('[DEBUG] Built cell data, totalRows:', totalRows);
 
     const workbook = univerAPI.getActiveWorkbook();
     const sheet = workbook?.getSheetBySheetId('sheet1');
     if (!sheet) return;
 
-    // Clear existing data rows (except date picker row and header row)
-    // Use a reasonable max to clear previous data
+    // OPTIMIZED: Clear existing data rows in ONE batch operation
     const maxRowsToClear = 500;
-    for (let row = DATA_START_ROW; row < maxRowsToClear; row++) {
-      for (let col = 0; col < 4; col++) {
-        sheet.getRange(row, col, 1, 1)?.setValue('');
-      }
-    }
+    const rowsToClear = maxRowsToClear - DATA_START_ROW;
+    console.log('[DEBUG] Clearing rows from', DATA_START_ROW, 'count:', rowsToClear);
+    sheet.getRange(DATA_START_ROW, 0, rowsToClear, 4)?.clearContent();
+    console.log('[DEBUG] Clear complete');
 
-    // Set new data (skip date picker row - row 0, and header row - row 1)
-    for (const [rowIndex, rowData] of Object.entries(cells)) {
-      const row = Number.parseInt(rowIndex, 10);
-      if (row < DATA_START_ROW) continue; // Skip date picker and header rows
-      for (const [colIndex, cellData] of Object.entries(rowData)) {
-        const col = Number.parseInt(colIndex, 10);
-        sheet.getRange(row, col, 1, 1)?.setValue(cellData.v);
+    // OPTIMIZED: Build 2D array for batch setValues
+    const dataRowCount = totalRows - DATA_START_ROW + 1;
+    console.log('[DEBUG] dataRowCount:', dataRowCount);
+    if (dataRowCount > 0) {
+      const dataArray: (string | number)[][] = [];
+      for (let r = DATA_START_ROW; r <= totalRows; r++) {
+        const rowData = cells[r];
+        if (rowData) {
+          dataArray.push([
+            rowData[0]?.v ?? '',
+            rowData[1]?.v ?? '',
+            rowData[2]?.v ?? '',
+            rowData[3]?.v ?? '',
+          ]);
+        } else {
+          dataArray.push(['', '', '', '']);
+        }
       }
+      console.log('[DEBUG] Setting', dataArray.length, 'rows of data');
+      // Set all data in ONE batch operation
+      sheet.getRange(DATA_START_ROW, 0, dataArray.length, 4)?.setValues(dataArray);
+      console.log('[DEBUG] setValues complete');
     }
 
     // Hide child rows and reset expand state
@@ -284,6 +304,11 @@ async function refreshSheet1(date?: string) {
     hideLoadingOverlay();
   }
 }
+
+// Debounced version of refreshSheet1 using VueUse
+const debouncedRefreshSheet1 = useDebounceFn((date: string) => {
+  refreshSheet1(date);
+}, 300);
 
 // ===================================================
 // SHEET 2: Detail Checklist
@@ -659,7 +684,9 @@ onMounted(async () => {
     }
 
     // Add click event listener for expand/collapse on both sheets
+    console.log('[DEBUG] Registering CellClicked event listener...');
     api.addEvent(api.Event.CellClicked, (params) => {
+      console.log('[DEBUG] CellClicked fired:', params.row, params.column);
       const { row } = params;
       const activeSheet = workbook.getActiveSheet();
       const sheetId = activeSheet?.getSheetId();
@@ -790,64 +817,92 @@ onMounted(async () => {
       }
     });
 
-    // Listen for cell edit end to detect date picker changes
-    api.addEvent(api.Event.SheetEditEnded, async (params) => {
-      const { row, column, worksheet: editedSheet, isConfirm } = params;
+    // Listen for cell value changes to detect date picker changes
+    // SheetValueChanged fires for data validation (date picker) changes
+    console.log('[DEBUG] Registering SheetValueChanged event listener...');
+    api.addEvent(api.Event.SheetValueChanged, (params) => {
+      console.log('[DEBUG] SheetValueChanged fired:', params);
 
-      if (isInitialLoad || isLoadingSheet1.value) return;
-      if (!isConfirm) return;
+      if (isInitialLoad || isLoadingSheet1.value) {
+        console.log('[DEBUG] Skipped: isInitialLoad=', isInitialLoad, 'isLoadingSheet1=', isLoadingSheet1.value);
+        return;
+      }
 
-      const sheetId = editedSheet?.getSheetId();
+      const { effectedRanges } = params;
 
-      // Handle Sheet1 events
-      if (sheetId === 'sheet1') {
-        // Check if the edited cell is the date picker cell
-        if (row === DATE_PICKER_ROW && column === DATE_PICKER_VALUE_COL) {
-          // Get the new value from the cell
-          const sheet = workbook.getSheetBySheetId('sheet1');
-          const cellValue = sheet
-            ?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
-            ?.getValue();
-
-          if (cellValue) {
-            let isoDate = '';
-
-            if (typeof cellValue === 'number') {
-              // Excel serial date number
-              isoDate = serialToDate(cellValue);
-            } else if (typeof cellValue === 'string') {
-              // Parse M/D/YYYY or other date string formats
-              const dateStr = cellValue.toString();
-              // Try to parse the date string
-              const parsed = new Date(dateStr);
-              if (!Number.isNaN(parsed.getTime())) {
-                const year = parsed.getFullYear();
-                const month = String(parsed.getMonth() + 1).padStart(2, '0');
-                const day = String(parsed.getDate()).padStart(2, '0');
-                isoDate = `${year}-${month}-${day}`;
-              }
-            }
-
-            // Only refresh if the date actually changed
-            if (isoDate && isoDate !== selectedDate.value) {
-              selectedDate.value = isoDate;
-              await refreshSheet1(isoDate);
-            }
+      // Check if the date picker cell (row 0, col 1) is in the affected ranges
+      let datePickerAffected = false;
+      for (const range of effectedRanges) {
+        const rangeData = range.getRange();
+        if (
+          rangeData.startRow <= DATE_PICKER_ROW &&
+          rangeData.endRow >= DATE_PICKER_ROW &&
+          rangeData.startColumn <= DATE_PICKER_VALUE_COL &&
+          rangeData.endColumn >= DATE_PICKER_VALUE_COL
+        ) {
+          // Check if this is sheet1
+          if (range.getSheetId() === 'sheet1') {
+            datePickerAffected = true;
+            break;
           }
         }
-        // Note: Checkbox changes are now handled in onCommandExecuted listener above
+      }
+
+      if (!datePickerAffected) return;
+
+      console.log('[DEBUG] Date picker cell affected!');
+
+      // Get the new value from the cell
+      const sheet = workbook.getSheetBySheetId('sheet1');
+      const cellValue = sheet
+        ?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
+        ?.getValue();
+
+      console.log('[DEBUG] Cell value:', cellValue, 'type:', typeof cellValue);
+
+      if (cellValue) {
+        let isoDate = '';
+
+        if (typeof cellValue === 'number') {
+          // Excel serial date number
+          isoDate = serialToDate(cellValue);
+          console.log('[DEBUG] Converted serial to date:', isoDate);
+        } else if (typeof cellValue === 'string') {
+          // Parse M/D/YYYY or other date string formats
+          const dateStr = cellValue.toString();
+          const parsed = new Date(dateStr);
+          if (!Number.isNaN(parsed.getTime())) {
+            const year = parsed.getFullYear();
+            const month = String(parsed.getMonth() + 1).padStart(2, '0');
+            const day = String(parsed.getDate()).padStart(2, '0');
+            isoDate = `${year}-${month}-${day}`;
+          }
+          console.log('[DEBUG] Parsed string date:', isoDate);
+        }
+
+        console.log('[DEBUG] isoDate:', isoDate, 'selectedDate:', selectedDate.value);
+        // Only refresh if the date actually changed (with debounce)
+        if (isoDate && isoDate !== selectedDate.value) {
+          console.log('[DEBUG] Date changed! Calling debouncedRefreshSheet1...');
+          selectedDate.value = isoDate;
+          debouncedRefreshSheet1(isoDate);
+        } else {
+          console.log('[DEBUG] Date not changed or invalid');
+        }
       }
     });
   }
 
   // Mark initial load as complete and ensure Sheet 1 is active after all setup
   isInitialLoad = false;
+  console.log('[DEBUG] Initial load complete, isInitialLoad set to false');
 
   // Use nextTick to ensure Sheet 1 is shown after UI is fully rendered
   await nextTick();
   if (workbook) {
     workbook.setActiveSheet('sheet1');
   }
+  console.log('[DEBUG] onMounted complete - all event listeners registered');
 });
 
 onUnmounted(() => {

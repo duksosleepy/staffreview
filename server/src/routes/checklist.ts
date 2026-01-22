@@ -16,13 +16,22 @@ const MonthYearQuerySchema = z.object({
   year: z.coerce.number().min(2000).max(2100).optional(),
 });
 
-// Request body validation for upsert
+// Request body validation for upsert (Sheet 1 - approval workflow)
 const UpsertChecklistRecordSchema = z.object({
   checklist_item_id: z.string().uuid(),
   assessment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
   employee_checked: z.boolean().optional(),
   cht_checked: z.boolean().optional(),
   asm_checked: z.boolean().optional(),
+});
+
+// Request body validation for upsert (Sheet 2 - monthly tracking)
+const UpsertDetailMonthlyRecordSchema = z.object({
+  detail_item_id: z.string().uuid(),
+  month: z.number().min(1).max(12),
+  year: z.number().min(2020),
+  day: z.number().min(1).max(31),
+  checked: z.boolean(),
 });
 
 /**
@@ -52,7 +61,8 @@ export const checklistRoutes = new Hono<Env>()
 
   /**
    * GET /api/checklist/items
-   * Fetch checklist items with records, filtered by user role
+   * Fetch checklist items (from DetailChecklistItem) with Sheet 1 approval records
+   * Both Sheet 1 and Sheet 2 now share the same checklist items
    */
   .get("/items", zValidator("query", DateQuerySchema), async (c) => {
     const { date } = c.req.valid("query");
@@ -68,16 +78,26 @@ export const checklistRoutes = new Hono<Env>()
 
     const { filterCondition, params } = buildStaffFilter(user);
 
+    // Now using DetailChecklistItem as the source of truth for both sheets
+    // Sheet 1 uses checklist_records backlink for approval workflow
     const query = date
       ? `
-          select ChecklistItem {
+          select DetailChecklistItem {
             id,
+            item_number,
             name,
-            standard_score,
+            evaluator,
+            scope,
+            time_frame,
+            penalty_level_1,
+            penalty_level_2,
+            penalty_level_3,
+            score,
             order,
-            checklist: { name },
+            notes,
+            category: { id, name, category_type },
             record := assert_single((
-              select .records {
+              select .checklist_records {
                 id,
                 assessment_date,
                 employee_checked,
@@ -97,17 +117,25 @@ export const checklistRoutes = new Hono<Env>()
             ))
           }
           filter .is_deleted = false
-          order by .checklist.name then .order
+          order by .category.order then .order then .item_number
         `
       : `
-          select ChecklistItem {
+          select DetailChecklistItem {
             id,
+            item_number,
             name,
-            standard_score,
+            evaluator,
+            scope,
+            time_frame,
+            penalty_level_1,
+            penalty_level_2,
+            penalty_level_3,
+            score,
             order,
-            checklist: { name },
+            notes,
+            category: { id, name, category_type },
             record := assert_single((
-              select .records {
+              select .checklist_records {
                 id,
                 assessment_date,
                 employee_checked,
@@ -127,7 +155,7 @@ export const checklistRoutes = new Hono<Env>()
             ))
           }
           filter .is_deleted = false
-          order by .checklist.name then .order
+          order by .category.order then .order then .item_number
         `;
 
     const result = date
@@ -143,7 +171,7 @@ export const checklistRoutes = new Hono<Env>()
 
   /**
    * GET /api/checklist/assessment-dates
-   * Fetch available assessment dates, filtered by user role
+   * Fetch available assessment dates from Sheet 1 records, filtered by user role
    */
   .get("/assessment-dates", async (c) => {
     const db = c.get("db");
@@ -180,7 +208,8 @@ export const checklistRoutes = new Hono<Env>()
 
   /**
    * GET /api/checklist/detail-items
-   * Fetch detail checklist items with monthly records, filtered by user role
+   * Fetch detail checklist items with Sheet 2 monthly records, filtered by user role
+   * Both sheets share the same items, but Sheet 2 uses monthly_records backlink
    */
   .get("/detail-items", zValidator("query", MonthYearQuerySchema), async (c) => {
     const { month, year } = c.req.valid("query");
@@ -203,6 +232,7 @@ export const checklistRoutes = new Hono<Env>()
 
     const { filterCondition, params: staffParams } = buildStaffFilter(user);
 
+    // Sheet 2 uses monthly_records backlink for monthly tracking
     const query = `
       select DetailChecklistItem {
         id,
@@ -219,7 +249,7 @@ export const checklistRoutes = new Hono<Env>()
         notes,
         category: { id, name, category_type },
         record := assert_single((
-          select .records {
+          select .monthly_records {
             id,
             month,
             year,
@@ -276,7 +306,7 @@ export const checklistRoutes = new Hono<Env>()
 
   /**
    * POST /api/checklist/records/upsert
-   * Create or update a ChecklistRecord for the current user
+   * Create or update a ChecklistRecord (Sheet 1 approval workflow) for the current user
    * Uses INSERT ... UNLESS CONFLICT to handle upsert
    */
   .post("/records/upsert", zValidator("json", UpsertChecklistRecordSchema), async (c) => {
@@ -342,9 +372,10 @@ export const checklistRoutes = new Hono<Env>()
     }
 
     // Use INSERT ... UNLESS CONFLICT for upsert
+    // Now using DetailChecklistItem instead of ChecklistItem
     const query = `
       with
-        item := (select ChecklistItem filter .id = <uuid>$checklistItemId),
+        item := (select DetailChecklistItem filter .id = <uuid>$checklistItemId),
       insert ChecklistRecord {
         checklist_item := item,
         staff_id := <str>$staffId,
@@ -366,6 +397,95 @@ export const checklistRoutes = new Hono<Env>()
       return c.json({ success: true, data: result });
     } catch (error) {
       log?.error({ error, params }, "Failed to upsert checklist record");
+      return c.json({ error: "Failed to save record" }, 500);
+    }
+  })
+
+  /**
+   * POST /api/checklist/detail-records/upsert
+   * Create or update a DetailMonthlyRecord (Sheet 2 monthly tracking) for the current user
+   * Uses INSERT ... UNLESS CONFLICT to handle upsert
+   */
+  .post("/detail-records/upsert", zValidator("json", UpsertDetailMonthlyRecordSchema), async (c) => {
+    const body = c.req.valid("json");
+    const db = c.get("db");
+    const user = c.get("user");
+    const log = c.get("log");
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    log?.debug({ userId: user.sub, body }, "Upserting detail monthly record");
+
+    const params: Record<string, unknown> = {
+      detailItemId: body.detail_item_id,
+      staffId: user.sub,
+      month: body.month,
+      year: body.year,
+      day: body.day,
+      checked: body.checked,
+    };
+
+    // Use INSERT ... UNLESS CONFLICT for upsert
+    // Update the specific day in the daily_checks array
+    const query = `
+      with
+        item := (select DetailChecklistItem filter .id = <uuid>$detailItemId),
+        existing := (
+          select DetailMonthlyRecord
+          filter .detail_item = item
+            and .staff_id = <str>$staffId
+            and .month = <int32>$month
+            and .year = <int32>$year
+          limit 1
+        ),
+        # Create initial array with 31 false values if needed
+        initial_checks := array_agg((
+          for i in range_unpack(range(0, 31))
+          union (
+            select false
+          )
+        )),
+        # Get current checks or use initial
+        current_checks := existing.daily_checks ?? initial_checks,
+        # Update the specific day (0-indexed, so day-1)
+        updated_checks := (
+          select array_agg((
+            for idx in range_unpack(range(0, 31))
+            union (
+              select (
+                if idx = (<int32>$day - 1)
+                then <bool>$checked
+                else current_checks[idx] ?? false
+              )
+            )
+          ))
+        )
+      insert DetailMonthlyRecord {
+        detail_item := item,
+        staff_id := <str>$staffId,
+        month := <int32>$month,
+        year := <int32>$year,
+        daily_checks := updated_checks,
+        created_at := datetime_current(),
+        updated_at := datetime_current()
+      }
+      unless conflict on ((.detail_item, .staff_id, .month, .year))
+      else (
+        update DetailMonthlyRecord
+        set {
+          daily_checks := updated_checks,
+          updated_at := datetime_current()
+        }
+      )
+    `;
+
+    try {
+      const result = await db.query(query, params);
+      return c.json({ success: true, data: result });
+    } catch (error) {
+      log?.error({ error, params }, "Failed to upsert detail monthly record");
       return c.json({ error: "Failed to save record" }, 500);
     }
   });

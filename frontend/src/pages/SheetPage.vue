@@ -12,6 +12,7 @@ import {
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
   upsertChecklistRecord,
+  upsertDetailMonthlyRecord,
 } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
 import { usePermission } from '@/composables/usePermission';
@@ -68,14 +69,15 @@ let rowMapping1: RowMapping = {
 // Mapping from row number to ChecklistItem ID for Sheet1 data rows
 let rowToItemId1 = new Map<number, string>();
 
-function groupItemsByChecklist(items: ChecklistItemWithRecord[]) {
+// Group items by category (unified with Sheet 2)
+function groupItemsByCategory1(items: ChecklistItemWithRecord[]) {
   const grouped = new Map<string, ChecklistItemWithRecord[]>();
   for (const item of items) {
-    const checklistName = item.checklist.name;
-    if (!grouped.has(checklistName)) {
-      grouped.set(checklistName, []);
+    const categoryName = item.category.name;
+    if (!grouped.has(categoryName)) {
+      grouped.set(categoryName, []);
     }
-    grouped.get(checklistName)?.push(item);
+    grouped.get(categoryName)?.push(item);
   }
   return grouped;
 }
@@ -144,15 +146,16 @@ function buildSheet1CellData(
 
   rowMapping1 = { checklistRows: new Map(), childRowRanges: new Map() };
   rowToItemId1 = new Map(); // Reset the item ID mapping
-  const grouped = groupItemsByChecklist(items);
+  // Use category grouping (unified with Sheet 2)
+  const grouped = groupItemsByCategory1(items);
   let currentRow = DATA_START_ROW;
 
-  for (const [checklistName, checklistItems] of grouped) {
-    expandedGroups1.set(checklistName, false);
-    rowMapping1.checklistRows.set(currentRow, checklistName);
+  for (const [categoryName, categoryItems] of grouped) {
+    expandedGroups1.set(categoryName, false);
+    rowMapping1.checklistRows.set(currentRow, categoryName);
 
     cells[currentRow] = {
-      0: { v: `▶ ${checklistName}`, s: checklistHeaderStyle },
+      0: { v: `▶ ${categoryName}`, s: checklistHeaderStyle },
       1: { v: '', s: checklistHeaderStyle },
       2: { v: '', s: checklistHeaderStyle },
       3: { v: '', s: checklistHeaderStyle },
@@ -160,10 +163,11 @@ function buildSheet1CellData(
     currentRow++;
 
     const childStartRow = currentRow;
-    for (const item of checklistItems) {
+    for (const item of categoryItems) {
       const r = item.record;
+      // Show item_number and name for consistency with Sheet 2
       cells[currentRow] = {
-        0: { v: `    ${item.name}`, s: itemNameStyle },
+        0: { v: `    ${item.item_number}. ${item.name}`, s: itemNameStyle },
         1: { v: r?.employee_checked ? 1 : 0 },
         2: { v: r?.cht_checked ? 1 : 0 },
         3: { v: r?.asm_checked ? 1 : 0 },
@@ -173,34 +177,34 @@ function buildSheet1CellData(
       currentRow++;
     }
 
-    rowMapping1.childRowRanges.set(checklistName, {
+    rowMapping1.childRowRanges.set(categoryName, {
       start: childStartRow,
-      count: checklistItems.length,
+      count: categoryItems.length,
     });
   }
 
   return { cells, totalRows: currentRow };
 }
 
-function toggleGroup1(checklistName: string, headerRowIndex: number) {
+function toggleGroup1(categoryName: string, headerRowIndex: number) {
   if (!univerAPI) return;
 
   const workbook = univerAPI.getActiveWorkbook();
   const sheet = workbook?.getSheetBySheetId('sheet1');
   if (!sheet) return;
 
-  const isExpanded = expandedGroups1.get(checklistName) ?? false;
-  const range = rowMapping1.childRowRanges.get(checklistName);
+  const isExpanded = expandedGroups1.get(categoryName) ?? false;
+  const range = rowMapping1.childRowRanges.get(categoryName);
   if (!range) return;
 
   if (isExpanded) {
     sheet.hideRows(range.start, range.count);
-    expandedGroups1.set(checklistName, false);
-    sheet.getRange(headerRowIndex, 0, 1, 1)?.setValue(`▶ ${checklistName}`);
+    expandedGroups1.set(categoryName, false);
+    sheet.getRange(headerRowIndex, 0, 1, 1)?.setValue(`▶ ${categoryName}`);
   } else {
     sheet.showRows(range.start, range.count);
-    expandedGroups1.set(checklistName, true);
-    sheet.getRange(headerRowIndex, 0, 1, 1)?.setValue(`▼ ${checklistName}`);
+    expandedGroups1.set(categoryName, true);
+    sheet.getRange(headerRowIndex, 0, 1, 1)?.setValue(`▼ ${categoryName}`);
   }
 }
 
@@ -253,9 +257,9 @@ async function refreshSheet1(date?: string) {
     }
 
     // Hide child rows and reset expand state
-    for (const [checklistName, range] of rowMapping1.childRowRanges) {
+    for (const [categoryName, range] of rowMapping1.childRowRanges) {
       sheet.hideRows(range.start, range.count);
-      expandedGroups1.set(checklistName, false);
+      expandedGroups1.set(categoryName, false);
     }
 
     // Re-apply checkbox validation (columns B, C, D for checkboxes)
@@ -290,6 +294,13 @@ let rowMapping2: RowMapping = {
   checklistRows: new Map(),
   childRowRanges: new Map(),
 };
+
+// Mapping from row number to DetailChecklistItem ID for Sheet2 data rows
+let rowToItemId2 = new Map<number, string>();
+
+// Current month/year for Sheet 2 (used when saving daily checks)
+let sheet2Month = new Date().getMonth() + 1;
+let sheet2Year = new Date().getFullYear();
 
 function groupItemsByCategory(items: DetailChecklistItemWithRecord[]) {
   const grouped = new Map<string, DetailChecklistItemWithRecord[]>();
@@ -368,6 +379,7 @@ function buildSheet2CellData(
   cells[0][summaryColStart + 5] = { v: 'Ghi chú', s: headerStyle };
 
   rowMapping2 = { checklistRows: new Map(), childRowRanges: new Map() };
+  rowToItemId2 = new Map(); // Reset the item ID mapping for Sheet 2
   const grouped = groupItemsByCategory(items);
   let currentRow = 1;
 
@@ -416,6 +428,8 @@ function buildSheet2CellData(
       row[summaryColStart + 5] = { v: r?.notes ?? item.notes ?? '' };
 
       cells[currentRow] = row;
+      // Map this row to the DetailChecklistItem ID for Sheet 2
+      rowToItemId2.set(currentRow, item.id);
       currentRow++;
     }
 
@@ -503,6 +517,9 @@ onMounted(async () => {
   const currentDate = new Date();
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
+  // Store month/year for Sheet 2 checkbox saving
+  sheet2Month = month;
+  sheet2Year = year;
   const {
     cells: cells2,
     totalRows: totalRows2,
@@ -580,9 +597,9 @@ onMounted(async () => {
     const sheet1 = workbook.getSheetBySheetId('sheet1');
     if (sheet1) {
       // Hide child rows for collapsed groups
-      for (const [checklistName, range] of rowMapping1.childRowRanges) {
+      for (const [categoryName, range] of rowMapping1.childRowRanges) {
         sheet1.hideRows(range.start, range.count);
-        expandedGroups1.set(checklistName, false);
+        expandedGroups1.set(categoryName, false);
       }
 
       // Set up date picker with DATE validation (shows calendar popup)
@@ -731,6 +748,38 @@ onMounted(async () => {
           // Call the API to save the change
           try {
             const response = await upsertChecklistRecord(payload);
+            if (!response.success) {
+              sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
+            }
+          } catch (error) {
+            sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
+          }
+        }
+
+        // Handle Sheet2 checkbox changes (day columns: 9 to 9+daysInMonth-1)
+        const dayColStart2 = 9;
+        const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
+        if (sheetId === 'sheet2' && row >= 2 && column >= dayColStart2 && column < dayColStart2 + currentDaysInMonth) {
+          const itemId = rowToItemId2.get(row);
+          if (!itemId) return;
+
+          // Get the current checkbox value
+          const sheet = workbook.getSheetBySheetId('sheet2');
+          const cellValue = sheet?.getRange(row, column, 1, 1)?.getValue();
+          const isChecked = cellValue === 1 || cellValue === '1' || cellValue === true;
+
+          // Calculate the day number (1-31) from the column
+          const dayNumber = column - dayColStart2 + 1;
+
+          // Call the API to save the change
+          try {
+            const response = await upsertDetailMonthlyRecord({
+              detail_item_id: itemId,
+              month: sheet2Month,
+              year: sheet2Year,
+              day: dayNumber,
+              checked: isChecked,
+            });
             if (!response.success) {
               sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
             }

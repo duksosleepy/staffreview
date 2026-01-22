@@ -1,81 +1,15 @@
 module default {
     # ===================================================
-    # Checklist: Parent container for ChecklistItems
+    # UNIFIED CHECKLIST SYSTEM
+    # Sheet 1 and Sheet 2 share the same checklist items (DetailChecklistItem)
+    # but use different record types for their specific tracking needs
     # ===================================================
-    type Checklist {
-        required name: str;
-        description: str;
 
-        # Computed backlink to checklist items
-        multi items := .<checklist[is ChecklistItem];
-
-        # Timestamps
-        created_at: datetime {
-            default := datetime_current();
-        }
-        updated_at: datetime {
-            default := datetime_current();
-        }
-
-        # Indexes
-        index on (.name);
-    }
-
-    type ChecklistItem {
-        # Link to parent Checklist
-        required checklist: Checklist {
-            on target delete delete source;
-        }
-
-        # Tên task/category
-        required name: str;
-        standard_score: int32 {
-            constraint min_value(0);
-            constraint max_value(100);
-        }
-        # Self-referencing link cho cấu trúc phân cấp
-        parent: ChecklistItem {
-            on target delete allow;
-        }
-
-        # Computed backlink đến children
-        multi children := .<parent[is ChecklistItem];
-
-        # Thứ tự trong cùng parent level
-        order: int32 {
-            default := 0;
-            constraint min_value(0);
-        }
-
-        # Computed backlink đến records
-        multi records := .<checklist_item[is ChecklistRecord];
-
-        # Soft delete
-        deleted_at: datetime;
-        is_deleted: bool {
-            default := false;
-        }
-
-        # Timestamps
-        created_at: datetime {
-            default := datetime_current();
-        }
-        updated_at: datetime {
-            default := datetime_current();
-        }
-
-        # Constraints
-        constraint exclusive on ((.name, .parent, .checklist));
-
-        # Indexes
-        index on (.checklist);
-        index on (.parent);
-        index on (.order);
-        index on (.is_deleted);
-    }
+    # ChecklistRecord: Sheet 1's approval workflow records (per date)
+    # Links to DetailChecklistItem for unified checklist items
     type ChecklistRecord {
-        # Link to checklist item being evaluated
-        required checklist_item: ChecklistItem {
+        # Link to the detail checklist item (unified with Sheet 2)
+        required checklist_item: DetailChecklistItem {
             on target delete delete source;
         }
 
@@ -234,8 +168,11 @@ module default {
         # Notes/Ghi chú
         notes: str;
 
-        # Computed backlink to records
-        multi records := .<detail_item[is DetailMonthlyRecord];
+        # Computed backlink to monthly records (Sheet 2)
+        multi monthly_records := .<detail_item[is DetailMonthlyRecord];
+
+        # Computed backlink to checklist records (Sheet 1 - approval workflow)
+        multi checklist_records := .<checklist_item[is ChecklistRecord];
 
         # Soft delete
         deleted_at: datetime;

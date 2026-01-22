@@ -1,63 +1,11 @@
-CREATE MIGRATION m12x3xjhtgjcf4qecvpzflmawgsvx53weleirij3dk3cekwoyzhd7a
+CREATE MIGRATION m1vspxsslts4jamux4jnhjo2gdigqyxm7n5a4h7a3g23zjjy74ybkq
     ONTO initial
 {
   CREATE SCALAR TYPE default::DetailCategoryType EXTENDING enum<daily, weekly, monthly>;
   CREATE FUTURE no_linkful_computed_splats;
-  CREATE TYPE default::Checklist {
-      CREATE REQUIRED PROPERTY name: std::str;
-      CREATE INDEX ON (.name);
-      CREATE PROPERTY created_at: std::datetime {
-          SET default := (std::datetime_current());
-      };
-      CREATE PROPERTY description: std::str;
-      CREATE PROPERTY updated_at: std::datetime {
-          SET default := (std::datetime_current());
-      };
-  };
-  CREATE TYPE default::ChecklistItem {
-      CREATE REQUIRED LINK checklist: default::Checklist {
-          ON TARGET DELETE DELETE SOURCE;
-      };
-      CREATE LINK parent: default::ChecklistItem {
-          ON TARGET DELETE ALLOW;
-      };
-      CREATE REQUIRED PROPERTY name: std::str;
-      CREATE CONSTRAINT std::exclusive ON ((.name, .parent, .checklist));
-      CREATE INDEX ON (.checklist);
-      CREATE PROPERTY order: std::int32 {
-          SET default := 0;
-          CREATE CONSTRAINT std::min_value(0);
-      };
-      CREATE INDEX ON (.order);
-      CREATE INDEX ON (.parent);
-      CREATE PROPERTY is_deleted: std::bool {
-          SET default := false;
-      };
-      CREATE INDEX ON (.is_deleted);
-      CREATE MULTI LINK children := (.<parent[IS default::ChecklistItem]);
-      CREATE PROPERTY created_at: std::datetime {
-          SET default := (std::datetime_current());
-      };
-      CREATE PROPERTY deleted_at: std::datetime;
-      CREATE PROPERTY standard_score: std::int32 {
-          CREATE CONSTRAINT std::max_value(100);
-          CREATE CONSTRAINT std::min_value(0);
-      };
-      CREATE PROPERTY updated_at: std::datetime {
-          SET default := (std::datetime_current());
-      };
-  };
-  ALTER TYPE default::Checklist {
-      CREATE MULTI LINK items := (.<checklist[IS default::ChecklistItem]);
-  };
   CREATE TYPE default::ChecklistRecord {
-      CREATE REQUIRED LINK checklist_item: default::ChecklistItem {
-          ON TARGET DELETE DELETE SOURCE;
-      };
       CREATE REQUIRED PROPERTY assessment_date: std::cal::local_date;
       CREATE REQUIRED PROPERTY staff_id: std::str;
-      CREATE CONSTRAINT std::exclusive ON ((.checklist_item, .staff_id, .assessment_date));
-      CREATE INDEX ON (.checklist_item);
       CREATE INDEX ON (.assessment_date);
       CREATE INDEX ON (.staff_id);
       CREATE PROPERTY final_classification: std::str {
@@ -99,37 +47,10 @@ CREATE MIGRATION m12x3xjhtgjcf4qecvpzflmawgsvx53weleirij3dk3cekwoyzhd7a
           SET default := (std::datetime_current());
       };
   };
-  ALTER TYPE default::ChecklistItem {
-      CREATE MULTI LINK records := (.<checklist_item[IS default::ChecklistRecord]);
-  };
-  CREATE TYPE default::DetailCategory {
-      CREATE PROPERTY order: std::int32 {
-          SET default := 0;
-          CREATE CONSTRAINT std::min_value(0);
-      };
-      CREATE INDEX ON (.order);
-      CREATE REQUIRED PROPERTY category_type: default::DetailCategoryType;
-      CREATE INDEX ON (.category_type);
-      CREATE PROPERTY created_at: std::datetime {
-          SET default := (std::datetime_current());
-      };
-      CREATE PROPERTY description: std::str;
-      CREATE REQUIRED PROPERTY name: std::str {
-          CREATE CONSTRAINT std::exclusive;
-      };
-      CREATE PROPERTY updated_at: std::datetime {
-          SET default := (std::datetime_current());
-      };
-  };
   CREATE TYPE default::DetailChecklistItem {
-      CREATE REQUIRED LINK category: default::DetailCategory {
-          ON TARGET DELETE DELETE SOURCE;
-      };
       CREATE REQUIRED PROPERTY item_number: std::int32 {
           CREATE CONSTRAINT std::min_value(1);
       };
-      CREATE CONSTRAINT std::exclusive ON ((.item_number, .category));
-      CREATE INDEX ON (.category);
       CREATE PROPERTY order: std::int32 {
           SET default := 0;
           CREATE CONSTRAINT std::min_value(0);
@@ -159,6 +80,42 @@ CREATE MIGRATION m12x3xjhtgjcf4qecvpzflmawgsvx53weleirij3dk3cekwoyzhd7a
       CREATE PROPERTY updated_at: std::datetime {
           SET default := (std::datetime_current());
       };
+  };
+  ALTER TYPE default::ChecklistRecord {
+      CREATE REQUIRED LINK checklist_item: default::DetailChecklistItem {
+          ON TARGET DELETE DELETE SOURCE;
+      };
+      CREATE CONSTRAINT std::exclusive ON ((.checklist_item, .staff_id, .assessment_date));
+      CREATE INDEX ON (.checklist_item);
+  };
+  ALTER TYPE default::DetailChecklistItem {
+      CREATE MULTI LINK checklist_records := (.<checklist_item[IS default::ChecklistRecord]);
+  };
+  CREATE TYPE default::DetailCategory {
+      CREATE PROPERTY order: std::int32 {
+          SET default := 0;
+          CREATE CONSTRAINT std::min_value(0);
+      };
+      CREATE INDEX ON (.order);
+      CREATE REQUIRED PROPERTY category_type: default::DetailCategoryType;
+      CREATE INDEX ON (.category_type);
+      CREATE PROPERTY created_at: std::datetime {
+          SET default := (std::datetime_current());
+      };
+      CREATE PROPERTY description: std::str;
+      CREATE REQUIRED PROPERTY name: std::str {
+          CREATE CONSTRAINT std::exclusive;
+      };
+      CREATE PROPERTY updated_at: std::datetime {
+          SET default := (std::datetime_current());
+      };
+  };
+  ALTER TYPE default::DetailChecklistItem {
+      CREATE REQUIRED LINK category: default::DetailCategory {
+          ON TARGET DELETE DELETE SOURCE;
+      };
+      CREATE CONSTRAINT std::exclusive ON ((.item_number, .category));
+      CREATE INDEX ON (.category);
   };
   ALTER TYPE default::DetailCategory {
       CREATE MULTI LINK items := (.<category[IS default::DetailChecklistItem]);
@@ -215,6 +172,6 @@ CREATE MIGRATION m12x3xjhtgjcf4qecvpzflmawgsvx53weleirij3dk3cekwoyzhd7a
       };
   };
   ALTER TYPE default::DetailChecklistItem {
-      CREATE MULTI LINK records := (.<detail_item[IS default::DetailMonthlyRecord]);
+      CREATE MULTI LINK monthly_records := (.<detail_item[IS default::DetailMonthlyRecord]);
   };
 };

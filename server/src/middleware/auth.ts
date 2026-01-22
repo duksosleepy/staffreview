@@ -2,7 +2,8 @@ import { getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { verifyAppJwt } from "../lib/oidc.js";
-import type { AuthUser, Permission, Role, ROLE_PERMISSIONS } from "../types/auth.js";
+import type { AuthUser, Permission, Role } from "../types/auth.js";
+import { ROLE_PERMISSIONS } from "../types/auth.js";
 
 // Cookie name for auth token
 export const AUTH_COOKIE_NAME = "auth_token";

@@ -678,13 +678,74 @@ onMounted(async () => {
       return true; // Allow edit
     });
 
-    // Listen for cell edit end to detect date picker changes and checkbox changes
-    api.addEvent(api.Event.SheetEditEnded, async (params) => {
-      if (isInitialLoad || isLoadingSheet1.value) return;
+    // Listen for command execution to detect checkbox changes
+    // Checkboxes don't trigger SheetEditEnded - they execute commands directly
+    api.onCommandExecuted(async (command) => {
+      if (command.id === 'sheet.command.set-range-values') {
+        if (isInitialLoad || isLoadingSheet1.value) return;
 
+        const params = command.params as any;
+        const range = params?.range;
+
+        if (!range) return;
+
+        const row = range.startRow;
+        const column = range.startColumn;
+        const activeSheet = workbook?.getActiveSheet();
+        const sheetId = activeSheet?.getSheetId();
+
+        // Handle Sheet1 checkbox changes (columns B=1, C=2, D=3)
+        if (sheetId === 'sheet1' && row >= DATA_START_ROW && column >= 1 && column <= 3) {
+          const itemId = rowToItemId1.get(row);
+          if (!itemId) return;
+
+          // Get the current checkbox value
+          const sheet = workbook.getSheetBySheetId('sheet1');
+          const cellValue = sheet?.getRange(row, column, 1, 1)?.getValue();
+          const isChecked = cellValue === 1 || cellValue === '1' || cellValue === true;
+
+          // Make sure we have a valid date
+          const assessmentDate = selectedDate.value;
+          if (!assessmentDate) return;
+
+          // Build the payload based on which column was changed
+          const payload: {
+            checklist_item_id: string;
+            assessment_date: string;
+            employee_checked?: boolean;
+            cht_checked?: boolean;
+            asm_checked?: boolean;
+          } = {
+            checklist_item_id: itemId,
+            assessment_date: assessmentDate,
+          };
+
+          if (column === 1) {
+            payload.employee_checked = isChecked;
+          } else if (column === 2) {
+            payload.cht_checked = isChecked;
+          } else if (column === 3) {
+            payload.asm_checked = isChecked;
+          }
+
+          // Call the API to save the change
+          try {
+            const response = await upsertChecklistRecord(payload);
+            if (!response.success) {
+              sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
+            }
+          } catch (error) {
+            sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
+          }
+        }
+      }
+    });
+
+    // Listen for cell edit end to detect date picker changes
+    api.addEvent(api.Event.SheetEditEnded, async (params) => {
       const { row, column, worksheet: editedSheet, isConfirm } = params;
 
-      // Only process if edit was confirmed (not cancelled)
+      if (isInitialLoad || isLoadingSheet1.value) return;
       if (!isConfirm) return;
 
       const sheetId = editedSheet?.getSheetId();
@@ -725,53 +786,7 @@ onMounted(async () => {
             }
           }
         }
-
-        // Handle checkbox changes in data rows (columns B=1, C=2, D=3)
-        if (row >= DATA_START_ROW && column >= 1 && column <= 3) {
-          const itemId = rowToItemId1.get(row);
-          if (!itemId) return; // This row is a group header, not a data row
-
-          // Get the current checkbox value
-          const sheet = workbook.getSheetBySheetId('sheet1');
-          const cellValue = sheet?.getRange(row, column, 1, 1)?.getValue();
-          const isChecked = cellValue === 1 || cellValue === '1' || cellValue === true;
-
-          // Make sure we have a valid date
-          const assessmentDate = selectedDate.value;
-          if (!assessmentDate) {
-            console.warn('No assessment date selected, cannot save checkbox change');
-            return;
-          }
-
-          // Build the payload based on which column was changed
-          const payload: {
-            checklist_item_id: string;
-            assessment_date: string;
-            employee_checked?: boolean;
-            cht_checked?: boolean;
-            asm_checked?: boolean;
-          } = {
-            checklist_item_id: itemId,
-            assessment_date: assessmentDate,
-          };
-
-          if (column === 1) {
-            payload.employee_checked = isChecked;
-          } else if (column === 2) {
-            payload.cht_checked = isChecked;
-          } else if (column === 3) {
-            payload.asm_checked = isChecked;
-          }
-
-          // Call the API to save the change
-          try {
-            await upsertChecklistRecord(payload);
-          } catch (error) {
-            console.error('Failed to save checkbox change:', error);
-            // Optionally: revert the checkbox value on error
-            // sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
-          }
-        }
+        // Note: Checkbox changes are now handled in onCommandExecuted listener above
       }
     });
   }

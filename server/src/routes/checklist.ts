@@ -329,10 +329,17 @@ export const checklistRoutes = new Hono<Env>()
     // Always update the updated_at timestamp
     setClauses.push("updated_at := datetime_current()");
 
-    log?.debug(
-      { userId: user.sub, role: user.role, checklistItemId: body.checklist_item_id, date: body.assessment_date },
-      "Upserting checklist record"
-    );
+    // Build INSERT fields dynamically
+    const insertFields: string[] = [];
+    if (body.employee_checked !== undefined && allowedFields.includes("employee_checked")) {
+      insertFields.push("employee_checked := <bool>$employeeChecked");
+    }
+    if (body.cht_checked !== undefined && allowedFields.includes("cht_checked")) {
+      insertFields.push("cht_checked := <bool>$chtChecked");
+    }
+    if (body.asm_checked !== undefined && allowedFields.includes("asm_checked")) {
+      insertFields.push("asm_checked := <bool>$asmChecked");
+    }
 
     // Use INSERT ... UNLESS CONFLICT for upsert
     const query = `
@@ -341,10 +348,7 @@ export const checklistRoutes = new Hono<Env>()
       insert ChecklistRecord {
         checklist_item := item,
         staff_id := <str>$staffId,
-        assessment_date := <cal::local_date>$assessmentDate,
-        ${body.employee_checked !== undefined && allowedFields.includes("employee_checked") ? "employee_checked := <bool>$employeeChecked," : ""}
-        ${body.cht_checked !== undefined && allowedFields.includes("cht_checked") ? "cht_checked := <bool>$chtChecked," : ""}
-        ${body.asm_checked !== undefined && allowedFields.includes("asm_checked") ? "asm_checked := <bool>$asmChecked," : ""}
+        assessment_date := <cal::local_date>$assessmentDate${insertFields.length > 0 ? ",\n        " + insertFields.join(",\n        ") : ""},
         created_at := datetime_current(),
         updated_at := datetime_current()
       }

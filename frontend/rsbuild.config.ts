@@ -8,6 +8,28 @@ const API_SERVER_URL = process.env.API_SERVER_URL || 'http://localhost:3001';
 // Docs: https://rsbuild.rs/config/
 export default defineConfig({
   plugins: [pluginVue()],
+  html: {
+    title: 'Đánh giá nhân viên',
+    meta: {
+      description: 'Đánh giá nhân viên',
+      'og:title': {
+        property: 'og:title',
+        content: 'Đánh giá nhân viên',
+      },
+      'og:description': {
+        property: 'og:description',
+        content: 'Đánh giá nhân viên',
+      },
+      'og:type': {
+        property: 'og:type',
+        content: 'website',
+      },
+      'og:image': {
+        property: 'og:image',
+        content: '/logo.png',
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

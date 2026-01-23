@@ -37,7 +37,7 @@ cors_allow_origins = [
 # auto_rebuild_query_cache            = false
 # auto_rebuild_query_cache_timeout    = "30 seconds"
 
-# [instance.config]
+[instance.config]
 http_max_connections = 100
 ## Email providers (SMTP)
 # [[branch.config."cfg::SMTPProviderConfig"]]

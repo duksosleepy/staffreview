@@ -296,6 +296,9 @@ async function refreshSheet1(date?: string) {
         univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
       );
 
+    // Auto-resize rows to fit text-wrapped content
+    sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
+
   } finally {
     hideLoadingOverlay();
   }
@@ -590,6 +593,71 @@ function getColumnLetter(index: number): string {
     n = Math.floor(n / 26) - 1;
   }
   return result;
+}
+
+// Refresh Sheet2 data to recalculate row heights
+async function refreshSheet2() {
+  if (!univerAPI) return;
+
+  const items = await fetchAllDetailChecklistItems().catch(
+    () => [] as DetailChecklistItemWithRecord[],
+  );
+
+  const {
+    cells,
+    totalRows,
+    daysInMonth,
+    summaryColStart,
+  } = buildSheet2CellData(items, sheet2Month, sheet2Year);
+
+  const workbook = univerAPI.getActiveWorkbook();
+  const sheet = workbook?.getSheetBySheetId('sheet2');
+  if (!sheet) return;
+
+  const dayColStart = 9;
+
+  // Clear existing data rows
+  const maxRowsToClear = 500;
+  sheet.getRange(1, 0, maxRowsToClear, summaryColStart + 6)?.clearContent();
+
+  // Build 2D array for batch setValues
+  const dataRowCount = totalRows;
+  if (dataRowCount > 0) {
+    const dataArray: (string | number)[][] = [];
+    for (let r = 1; r < totalRows; r++) {
+      const rowData = cells[r];
+      if (rowData) {
+        const row: (string | number)[] = [];
+        for (let c = 0; c <= summaryColStart + 5; c++) {
+          row.push(rowData[c]?.v ?? '');
+        }
+        dataArray.push(row);
+      }
+    }
+    // Set all data in ONE batch operation
+    if (dataArray.length > 0) {
+      sheet.getRange(1, 0, dataArray.length, summaryColStart + 6)?.setValues(dataArray);
+    }
+  }
+
+  // Hide child rows and reset expand state
+  for (const [categoryName, range] of rowMapping2.childRowRanges) {
+    sheet.hideRows(range.start, range.count);
+    expandedGroups2.set(categoryName, false);
+  }
+
+  // Re-apply checkbox validation to day columns
+  for (let day = 0; day < daysInMonth; day++) {
+    const colLetter = getColumnLetter(dayColStart + day);
+    sheet
+      .getRange(`${colLetter}2:${colLetter}${totalRows}`)
+      ?.setDataValidation(
+        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
+      );
+  }
+
+  // Auto-resize rows to fit text-wrapped content
+  sheet.autoResizeRows(1, totalRows);
 }
 
 onMounted(async () => {
@@ -1101,6 +1169,22 @@ onMounted(async () => {
   if (workbook) {
     workbook.setActiveSheet('sheet1');
   }
+
+  // Refresh both sheets to recalculate row heights for text-wrapped content
+  // This triggers the same mechanism as the date picker change which properly adjusts row heights
+  setTimeout(async () => {
+    // Refresh Sheet 1 with current date (triggers row height recalculation)
+    await refreshSheet1(selectedDate.value);
+
+    // Refresh Sheet 2 (triggers row height recalculation for NỘI DUNG column)
+    await refreshSheet2();
+
+    // Ensure Sheet 1 is active after refresh
+    const wb = univerAPI?.getActiveWorkbook();
+    if (wb) {
+      wb.setActiveSheet('sheet1');
+    }
+  }, 300);
 });
 
 onUnmounted(() => {

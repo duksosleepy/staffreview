@@ -29,3 +29,16 @@ const config: Config = {
 };
 
 export default config;
+
+
+- lock records (ASM) (3 days)
+- final result (ASM, CHT) and lock record
+- ASM check (3 days), notify LARK, notify in UI
+- select all (ticked box)
+- modify history 
+
+bugs:
+
+- update/create for lower prive
+- refresh UI when login to webpage 
+

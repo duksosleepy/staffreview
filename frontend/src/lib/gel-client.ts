@@ -79,6 +79,7 @@ export type ChecklistItemWithRecord = {
   score: number;
   order: number;
   notes: string | null;
+  baseline: number | null; // Baseline for weekly/monthly items
   category: { id: string; name: string; category_type: DetailCategoryType };
   // Sheet 1 uses this record type (approval workflow)
   record: ChecklistRecord | null;
@@ -101,6 +102,7 @@ export type DetailChecklistItemWithRecord = {
   score: number;
   order: number;
   notes: string | null;
+  baseline: number | null; // Baseline for weekly/monthly items
   category: { id: string; name: string; category_type: DetailCategoryType };
   // Sheet 2 uses this record type (monthly tracking)
   record: DetailMonthlyRecord | null;

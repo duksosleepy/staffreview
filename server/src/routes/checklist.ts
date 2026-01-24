@@ -95,6 +95,7 @@ export const checklistRoutes = new Hono<Env>()
             score,
             order,
             notes,
+            baseline,
             category: { id, name, category_type },
             record := assert_single((
               select .checklist_records {
@@ -133,6 +134,7 @@ export const checklistRoutes = new Hono<Env>()
             score,
             order,
             notes,
+            baseline,
             category: { id, name, category_type },
             record := assert_single((
               select .checklist_records {
@@ -247,6 +249,7 @@ export const checklistRoutes = new Hono<Env>()
         score,
         order,
         notes,
+        baseline,
         category: { id, name, category_type },
         record := assert_single((
           select .monthly_records {

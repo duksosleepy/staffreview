@@ -159,6 +159,14 @@ module default {
             constraint max_value(3);
         }
 
+        # Baseline for weekly/monthly items (number of expected completions)
+        # Used to calculate TL(%)ĐẠT = Số lần Đạt / baseline * 100%
+        # Daily items use fixed value of 26, weekly/monthly items use this field
+        baseline: int32 {
+            default := 1;
+            constraint min_value(1);
+        }
+
         # Display order within category
         order: int32 {
             default := 0;

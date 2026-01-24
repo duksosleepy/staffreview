@@ -326,6 +326,79 @@ let itemIdToRow2 = new Map<string, number>();
 let sheet2Month = new Date().getMonth() + 1;
 let sheet2Year = new Date().getFullYear();
 
+// Store item metadata for formula calculations (row -> {categoryType, baseline, score})
+type ItemMetadata = {
+  categoryType: 'daily' | 'weekly' | 'monthly';
+  baseline: number;
+  score: number;
+};
+let rowToItemMetadata2 = new Map<number, ItemMetadata>();
+
+// Calculate summary values for Sheet 2 based on category type
+function calculateSummaryValues(
+  dailyChecks: boolean[],
+  categoryType: 'daily' | 'weekly' | 'monthly',
+  baseline: number,
+  score: number,
+  daysInMonth: number,
+): {
+  achievementPercentage: number;
+  successfulCompletions: number;
+  implementationIssuesCount: number;
+  scoreAchieved: number;
+  classification: string;
+} {
+  // Count checked and unchecked days (only count up to daysInMonth)
+  const relevantChecks = dailyChecks.slice(0, daysInMonth);
+  const successfulCompletions = relevantChecks.filter(Boolean).length;
+  const implementationIssuesCount = relevantChecks.filter(v => v === false).length;
+
+  let achievementPercentage: number;
+  let scoreAchieved: number;
+  let classification: string;
+
+  if (categoryType === 'daily') {
+    // Daily items: use fixed baseline of 26
+    const dailyBaseline = 26;
+    achievementPercentage = (successfulCompletions / dailyBaseline) * 100;
+    scoreAchieved = (successfulCompletions / dailyBaseline) * score;
+
+    // Classification based on achievement percentage
+    const ratio = successfulCompletions / dailyBaseline;
+    if (ratio >= 0.9) {
+      classification = 'A';
+    } else if (ratio >= 0.8) {
+      classification = 'B';
+    } else if (ratio >= 0.7) {
+      classification = 'C';
+    } else {
+      classification = 'KHONG_DAT';
+    }
+  } else {
+    // Weekly/Monthly items: use baseline from database
+    const itemBaseline = baseline || 1;
+    achievementPercentage = (successfulCompletions / itemBaseline) * 100;
+    scoreAchieved = (successfulCompletions / 26) * score;
+
+    // Classification based on score achieved
+    if (scoreAchieved >= 8) {
+      classification = 'A';
+    } else if (scoreAchieved >= 5) {
+      classification = 'B';
+    } else {
+      classification = 'C';
+    }
+  }
+
+  return {
+    achievementPercentage: Math.round(achievementPercentage * 100) / 100,
+    successfulCompletions,
+    implementationIssuesCount,
+    scoreAchieved: Math.round(scoreAchieved * 100) / 100,
+    classification,
+  };
+}
+
 function groupItemsByCategory(items: DetailChecklistItemWithRecord[]) {
   const grouped = new Map<string, DetailChecklistItemWithRecord[]>();
   for (const item of items) {
@@ -405,6 +478,7 @@ function buildSheet2CellData(
   rowMapping2 = { checklistRows: new Map(), childRowRanges: new Map() };
   rowToItemId2 = new Map(); // Reset the item ID mapping for Sheet 2
   itemIdToRow2 = new Map(); // Reset the reverse mapping for Sheet 2
+  rowToItemMetadata2 = new Map(); // Reset the item metadata mapping
   const grouped = groupItemsByCategory(items);
   let currentRow = 1;
 
@@ -427,7 +501,21 @@ function buildSheet2CellData(
 
     for (const item of categoryItems) {
       const r = item.record;
-      const dailyChecks = r?.daily_checks ?? [];
+      const dailyChecks = r?.daily_checks ?? Array(31).fill(false);
+
+      // Store item metadata for formula calculations
+      const categoryType = item.category.category_type;
+      const baseline = item.baseline ?? 1;
+      const score = item.score;
+
+      // Calculate summary values based on category type
+      const summary = calculateSummaryValues(
+        dailyChecks,
+        categoryType,
+        baseline,
+        score,
+        daysInMonth,
+      );
 
       const row: Record<number, { v: string | number; s?: object }> = {
         0: { v: item.item_number },
@@ -445,11 +533,12 @@ function buildSheet2CellData(
         row[dayColStart + day] = { v: dailyChecks[day] ? 1 : 0 };
       }
 
-      row[summaryColStart] = { v: r?.achievement_percentage ?? 0 };
-      row[summaryColStart + 1] = { v: r?.successful_completions ?? 0 };
-      row[summaryColStart + 2] = { v: r?.implementation_issues_count ?? 0 };
-      row[summaryColStart + 3] = { v: r?.score_achieved ?? 0 };
-      row[summaryColStart + 4] = { v: r?.classification ?? '' };
+      // Use calculated summary values
+      row[summaryColStart] = { v: summary.achievementPercentage };
+      row[summaryColStart + 1] = { v: summary.successfulCompletions };
+      row[summaryColStart + 2] = { v: summary.implementationIssuesCount };
+      row[summaryColStart + 3] = { v: summary.scoreAchieved };
+      row[summaryColStart + 4] = { v: summary.classification };
       row[summaryColStart + 5] = { v: r?.notes ?? item.notes ?? '' };
 
       cells[currentRow] = row;
@@ -457,6 +546,8 @@ function buildSheet2CellData(
       rowToItemId2.set(currentRow, item.id);
       // Reverse mapping: item ID to row (for syncing from Sheet 1)
       itemIdToRow2.set(item.id, currentRow);
+      // Store metadata for recalculating when checkboxes change
+      rowToItemMetadata2.set(currentRow, { categoryType, baseline, score });
       currentRow++;
     }
 
@@ -806,6 +897,39 @@ onMounted(async () => {
                     day: day,
                     checked: isChecked,
                   });
+
+                  // Recalculate and update summary columns in Sheet 2
+                  const metadata = rowToItemMetadata2.get(sheet2Row);
+                  const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
+                  if (metadata && sheet2) {
+                    // Read all daily checks from the row
+                    const dailyChecks: boolean[] = [];
+                    for (let d = 0; d < currentDaysInMonth; d++) {
+                      const val = sheet2.getRange(sheet2Row, dayColStart2 + d, 1, 1)?.getValue();
+                      dailyChecks.push(val === 1 || val === '1' || val === true);
+                    }
+                    // Pad to 31 days
+                    while (dailyChecks.length < 31) {
+                      dailyChecks.push(false);
+                    }
+
+                    // Calculate new summary values
+                    const summary = calculateSummaryValues(
+                      dailyChecks,
+                      metadata.categoryType,
+                      metadata.baseline,
+                      metadata.score,
+                      currentDaysInMonth,
+                    );
+
+                    // Update summary columns
+                    const summaryCol = dayColStart2 + currentDaysInMonth;
+                    sheet2.getRange(sheet2Row, summaryCol, 1, 1)?.setValue(summary.achievementPercentage);
+                    sheet2.getRange(sheet2Row, summaryCol + 1, 1, 1)?.setValue(summary.successfulCompletions);
+                    sheet2.getRange(sheet2Row, summaryCol + 2, 1, 1)?.setValue(summary.implementationIssuesCount);
+                    sheet2.getRange(sheet2Row, summaryCol + 3, 1, 1)?.setValue(summary.scoreAchieved);
+                    sheet2.getRange(sheet2Row, summaryCol + 4, 1, 1)?.setValue(summary.classification);
+                  }
                 }
               }
             }
@@ -841,6 +965,38 @@ onMounted(async () => {
             if (!response.success) {
               sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
             } else {
+              // Recalculate and update summary columns
+              const metadata = rowToItemMetadata2.get(row);
+              if (metadata && sheet) {
+                // Read all daily checks from the row
+                const dailyChecks: boolean[] = [];
+                for (let d = 0; d < currentDaysInMonth; d++) {
+                  const val = sheet.getRange(row, dayColStart2 + d, 1, 1)?.getValue();
+                  dailyChecks.push(val === 1 || val === '1' || val === true);
+                }
+                // Pad to 31 days
+                while (dailyChecks.length < 31) {
+                  dailyChecks.push(false);
+                }
+
+                // Calculate new summary values
+                const summary = calculateSummaryValues(
+                  dailyChecks,
+                  metadata.categoryType,
+                  metadata.baseline,
+                  metadata.score,
+                  currentDaysInMonth,
+                );
+
+                // Update summary columns (summaryColStart = dayColStart2 + currentDaysInMonth)
+                const summaryCol = dayColStart2 + currentDaysInMonth;
+                sheet.getRange(row, summaryCol, 1, 1)?.setValue(summary.achievementPercentage);
+                sheet.getRange(row, summaryCol + 1, 1, 1)?.setValue(summary.successfulCompletions);
+                sheet.getRange(row, summaryCol + 2, 1, 1)?.setValue(summary.implementationIssuesCount);
+                sheet.getRange(row, summaryCol + 3, 1, 1)?.setValue(summary.scoreAchieved);
+                sheet.getRange(row, summaryCol + 4, 1, 1)?.setValue(summary.classification);
+              }
+
               // SYNC: When day checkbox changes in Sheet 2, also update Sheet 1 if date matches
               // Check if the day matches Sheet 1's selected date
               if (selectedDate.value) {

@@ -14,6 +14,8 @@ export type AuthUser = {
   email: string;
   role: Role;
   permissions: Permission[];
+  stores: string[];
+  casdoor_id: string;
 };
 
 export type AuthMeResponse = {

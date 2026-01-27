@@ -9,11 +9,13 @@ import type { AuthUser } from "../types/auth.js";
 // Query params validation
 const DateQuerySchema = z.object({
   date: z.string().optional(),
+  staff_id: z.string().optional(),
 });
 
 const MonthYearQuerySchema = z.object({
   month: z.coerce.number().min(1).max(12).optional(),
   year: z.coerce.number().min(2000).max(2100).optional(),
+  staff_id: z.string().optional(),
 });
 
 // Request body validation for upsert (Sheet 1 - approval workflow)
@@ -36,21 +38,34 @@ const UpsertDetailMonthlyRecordSchema = z.object({
 
 /**
  * Build staff_id filter parameters based on user role
- * - Employee: can only see their own records
- * - CHT: can see all records (they review employees)
- * - ASM: can see all records (they review everyone)
+ * - Employee: can only see their own records (filter by staff_id)
+ * - CHT/ASM viewing specific employee: filter by that staff_id
+ * - CHT/ASM viewing all: filter by store_id IN stores[]
  */
-function buildStaffFilter(user: AuthUser) {
+function buildStaffFilter(user: AuthUser, targetStaffId?: string) {
   if (user.role === "employee") {
-    // Employee can only see records where staff_id matches their sub
     return {
       filterCondition: "and .staff_id = <str>$staffId",
       params: { staffId: user.sub }
     };
   }
-  // CHT and ASM can see all records
+  // CHT/ASM viewing a specific employee's records
+  if (targetStaffId) {
+    return {
+      filterCondition: "and .staff_id = <str>$staffId",
+      params: { staffId: targetStaffId }
+    };
+  }
+  // CHT and ASM: filter by store_id matching user's stores
+  if (user.stores.length > 0) {
+    return {
+      filterCondition: "and .store_id in array_unpack(<array<str>>$storeIds)",
+      params: { storeIds: user.stores }
+    };
+  }
+  // No stores assigned — show nothing to prevent data leaks
   return {
-    filterCondition: "",
+    filterCondition: "and false",
     params: {}
   };
 }
@@ -65,7 +80,7 @@ export const checklistRoutes = new Hono<Env>()
    * Both Sheet 1 and Sheet 2 now share the same checklist items
    */
   .get("/items", zValidator("query", DateQuerySchema), async (c) => {
-    const { date } = c.req.valid("query");
+    const { date, staff_id } = c.req.valid("query");
     const db = c.get("db");
     const user = c.get("user");
     const log = c.get("log");
@@ -74,9 +89,9 @@ export const checklistRoutes = new Hono<Env>()
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    log?.debug({ userId: user.sub, role: user.role, date }, "Fetching checklist items");
+    log?.debug({ userId: user.sub, role: user.role, date, staff_id }, "Fetching checklist items");
 
-    const { filterCondition, params } = buildStaffFilter(user);
+    const { filterCondition, params } = buildStaffFilter(user, staff_id);
 
     // Now using DetailChecklistItem as the source of truth for both sheets
     // Sheet 1 uses checklist_records backlink for approval workflow
@@ -178,21 +193,19 @@ export const checklistRoutes = new Hono<Env>()
   .get("/assessment-dates", async (c) => {
     const db = c.get("db");
     const user = c.get("user");
+    const staffIdParam = c.req.query("staff_id");
 
     if (!user) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    // Build filter for staff_id
-    const { filterCondition, params } = user.role === "employee"
-      ? {
-          filterCondition: "and ChecklistRecord.staff_id = <str>$staffId",
-          params: { staffId: user.sub }
-        }
-      : {
-          filterCondition: "",
-          params: {}
-        };
+    // Build filter for staff_id / store_id
+    const { filterCondition: rawFilter, params } = buildStaffFilter(user, staffIdParam);
+    // Rewrite filter to use ChecklistRecord prefix instead of implicit `.`
+    const filterCondition = rawFilter
+      .replace("and .staff_id", "and ChecklistRecord.staff_id")
+      .replace("and .store_id", "and ChecklistRecord.store_id")
+      .replace("and false", "and false");
 
     const query = `
       select array_agg(distinct (
@@ -214,7 +227,7 @@ export const checklistRoutes = new Hono<Env>()
    * Both sheets share the same items, but Sheet 2 uses monthly_records backlink
    */
   .get("/detail-items", zValidator("query", MonthYearQuerySchema), async (c) => {
-    const { month, year } = c.req.valid("query");
+    const { month, year, staff_id } = c.req.valid("query");
     const db = c.get("db");
     const user = c.get("user");
     const log = c.get("log");
@@ -228,11 +241,11 @@ export const checklistRoutes = new Hono<Env>()
     const targetYear = year ?? currentDate.getFullYear();
 
     log?.debug(
-      { userId: user.sub, role: user.role, month: targetMonth, year: targetYear },
+      { userId: user.sub, role: user.role, month: targetMonth, year: targetYear, staff_id },
       "Fetching detail checklist items"
     );
 
-    const { filterCondition, params: staffParams } = buildStaffFilter(user);
+    const { filterCondition, params: staffParams } = buildStaffFilter(user, staff_id);
 
     // Sheet 2 uses monthly_records backlink for monthly tracking
     const query = `
@@ -336,9 +349,11 @@ export const checklistRoutes = new Hono<Env>()
 
     // Build the SET clause for fields that are provided and allowed
     const setClauses: string[] = [];
+    const storeId = user.stores[0] ?? "";
     const params: Record<string, unknown> = {
       checklistItemId: body.checklist_item_id,
       staffId: user.sub,
+      storeId,
       assessmentDate: new LocalDate(
         Number.parseInt(body.assessment_date.split("-")[0], 10),
         Number.parseInt(body.assessment_date.split("-")[1], 10),
@@ -382,6 +397,7 @@ export const checklistRoutes = new Hono<Env>()
       insert ChecklistRecord {
         checklist_item := item,
         staff_id := <str>$staffId,
+        store_id := <str>$storeId,
         assessment_date := <cal::local_date>$assessmentDate${insertFields.length > 0 ? ",\n        " + insertFields.join(",\n        ") : ""},
         created_at := datetime_current(),
         updated_at := datetime_current()
@@ -421,9 +437,11 @@ export const checklistRoutes = new Hono<Env>()
 
     log?.debug({ userId: user.sub, body }, "Upserting detail monthly record");
 
+    const storeId = user.stores[0] ?? "";
     const params: Record<string, unknown> = {
       detailItemId: body.detail_item_id,
       staffId: user.sub,
+      storeId,
       month: body.month,
       year: body.year,
       day: body.day,
@@ -468,6 +486,7 @@ export const checklistRoutes = new Hono<Env>()
       insert DetailMonthlyRecord {
         detail_item := item,
         staff_id := <str>$staffId,
+        store_id := <str>$storeId,
         month := <int32>$month,
         year := <int32>$year,
         daily_checks := updated_checks,

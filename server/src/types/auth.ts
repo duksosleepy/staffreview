@@ -32,6 +32,8 @@ export type AuthUser = {
   name: string;
   email: string;
   role: Role;
+  stores: string[];
+  casdoor_id: string;
 };
 
 // OIDC token response (standard)

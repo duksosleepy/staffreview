@@ -118,6 +118,8 @@ export const createAppJwt = async (user: AuthUser): Promise<string> => {
     name: user.name,
     email: user.email,
     role: user.role,
+    stores: user.stores,
+    casdoor_id: user.casdoor_id,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -135,7 +137,115 @@ export const verifyAppJwt = async (token: string): Promise<AuthUser> => {
     name: payload.name as string,
     email: payload.email as string,
     role: payload.role as Role,
+    stores: (payload.stores as string[]) ?? [],
+    casdoor_id: (payload.casdoor_id as string) ?? "",
   };
+};
+
+// Fetch full Casdoor user object via API (includes properties like CUAHANG, ID)
+export const fetchCasdoorUserInfo = async (
+  accessToken: string,
+): Promise<{ stores: string[]; casdoor_id: string }> => {
+  const response = await fetch(
+    `${oidcConfig.endpoint}/api/get-account`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  const data = await response.json();
+
+  // Casdoor wraps user object inside data.data
+  const userData = data?.data ?? {};
+  const properties = userData.properties ?? {};
+  const cuahang = properties.CUAHANG ?? "";
+  const casdoorId = properties.ID ?? "";
+
+  // CUAHANG is comma-separated store IDs, e.g. "S001,S002"
+  const stores = cuahang
+    ? cuahang.split(",").map((s: string) => s.trim()).filter(Boolean)
+    : [];
+
+  return { stores, casdoor_id: casdoorId };
+};
+
+// Casdoor user type for employee listing
+export type CasdoorEmployee = {
+  id: string;
+  name: string;
+  displayName: string;
+  email: string;
+  stores: string[];
+  casdoor_id: string;
+  role: string;
+};
+
+// Fetch all users from Casdoor org, filtered by store IDs
+export const fetchCasdoorUsersByStores = async (
+  storeIds: string[],
+): Promise<CasdoorEmployee[]> => {
+  // Casdoor API: GET /api/get-users?owner={org}&clientId={id}&clientSecret={secret}
+  const owner = process.env.CASDOOR_ORG || "lug.vn";
+  const params = new URLSearchParams({
+    owner,
+    clientId: oidcConfig.clientId,
+    clientSecret: oidcConfig.clientSecret,
+  });
+
+  const response = await fetch(
+    `${oidcConfig.endpoint}/api/get-users?${params.toString()}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Casdoor get-users failed: ${response.status}`);
+  }
+
+  const rawBody = await response.json();
+
+  // Casdoor may return array directly or wrapped in { data: [...] }
+  const users = Array.isArray(rawBody) ? rawBody : (rawBody?.data ?? rawBody);
+
+  if (!Array.isArray(users)) {
+    return [];
+  }
+
+  // Filter users whose CUAHANG property overlaps with requested storeIds
+  const storeSet = new Set(storeIds);
+  const employees: CasdoorEmployee[] = [];
+
+  for (const user of users) {
+    const properties = user.properties ?? {};
+    const cuahang = properties.CUAHANG ?? "";
+    const userStores = cuahang
+      ? cuahang.split(",").map((s: string) => s.trim()).filter(Boolean)
+      : [];
+
+    // Check if any of the user's stores match
+    const hasMatchingStore = userStores.some((s: string) => storeSet.has(s));
+    if (!hasMatchingStore) continue;
+
+    // Extract role: check roles array first, then tag field as fallback
+    let role = "employee";
+    if (user.roles?.length) {
+      const r = extractRoleString(user.roles[0]);
+      if (r && isValidRole(r)) role = r;
+    } else if (user.tag) {
+      const t = user.tag.toLowerCase();
+      if (isValidRole(t)) role = t;
+    }
+
+    employees.push({
+      id: user.id,
+      name: user.name,
+      displayName: user.displayName || user.name,
+      email: user.email || "",
+      stores: userStores,
+      casdoor_id: properties.ID ?? "",
+      role,
+    });
+  }
+
+  return employees;
 };
 
 // Decode OIDC ID token (without verification - IDP already verified)

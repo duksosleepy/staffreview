@@ -5,11 +5,12 @@ import { UniverSheetsDataValidationPreset } from '@univerjs/preset-sheets-data-v
 import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-validation/locales/en-US';
 import type { FUniver, Univer } from '@univerjs/presets';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
-import { nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
 import {
   type ChecklistItemWithRecord,
   type DetailChecklistItemWithRecord,
+  type StoreEmployee,
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
   upsertChecklistRecord,
@@ -18,13 +19,37 @@ import {
 import { useAuthStore } from '@/stores/auth';
 import { usePermission } from '@/composables/usePermission';
 import UserMenu from '@/components/UserMenu.vue';
+import EmployeeSidebar from '@/components/EmployeeSidebar.vue';
 
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
 
 // Auth
 const auth = useAuthStore();
-const { canCheckCht, canCheckAsm } = usePermission();
+const { canCheckCht, canCheckAsm, isCht, isAsm } = usePermission();
+
+// Show sidebar only for CHT/ASM
+const showSidebar = computed(() => isCht.value || isAsm.value);
+
+// Selected employee from sidebar (CHT/ASM viewing specific employee's data)
+const selectedStaffId = ref<string | undefined>(undefined);
+const selectedStaffName = ref<string>('');
+
+// Handle employee selection from sidebar
+const onEmployeeSelect = async (employee: StoreEmployee | null) => {
+  if (employee) {
+    selectedStaffId.value = employee.id;
+    selectedStaffName.value = employee.displayName;
+  } else {
+    selectedStaffId.value = undefined;
+    selectedStaffName.value = '';
+  }
+  // Refresh both sheets with the selected employee's data
+  await Promise.all([
+    refreshSheet1(selectedDate.value || undefined),
+    refreshSheet2(),
+  ]);
+};
 
 const containerRef = ref<HTMLDivElement | null>(null);
 const loadingOverlayRef = ref<HTMLDivElement | null>(null);
@@ -239,7 +264,7 @@ async function refreshSheet1(date?: string) {
 
   showLoadingOverlay();
   try {
-    const items = await fetchAllChecklistItems(date);
+    const items = await fetchAllChecklistItems(date, selectedStaffId.value);
     const { cells, totalRows } = buildSheet1CellData(items, date || '');
 
     const workbook = univerAPI.getActiveWorkbook();
@@ -599,7 +624,9 @@ function getColumnLetter(index: number): string {
 async function refreshSheet2() {
   if (!univerAPI) return;
 
-  const items = await fetchAllDetailChecklistItems().catch(
+  const items = await fetchAllDetailChecklistItems(
+    undefined, undefined, selectedStaffId.value,
+  ).catch(
     () => [] as DetailChecklistItemWithRecord[],
   );
 
@@ -687,8 +714,8 @@ onMounted(async () => {
 
   // Fetch data for both sheets
   const [sheet1Items, sheet2Items] = await Promise.all([
-    fetchAllChecklistItems(selectedDate.value || undefined),
-    fetchAllDetailChecklistItems().catch(
+    fetchAllChecklistItems(selectedDate.value || undefined, selectedStaffId.value),
+    fetchAllDetailChecklistItems(undefined, undefined, selectedStaffId.value).catch(
       () => [] as DetailChecklistItemWithRecord[],
     ),
   ]);
@@ -1208,7 +1235,10 @@ onUnmounted(() => {
           <h1 class="m-0 font-['Inter'] text-lg sm:text-xl font-semibold text-white tracking-tight">
             Quan ly
           </h1>
-          <p class="hidden sm:block text-xs text-gray-400 mt-0.5">He thong kiem tra cong viec</p>
+          <p v-if="selectedStaffName" class="hidden sm:block text-xs text-teal-400 mt-0.5">
+            Dang xem: {{ selectedStaffName }}
+          </p>
+          <p v-else class="hidden sm:block text-xs text-gray-400 mt-0.5">He thong kiem tra cong viec</p>
         </div>
       </div>
 
@@ -1221,21 +1251,27 @@ onUnmounted(() => {
       />
     </header>
 
-    <!-- Main Content Area -->
-    <div class="flex-1 p-2 sm:p-4 overflow-hidden">
-      <div class="relative h-full glass-card rounded-xl sm:rounded-2xl overflow-hidden">
-        <!-- Spreadsheet container -->
-        <div ref="containerRef" class="w-full h-full"></div>
+    <!-- Main Content Area with optional sidebar -->
+    <div class="flex-1 flex overflow-hidden">
+      <!-- Employee Sidebar (CHT/ASM only) -->
+      <EmployeeSidebar v-if="showSidebar" @select="onEmployeeSelect" />
 
-        <!-- Loading overlay -->
-        <div
-          ref="loadingOverlayRef"
-          class="absolute inset-0 bg-black/60 backdrop-blur-sm items-center justify-center z-50 hidden"
-          style="display: none"
-        >
-          <div class="flex flex-col items-center gap-4 p-8 glass rounded-2xl">
-            <div class="w-10 h-10 border-3 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
-            <span class="text-sm text-gray-300 font-medium">Dang tai du lieu...</span>
+      <!-- Spreadsheet Area -->
+      <div class="flex-1 p-2 sm:p-4 overflow-hidden">
+        <div class="relative h-full glass-card rounded-xl sm:rounded-2xl overflow-hidden">
+          <!-- Spreadsheet container -->
+          <div ref="containerRef" class="w-full h-full"></div>
+
+          <!-- Loading overlay -->
+          <div
+            ref="loadingOverlayRef"
+            class="absolute inset-0 bg-black/60 backdrop-blur-sm items-center justify-center z-50 hidden"
+            style="display: none"
+          >
+            <div class="flex flex-col items-center gap-4 p-8 glass rounded-2xl">
+              <div class="w-10 h-10 border-3 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+              <span class="text-sm text-gray-300 font-medium">Dang tai du lieu...</span>
+            </div>
           </div>
         </div>
       </div>

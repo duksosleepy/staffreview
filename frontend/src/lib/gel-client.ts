@@ -145,10 +145,14 @@ async function handleResponse<T>(response: Response): Promise<T> {
  */
 export async function fetchAllChecklistItems(
   date?: string,
+  staffId?: string,
 ): Promise<ChecklistItemWithRecord[]> {
   const url = new URL(`${API_BASE}/items`, window.location.origin);
   if (date) {
     url.searchParams.set("date", date);
+  }
+  if (staffId) {
+    url.searchParams.set("staff_id", staffId);
   }
 
   const response = await fetch(url.toString(), {
@@ -180,6 +184,7 @@ export async function fetchAvailableAssessmentDates(): Promise<string[]> {
 export async function fetchAllDetailChecklistItems(
   month?: number,
   year?: number,
+  staffId?: string,
 ): Promise<DetailChecklistItemWithRecord[]> {
   const url = new URL(`${API_BASE}/detail-items`, window.location.origin);
   if (month !== undefined) {
@@ -187,6 +192,9 @@ export async function fetchAllDetailChecklistItems(
   }
   if (year !== undefined) {
     url.searchParams.set("year", year.toString());
+  }
+  if (staffId) {
+    url.searchParams.set("staff_id", staffId);
   }
 
   const response = await fetch(url.toString(), {
@@ -207,6 +215,33 @@ export async function fetchDetailCategories(): Promise<DetailCategory[]> {
   });
 
   return handleResponse<DetailCategory[]>(response);
+}
+
+// ===================================================
+// Employee Listing (for CHT/ASM sidebar)
+// ===================================================
+
+export type StoreEmployee = {
+  id: string;
+  name: string;
+  displayName: string;
+  email: string;
+  stores: string[];
+  casdoor_id: string;
+  role: string;
+};
+
+/**
+ * Fetch employees that share the same store as the logged-in CHT/ASM user.
+ * Returns 403 for employees (only CHT/ASM can access).
+ */
+export async function fetchStoreEmployees(): Promise<StoreEmployee[]> {
+  const response = await fetch("/api/employees/by-store", {
+    method: "GET",
+    credentials: "include",
+  });
+
+  return handleResponse<StoreEmployee[]>(response);
 }
 
 // ===================================================

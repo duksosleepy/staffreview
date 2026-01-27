@@ -5,6 +5,25 @@ module default {
     # but use different record types for their specific tracking needs
     # ===================================================
 
+    # Area: Region and store mapping
+    type Area {
+        required region: str;
+        required store_id: str {
+            constraint exclusive;
+        }
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # Indexes
+        index on (.region);
+    }
+
     # ChecklistRecord: Sheet 1's approval workflow records (per date)
     # Links to DetailChecklistItem for unified checklist items
     type ChecklistRecord {
@@ -15,6 +34,11 @@ module default {
 
         # Staff ID from Casdoor JWT (sub claim)
         required staff_id: str;
+
+        # Store ID from Casdoor user properties (CUAHANG)
+        store_id: str {
+            default := "";
+        }
 
         # Ngày đánh giá
         required assessment_date: cal::local_date;
@@ -81,6 +105,7 @@ module default {
         # Indexes
         index on (.checklist_item);
         index on (.staff_id);
+        index on (.store_id);
         index on (.assessment_date);
         index on (.is_deleted);
         index on (.final_classification);
@@ -215,6 +240,11 @@ module default {
         # Staff ID from Casdoor JWT (sub claim)
         required staff_id: str;
 
+        # Store ID from Casdoor user properties (CUAHANG)
+        store_id: str {
+            default := "";
+        }
+
         # Month and Year for this record
         required month: int32 {
             constraint min_value(1);
@@ -282,6 +312,7 @@ module default {
         # Indexes
         index on (.detail_item);
         index on (.staff_id);
+        index on (.store_id);
         index on ((.month, .year));
         index on (.is_deleted);
         index on (.classification);

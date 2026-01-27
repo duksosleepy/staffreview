@@ -18,6 +18,8 @@ export const useAuthStore = defineStore("auth", () => {
   const permissions = computed(() => user.value?.permissions ?? []);
   const userName = computed(() => user.value?.name ?? "");
   const userEmail = computed(() => user.value?.email ?? "");
+  const stores = computed(() => user.value?.stores ?? []);
+  const casdoorId = computed(() => user.value?.casdoor_id ?? "");
 
   // Check if user has a specific permission
   const hasPermission = (permission: Permission): boolean => {
@@ -115,6 +117,8 @@ export const useAuthStore = defineStore("auth", () => {
     permissions,
     userName,
     userEmail,
+    stores,
+    casdoorId,
 
     // Methods
     hasPermission,

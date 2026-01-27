@@ -8,6 +8,7 @@ import {
   decodeIdToken,
   exchangeCodeForTokens,
   extractRole,
+  fetchCasdoorUserInfo,
 } from "../lib/oidc.js";
 import { AUTH_COOKIE_NAME, authMiddleware } from "../middleware/auth.js";
 import { ROLE_PERMISSIONS } from "../types/auth.js";
@@ -59,12 +60,17 @@ export const authRoutes = new Hono<Env>()
       const userInfo = decodeIdToken(tokens.id_token);
       const role = extractRole(userInfo);
 
-      // Create app JWT with user info and role
+      // Fetch full Casdoor user object to get properties (CUAHANG, ID)
+      const { stores, casdoor_id } = await fetchCasdoorUserInfo(tokens.access_token);
+
+      // Create app JWT with user info, role, stores, and casdoor_id
       const appJwt = await createAppJwt({
         sub: userInfo.sub,
         name: userInfo.name,
         email: userInfo.email,
         role,
+        stores,
+        casdoor_id,
       });
 
       // Set auth cookie
@@ -80,10 +86,10 @@ export const authRoutes = new Hono<Env>()
       const frontendUrl = process.env.FRONTEND_URL || "/";
       return c.redirect(frontendUrl);
     } catch (error) {
-      const log = c.get("log");
+      const errLog = c.get("log");
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
-      log?.error({ errorMessage, errorStack }, "Auth callback failed");
+      errLog?.error({ errorMessage, errorStack }, "Auth callback failed");
       throw new HTTPException(500, { message: `Authentication failed: ${errorMessage}` });
     }
   })
@@ -100,6 +106,8 @@ export const authRoutes = new Hono<Env>()
         email: user.email,
         role: user.role,
         permissions,
+        stores: user.stores,
+        casdoor_id: user.casdoor_id,
       },
     });
   })

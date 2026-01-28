@@ -20,7 +20,11 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const auth = useAuthStore();
-const { getRoleBadgeClass, getRoleDisplay } = useRoleDisplay();
+const { getRoleDisplay, getRoleBadgeClass } = useRoleDisplay();
+
+// Extract reactive values to ensure proper re-computation
+const currentUserStores = computed(() => auth.stores);
+const currentUserId = computed(() => auth.casdoorId);
 
 const emit = defineEmits<{
   select: [employee: StoreEmployee | null];
@@ -50,21 +54,49 @@ const isCollapsed = useLocalStorage('sidebar-collapsed', false);
 const selectedId = shallowRef<string | null>(props.initialSelectedId || null);
 
 /**
- * Groups employees by their assigned stores
+ * Groups employees by their assigned stores and sorts by role level
  * @returns Map where keys are store names and values are employee arrays
  */
 const employeesByStore = computed(() => {
+  const userStores = currentUserStores.value;
+  const userId = currentUserId.value;
   const grouped = new Map<string, StoreEmployee[]>();
+
   for (const emp of employees.value) {
     for (const store of emp.stores) {
-      if (auth.stores.includes(store)) {
+      if (userStores.includes(store)) {
         if (!grouped.has(store)) {
           grouped.set(store, []);
         }
-        grouped.get(store)!.push(emp);
+        grouped.get(store)?.push(emp);
       }
     }
   }
+
+  // Role hierarchy: ASM > CHT > Employee
+  const roleLevel: Record<string, number> = { asm: 3, cht: 2, employee: 1 };
+
+  // Sort each store's employees by role level (high to low), then current user first, then alphabetically
+  for (const emps of grouped.values()) {
+    emps.sort((a, b) => {
+      const aRole = getEffectiveRole(a);
+      const bRole = getEffectiveRole(b);
+
+      // First by role level (descending)
+      const roleDiff = (roleLevel[bRole] ?? 0) - (roleLevel[aRole] ?? 0);
+      if (roleDiff !== 0) return roleDiff;
+
+      // Within same role: current user first
+      const aIsCurrent = a.casdoor_id === userId;
+      const bIsCurrent = b.casdoor_id === userId;
+      if (aIsCurrent && !bIsCurrent) return -1;
+      if (!aIsCurrent && bIsCurrent) return 1;
+
+      // Then alphabetically
+      return a.displayName.localeCompare(b.displayName);
+    });
+  }
+
   return grouped;
 });
 
@@ -101,7 +133,21 @@ const clearSelection = () => {
   emit('select', null);
 };
 
-onMounted(loadEmployees);
+/**
+ * Auto-select current user after employees are loaded
+ */
+const autoSelectCurrentUser = () => {
+  const currentUser = employees.value.find(emp => emp.casdoor_id === currentUserId.value);
+  if (currentUser && !selectedId.value) {
+    selectedId.value = currentUser.id;
+    emit('select', currentUser);
+  }
+};
+
+onMounted(async () => {
+  await loadEmployees();
+  autoSelectCurrentUser();
+});
 </script>
 
 <template>
@@ -184,7 +230,7 @@ onMounted(loadEmployees);
             <button
               v-for="emp in storeEmployees"
               :key="emp.id"
-              v-memo="[selectedId === emp.id, emp.displayName, emp.role, emp.casdoor_id]"
+              v-memo="[selectedId === emp.id, emp.displayName, emp.role]"
               type="button"
               :class="`w-full text-left px-3 py-2.5 rounded-lg transition-[background-color,border-color,color] duration-200 group border ${FOCUS_RING_CLASSES} ${
                 selectedId === emp.id

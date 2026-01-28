@@ -38,7 +38,7 @@ import '@univerjs/preset-sheets-data-validation/lib/index.css';
 
 // Auth
 const auth = useAuthStore();
-const { canCheckCht, canCheckAsm, isCht, isAsm } = usePermission();
+const { canCheckCht, canCheckAsm, isCht, isAsm, isRole } = usePermission();
 
 // Notifications
 const notificationStore = useNotificationStore();
@@ -72,7 +72,11 @@ onErrorCaptured((err, instance, info) => {
 });
 
 // Show sidebar only for CHT/ASM
-const showSidebar = computed(() => isCht.value || isAsm.value);
+const showSidebar = computed(() => {
+  const show = isCht.value || isAsm.value;
+  console.log('[Sidebar] Role:', auth.role, 'isCht:', isCht.value, 'isAsm:', isAsm.value, 'showSidebar:', show);
+  return show;
+});
 
 // Selected employee from sidebar (CHT/ASM viewing specific employee's data)
 const selectedStaffId = ref<string | undefined>(undefined);
@@ -105,6 +109,7 @@ let univerAPI: FUniver | null = null;
 const selectedDate = ref<string>('');
 const isLoadingSheet1 = ref(false);
 let isInitialLoad = true; // Flag to prevent event firing during initial load
+let isRevertingValue = false; // Flag to prevent recursion when reverting unauthorized changes
 
 // Constants for date picker cell location in Sheet1
 const DATE_PICKER_ROW = 0;
@@ -911,7 +916,7 @@ onMounted(async () => {
     // Checkboxes don't trigger SheetEditEnded - they execute commands directly
     api.onCommandExecuted(async (command) => {
       if (command.id === 'sheet.command.set-range-values') {
-        if (isInitialLoad || isLoadingSheet1.value) return;
+        if (isInitialLoad || isLoadingSheet1.value || isRevertingValue) return;
 
         const params = command.params as any;
         const range = params?.range;
@@ -936,6 +941,30 @@ onMounted(async () => {
           // Make sure we have a valid date
           const assessmentDate = selectedDate.value;
           if (!assessmentDate) return;
+
+          // Role-based column validation
+          type ColumnRole = 'employee' | 'cht' | 'asm';
+          const COLUMN_CONFIG: Record<number, { role: ColumnRole; name: string }> = {
+            1: { role: 'employee', name: 'NHÂN VIÊN' }, // Column B
+            2: { role: 'cht', name: 'CHT' },            // Column C
+            3: { role: 'asm', name: 'ASM' },            // Column D
+          };
+
+          const columnConfig = COLUMN_CONFIG[column];
+          if (!columnConfig) return;
+
+          if (!isRole(columnConfig.role)) {
+            toaster.create({
+              title: 'Unauthorized',
+              description: `You can only edit your own column (${columnConfig.name})`,
+              type: 'error',
+            });
+            // Set flag to prevent recursion, then revert the value
+            isRevertingValue = true;
+            sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
+            setTimeout(() => { isRevertingValue = false; }, 100);
+            return;
+          }
 
           // Build the payload based on which column was changed
           const payload: {
@@ -1027,8 +1056,17 @@ onMounted(async () => {
                 }
               }
             }
-          } catch (error) {
+          } catch (error: any) {
+            const errorMsg = error?.message || 'Failed to update';
+            toaster.create({
+              title: 'Error',
+              description: errorMsg,
+              type: 'error',
+            });
+            // Set flag to prevent recursion, then revert the value
+            isRevertingValue = true;
             sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
+            setTimeout(() => { isRevertingValue = false; }, 100);
           }
         }
 

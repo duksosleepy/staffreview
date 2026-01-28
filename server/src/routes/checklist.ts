@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { Env } from '../lib/env.js';
 import { authMiddleware } from '../middleware/auth.js';
 import type { AuthUser } from '../types/auth.js';
+import { validateColumnAccess, getAllowedColumns, type ChecklistColumn } from '../lib/rbac.js';
 
 // Query params validation
 const DateQuerySchema = z.object({
@@ -450,17 +451,22 @@ export const checklistRoutes = new Hono<Env>()
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    // Role-based permission check for checkbox fields
-    // - Employee: can only set employee_checked
-    // - CHT: can set employee_checked and cht_checked
-    // - ASM: can set all checkboxes
-    const allowedFields: string[] = ['employee_checked'];
-    if (user.role === 'cht' || user.role === 'asm') {
-      allowedFields.push('cht_checked');
+    // Role-based column access control
+    // Employee: Column B only | CHT: Column C only | ASM: Column D only
+    const requestedColumns: ChecklistColumn[] = [];
+    if (body.employee_checked !== undefined) requestedColumns.push('employee_checked');
+    if (body.cht_checked !== undefined) requestedColumns.push('cht_checked');
+    if (body.asm_checked !== undefined) requestedColumns.push('asm_checked');
+
+    const validation = validateColumnAccess(user.role, requestedColumns);
+    if (!validation.allowed) {
+      const columnNames = { employee_checked: 'NHÂN VIÊN', cht_checked: 'CHT', asm_checked: 'ASM' };
+      const denied = validation.deniedColumns.map(c => columnNames[c]).join(', ');
+      log?.warn({ role: user.role, requested: requestedColumns, denied: validation.deniedColumns }, 'Unauthorized column access');
+      return c.json({ error: `You can only edit your own column. Cannot update: ${denied}` }, 403);
     }
-    if (user.role === 'asm') {
-      allowedFields.push('asm_checked');
-    }
+
+    const allowedFields = getAllowedColumns(user.role);
 
     // Build the SET clause for fields that are provided and allowed
     const setClauses: string[] = [];

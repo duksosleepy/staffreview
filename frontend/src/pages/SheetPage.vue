@@ -1185,15 +1185,6 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col h-screen w-full bg-gradient-to-br from-ink-deepest to-ink-deep relative overflow-hidden">
-    <!-- Animated background elements -->
-    <div class="absolute inset-0 overflow-hidden">
-      <!-- Geometric patterns -->
-      <div class="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-vermillion-500/5 blur-3xl animate-pulse"></div>
-      <div class="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full bg-gold-500/5 blur-3xl animate-pulse delay-1000"></div>
-    </div>
-
-    <!-- Noise texture overlay -->
-    <div class="noise-overlay absolute inset-0 pointer-events-none"></div>
 
     <!-- Notification Toast (Ark UI) -->
     <Teleport to="body">

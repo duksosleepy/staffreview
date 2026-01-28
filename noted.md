@@ -42,3 +42,10 @@ bugs:
 - update/create for lower prive
 - refresh UI when login to webpage 
 
+
+# colors
+#272725
+#191919
+#1c1c1c
+
+border: #757473 #373736

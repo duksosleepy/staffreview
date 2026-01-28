@@ -23,7 +23,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     }
     const { incompleteStaff, totalStaff } = summary.value;
     if (incompleteStaff === 0) return 'Tat ca nhan vien da hoan thanh checklist';
-    return `${incompleteStaff}/${totalStaff} nhan vien chua hoan thanh checklist`;
+    return `${incompleteStaff}/${totalStaff} nhân viên chưa hoàn thành checklist`;
   });
 
   const fetchSummary = async () => {

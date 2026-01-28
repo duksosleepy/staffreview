@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Avatar, Menu } from '@ark-ui/vue';
+import { Avatar, Menu, Button } from '@ark-ui/vue';
 import { computed } from 'vue';
 
 type Props = {
@@ -42,17 +42,19 @@ const handleLogout = () => {
 <template>
   <Menu.Root>
     <Menu.Trigger
-      class="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 hover:bg-white/10 group shadow-sm"
+      class="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 hover:bg-vermillion-500/10 group shadow-sm border border-transparent hover:border-vermillion-500/20"
     >
       <!-- Avatar with notification badge -->
       <div class="relative">
-        <Avatar.Root class="w-11 h-11 shrink-0">
-          <Avatar.Fallback class="text-sm">{{ userInitials }}</Avatar.Fallback>
+        <Avatar.Root class="w-11 h-11 shrink-0 ring-2 ring-vermillion-500/20">
+          <Avatar.Fallback class="text-sm bg-gradient-to-br from-vermillion-600 to-vermillion-800">
+            {{ userInitials }}
+          </Avatar.Fallback>
           <Avatar.Image v-if="avatarUrl" :src="avatarUrl" :alt="userName" />
         </Avatar.Root>
         <span
           v-if="notificationCount && notificationCount > 0"
-          class="absolute -top-1 -right-1 min-w-[22px] h-[22px] flex items-center justify-center rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white text-xs font-bold px-1 ring-2 ring-[#26232B] shadow-md"
+          class="absolute -top-1 -right-1 min-w-[22px] h-[22px] flex items-center justify-center rounded-full bg-gradient-to-r from-vermillion-500 to-vermillion-600 text-white text-xs font-bold px-1 ring-2 ring-ink-deepest shadow-md animate-pulse-glow"
         >
           {{ notificationCount > 99 ? '99+' : notificationCount }}
         </span>
@@ -60,15 +62,15 @@ const handleLogout = () => {
 
       <!-- User Info (hidden on mobile) -->
       <div class="hidden md:flex flex-col items-start min-w-0 flex-1">
-        <span class="text-sm font-semibold text-white truncate group-hover:text-teal-300 transition-colors">
+        <span class="text-sm font-body font-medium text-paper-white truncate group-hover:text-vermillion-400 transition-colors">
           {{ userName }}
         </span>
-        <span class="text-xs text-gray-400 truncate">{{ roleDisplay }}</span>
+        <span class="text-xs text-paper-muted truncate font-body">{{ roleDisplay }}</span>
       </div>
 
       <!-- Dropdown indicator -->
       <svg
-        class="w-5 h-5 text-gray-400 group-hover:text-teal-400 transition-colors hidden md:block"
+        class="w-5 h-5 text-paper-muted group-hover:text-vermillion-400 transition-colors hidden md:block"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -83,21 +85,23 @@ const handleLogout = () => {
     </Menu.Trigger>
 
     <Menu.Positioner>
-      <Menu.Content class="animate-menu-in z-50 min-w-[280px] max-w-xs">
+      <Menu.Content class="animate-bureau-scale z-[60] min-w-[300px] max-w-xs bg-gradient-to-br from-ink-medium/95 to-ink-deep/95 backdrop-blur-xl border border-vermillion-500/20 shadow-2xl shadow-vermillion-500/10">
         <!-- User Info Header -->
-        <div class="px-5 py-4 border-b border-white/10 bg-gradient-to-r from-[#26232b]/50 to-[#1e1b24]">
+        <div class="px-5 py-5 border-b border-border-subtle bg-gradient-to-r from-vermillion-500/5 to-transparent">
           <div class="flex items-center gap-4">
-            <Avatar.Root class="w-14 h-14 shrink-0">
-              <Avatar.Fallback class="text-base">{{ userInitials }}</Avatar.Fallback>
+            <Avatar.Root class="w-16 h-16 shrink-0 ring-2 ring-vermillion-500/20">
+              <Avatar.Fallback class="text-lg bg-gradient-to-br from-vermillion-600 to-vermillion-800">
+                {{ userInitials }}
+              </Avatar.Fallback>
               <Avatar.Image v-if="avatarUrl" :src="avatarUrl" :alt="userName" />
             </Avatar.Root>
             <div class="flex-1 min-w-0">
-              <span class="block text-base font-bold text-white truncate">{{ userName }}</span>
-              <span v-if="userEmail" class="block text-sm text-gray-400 truncate mt-0.5">
+              <span class="block text-lg font-display font-normal text-paper-white truncate">{{ userName }}</span>
+              <span v-if="userEmail" class="block text-sm text-paper-muted truncate mt-1 font-body">
                 {{ userEmail }}
               </span>
               <span
-                class="mt-2 inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-gradient-to-r from-teal-500/20 to-teal-600/20 text-teal-300 border border-teal-500/30 w-fit"
+                class="mt-2 inline-flex items-center px-3 py-1 text-xs font-body font-medium rounded-full bg-gradient-to-r from-vermillion-500/20 to-vermillion-600/20 text-vermillion-300 border border-vermillion-500/30 w-fit"
               >
                 {{ roleDisplay }}
               </span>
@@ -108,13 +112,13 @@ const handleLogout = () => {
         <!-- Notification Section -->
         <div
           v-if="notificationMessage"
-          class="px-5 py-4 border-b border-white/10 bg-amber-500/5"
+          class="px-5 py-4 border-b border-border-subtle bg-vermillion-500/5"
         >
           <div class="flex items-start gap-3">
-            <div class="mt-0.5 p-1.5 rounded-lg bg-amber-500/10">
+            <div class="mt-0.5 p-2 rounded-lg bg-vermillion-500/10 text-vermillion-400">
               <svg
                 class="w-5 h-5"
-                :class="notificationCount && notificationCount > 0 ? 'text-amber-400' : 'text-green-400'"
+                :class="notificationCount && notificationCount > 0 ? 'text-vermillion-400' : 'text-gold-400'"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -128,15 +132,15 @@ const handleLogout = () => {
               </svg>
             </div>
             <div class="flex-1">
-              <h3 class="text-sm font-semibold text-white mb-1">Thông báo</h3>
-              <p class="text-sm text-gray-300 leading-relaxed">{{ notificationMessage }}</p>
+              <h3 class="text-sm font-body font-semibold text-paper-white mb-1">Thông báo</h3>
+              <p class="text-sm text-paper-medium leading-relaxed font-body">{{ notificationMessage }}</p>
             </div>
           </div>
         </div>
 
         <!-- Menu Items -->
-        <Menu.Item value="profile" class="group/item px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors">
-          <div class="p-2 rounded-lg bg-blue-500/10 text-blue-400 group-hover/item:text-blue-300 transition-colors">
+        <Menu.Item value="profile" class="group/item px-4 py-3.5 flex items-center gap-3.5 hover:bg-gradient-vermillion/10 transition-all duration-300 border-l-2 border-transparent hover:border-vermillion-500/50 relative overflow-hidden">
+          <div class="p-2.5 rounded-lg bg-gradient-vermillion/15 text-vermillion-400 group-hover/item:text-vermillion-300 transition-all duration-300">
             <svg
               class="w-5 h-5"
               fill="none"
@@ -151,11 +155,16 @@ const handleLogout = () => {
               />
             </svg>
           </div>
-          <span class="text-sm font-medium text-gray-300 group-hover/item:text-white transition-colors">Trang cá nhân</span>
+          <span class="text-sm font-body font-medium text-paper-medium group-hover/item:text-paper-white transition-all duration-300 flex-1">Trang cá nhân</span>
+          <div class="opacity-0 group-hover/item:opacity-100 transition-opacity duration-300">
+            <svg class="w-4 h-4 text-vermillion-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
         </Menu.Item>
 
-        <Menu.Item value="settings" class="group/item px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors">
-          <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400 group-hover/item:text-purple-300 transition-colors">
+        <Menu.Item value="settings" class="group/item px-4 py-3.5 flex items-center gap-3.5 hover:bg-gradient-gold/10 transition-all duration-300 border-l-2 border-transparent hover:border-gold-500/50 relative overflow-hidden">
+          <div class="p-2.5 rounded-lg bg-gradient-gold/15 text-gold-400 group-hover/item:text-gold-300 transition-all duration-300">
             <svg
               class="w-5 h-5"
               fill="none"
@@ -176,13 +185,18 @@ const handleLogout = () => {
               />
             </svg>
           </div>
-          <span class="text-sm font-medium text-gray-300 group-hover/item:text-white transition-colors">Cài đặt</span>
+          <span class="text-sm font-body font-medium text-paper-medium group-hover/item:text-paper-white transition-all duration-300 flex-1">Cài đặt</span>
+          <div class="opacity-0 group-hover/item:opacity-100 transition-opacity duration-300">
+            <svg class="w-4 h-4 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
         </Menu.Item>
 
-        <Menu.Separator class="my-1 bg-white/10" />
+        <Menu.Separator class="my-1 bg-gradient-vermillion/20 h-px" />
 
-        <Menu.Item value="logout" class="group/item px-4 py-3 flex items-center gap-3 text-red-400 hover:bg-red-500/10 transition-colors" @click="handleLogout">
-          <div class="p-2 rounded-lg bg-red-500/10 text-red-400 group-hover/item:text-red-300 transition-colors">
+        <Menu.Item value="logout" class="group/item px-4 py-3.5 flex items-center gap-3.5 text-vermillion-400 hover:bg-vermillion-500/15 transition-all duration-300 border-l-2 border-transparent hover:border-vermillion-500/50 relative overflow-hidden" @click="handleLogout">
+          <div class="p-2.5 rounded-lg bg-gradient-vermillion/15 text-vermillion-400 group-hover/item:text-vermillion-300 transition-all duration-300">
             <svg
               class="w-5 h-5"
               fill="none"
@@ -197,7 +211,12 @@ const handleLogout = () => {
               />
             </svg>
           </div>
-          <span class="text-sm font-medium text-red-400 group-hover/item:text-red-300 transition-colors">Đăng xuất</span>
+          <span class="text-sm font-body font-medium text-vermillion-400 group-hover/item:text-vermillion-300 transition-all duration-300 flex-1">Đăng xuất</span>
+          <div class="opacity-0 group-hover/item:opacity-100 transition-opacity duration-300">
+            <svg class="w-4 h-4 text-vermillion-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
         </Menu.Item>
       </Menu.Content>
     </Menu.Positioner>

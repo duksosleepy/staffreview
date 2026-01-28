@@ -1184,17 +1184,27 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen w-full bg-[#26232B]">
+  <div class="flex flex-col h-screen w-full bg-gradient-to-br from-ink-deepest to-ink-deep relative overflow-hidden">
+    <!-- Animated background elements -->
+    <div class="absolute inset-0 overflow-hidden">
+      <!-- Geometric patterns -->
+      <div class="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-vermillion-500/5 blur-3xl animate-pulse"></div>
+      <div class="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full bg-gold-500/5 blur-3xl animate-pulse delay-1000"></div>
+    </div>
+
+    <!-- Noise texture overlay -->
+    <div class="noise-overlay absolute inset-0 pointer-events-none"></div>
+
     <!-- Notification Toast (Ark UI) -->
     <Teleport to="body">
       <Toaster :toaster="toaster" v-slot="toast">
         <Toast.Root
-          class="min-w-[320px] max-w-sm rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/50 p-4"
+          class="min-w-[320px] max-w-sm rounded-xl bg-surface-overlay backdrop-blur-md border border-border-medium shadow-xl animate-bureau-scale"
         >
           <div class="flex items-start gap-3">
-            <div class="mt-0.5 p-1.5 rounded-lg bg-amber-500/10">
+            <div class="mt-0.5 p-2 rounded-lg bg-vermillion-500/10 text-vermillion-400">
               <svg
-                class="w-5 h-5 text-amber-400"
+                class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1208,15 +1218,15 @@ onUnmounted(() => {
               </svg>
             </div>
             <div class="flex-1 min-w-0">
-              <Toast.Title class="text-sm font-semibold text-white mb-1">
+              <Toast.Title class="text-sm font-body font-semibold text-paper-white mb-1">
                 {{ toast.title }}
               </Toast.Title>
-              <Toast.Description class="text-xs text-gray-300 leading-relaxed">
+              <Toast.Description class="text-xs text-paper-medium leading-relaxed font-body">
                 {{ toast.description }}
               </Toast.Description>
             </div>
             <Toast.CloseTrigger
-              class="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              class="shrink-0 p-1.5 rounded-lg text-paper-muted hover:text-paper-white hover:bg-vermillion-500/10 transition-colors cursor-pointer"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -1228,22 +1238,22 @@ onUnmounted(() => {
     </Teleport>
 
     <!-- Enhanced Header with Glassmorphism -->
-    <header class="glass flex justify-between items-center px-4 sm:px-8 py-3 border-b border-white/10">
+    <header class="glass flex justify-between items-center px-4 sm:px-8 py-4 border-b border-border-medium relative z-10">
       <!-- Logo & Title -->
-      <div class="flex items-center gap-3">
-        <div class="hidden sm:flex w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 items-center justify-center shadow-lg shadow-teal-500/20">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="flex items-center gap-4">
+        <div class="hidden sm:flex w-12 h-12 rounded-2xl bg-gradient-to-br from-vermillion-500 to-vermillion-700 items-center justify-center shadow-lg shadow-vermillion-500/30">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           </svg>
         </div>
         <div>
-          <h1 class="m-0 font-['Inter'] text-lg sm:text-xl font-semibold text-white tracking-tight">
-            Quan ly
+          <h1 class="m-0 font-display text-xl sm:text-2xl font-normal text-paper-white tracking-tight">
+            Checklist
           </h1>
-          <p v-if="selectedStaffName" class="hidden sm:block text-xs text-teal-400 mt-0.5">
-            Dang xem: {{ selectedStaffName }}
+          <p v-if="selectedStaffName" class="hidden sm:block text-sm text-vermillion-400 mt-1 font-body">
+            Đang xem: {{ selectedStaffName }}
           </p>
-          <p v-else class="hidden sm:block text-xs text-gray-400 mt-0.5">He thong kiem tra cong viec</p>
+          <p v-else class="hidden sm:block text-sm text-paper-muted mt-1 font-body">Hệ thống kiểm tra công việc</p>
         </div>
       </div>
 
@@ -1259,25 +1269,25 @@ onUnmounted(() => {
     </header>
 
     <!-- Main Content Area with optional sidebar -->
-    <div class="flex-1 flex overflow-hidden">
+    <div class="flex-1 flex overflow-hidden relative z-0">
       <!-- Employee Sidebar (CHT/ASM only) -->
       <EmployeeSidebar v-if="showSidebar" @select="onEmployeeSelect" />
 
       <!-- Spreadsheet Area -->
-      <div class="flex-1 p-2 sm:p-4 overflow-hidden">
-        <div class="relative h-full glass-card rounded-xl sm:rounded-2xl overflow-hidden">
+      <div class="flex-1 p-3 sm:p-5 overflow-hidden">
+        <div class="relative h-full glass-card rounded-2xl sm:rounded-3xl overflow-hidden border border-border-medium shadow-xl z-0">
           <!-- Spreadsheet container -->
           <div ref="containerRef" class="w-full h-full"></div>
 
           <!-- Loading overlay -->
           <div
             ref="loadingOverlayRef"
-            class="absolute inset-0 bg-black/60 backdrop-blur-sm items-center justify-center z-50 hidden"
+            class="absolute inset-0 bg-ink-deep/80 backdrop-blur-sm items-center justify-center z-50 hidden"
             style="display: none"
           >
-            <div class="flex flex-col items-center gap-4 p-8 glass rounded-2xl">
-              <div class="w-10 h-10 border-3 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
-              <span class="text-sm text-gray-300 font-medium">Dang tai du lieu...</span>
+            <div class="flex flex-col items-center gap-5 p-8 glass rounded-2xl border border-border-medium">
+              <div class="w-12 h-12 border-4 border-vermillion-500 border-t-transparent rounded-full animate-spin"></div>
+              <span class="text-sm text-paper-medium font-body">Đang tải dữ liệu...</span>
             </div>
           </div>
         </div>

@@ -106,12 +106,11 @@ onMounted(loadEmployees);
 
 <template>
   <aside
-    class="h-full flex flex-col border-r bg-ink-deep transition-[width] duration-300 relative"
+    class="h-full flex flex-col bg-ink-deep transition-[width] duration-300 relative after:content-[''] after:absolute after:top-0 after:right-0 after:bottom-0 after:w-px after:bg-gradient-to-b after:from-transparent after:via-border-strong/50 after:to-transparent"
     :class="isCollapsed ? 'w-16' : 'w-72 md:w-64 lg:w-72'"
-    style="border-right-color: var(--border-strong);"
   >
     <!-- Sidebar Header -->
-    <div v-if="!isCollapsed" class="flex items-center px-4 py-3 border-b relative justify-between" style="border-bottom-color: var(--border-subtle);">
+    <div v-if="!isCollapsed" class="flex items-center px-4 py-3 relative justify-between after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-border-subtle/70 after:to-transparent">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="min-w-0 flex-1">
           <h2 class="text-xs font-semibold text-paper-light uppercase tracking-wider truncate font-body">Nhân viên</h2>
@@ -250,7 +249,7 @@ onMounted(loadEmployees);
     </div>
 
     <!-- Footer: store count -->
-    <div v-if="!isCollapsed && !isLoading && employees.length > 0" class="px-4 py-3 border-t bg-ink-medium/30" style="border-top-color: var(--border-subtle);">
+    <div v-if="!isCollapsed && !isLoading && employees.length > 0" class="px-4 py-3 bg-ink-medium/30 relative before:content-[''] before:absolute before:top-0 before:left-0 before:right-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-border-subtle/70 before:to-transparent">
       <div class="flex items-center justify-between text-xs text-paper-muted font-body">
         <span>{{ employees.length }} nhân viên</span>
         <span>{{ employeesByStore.size }} cửa hàng</span>

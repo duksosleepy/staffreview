@@ -9,6 +9,7 @@ import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { useDebounceFn } from '@vueuse/core';
 import { computed, defineAsyncComponent, nextTick, onErrorCaptured, onMounted, onUnmounted, ref } from 'vue';
 import UserMenu from '@/components/UserMenu.vue';
+import { FOCUS_RING_CLASSES } from '@/constants/ui';
 import { usePermission } from '@/composables/usePermission';
 import {
   type ChecklistItemWithRecord,
@@ -41,9 +42,10 @@ const { canCheckCht, canCheckAsm, isCht, isAsm } = usePermission();
 // Notifications
 const notificationStore = useNotificationStore();
 const toaster = createToaster({
-  placement: 'top-end',
-  overlap: true,
-  gap: 16,
+  placement: 'bottom-end',
+  overlap: false,
+  gap: 12,
+  duration: 5000,
 });
 
 // Error handling
@@ -1216,19 +1218,107 @@ onUnmounted(() => {
 <template>
   <div class="flex flex-col h-screen w-full bg-gradient-to-br from-ink-deepest to-ink-deep relative overflow-hidden">
 
-    <!-- Notification Toast (Ark UI) -->
+    <!-- Professional Toast Notifications (Bottom-Right) -->
     <Teleport to="body">
       <Toaster :toaster="toaster" v-slot="toast">
         <Toast.Root
-          class="min-w-[320px] max-w-sm rounded-xl bg-surface-overlay backdrop-blur-md border border-border-medium shadow-xl animate-bureau-scale"
+          :class="[
+            'min-w-[360px] max-w-md rounded-2xl backdrop-blur-xl shadow-2xl',
+            'transition-all duration-300 ease-out',
+            'animate-toast-slide-in',
+            toast.type === 'error' && 'bg-ink-deepest/98 border-2 border-vermillion-500',
+            toast.type === 'success' && 'bg-ink-deepest/98 border-2 border-emerald-500',
+            toast.type === 'warning' && 'bg-ink-deepest/98 border-2 border-amber-500',
+            toast.type === 'info' && 'bg-ink-deepest/98 border-2 border-sky-500',
+            !toast.type && 'bg-ink-deepest/98 border-2 border-vermillion-500'
+          ]"
+          role="alert"
+          aria-live="polite"
         >
-          <div class="flex items-start gap-3">
-            <div class="mt-0.5 p-2 rounded-lg bg-vermillion-500/10 text-vermillion-400">
+          <div class="flex items-start gap-4 p-4">
+            <!-- Icon based on toast type -->
+            <div
+              :class="[
+                'shrink-0 p-2.5 rounded-xl',
+                toast.type === 'error' && 'bg-vermillion-500/15 text-vermillion-400',
+                toast.type === 'success' && 'bg-emerald-500/15 text-emerald-400',
+                toast.type === 'warning' && 'bg-amber-500/15 text-amber-400',
+                toast.type === 'info' && 'bg-sky-500/15 text-sky-400',
+                !toast.type && 'bg-vermillion-500/15 text-vermillion-400'
+              ]"
+            >
+              <!-- Error Icon -->
               <svg
+                v-if="toast.type === 'error'"
                 class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <!-- Success Icon -->
+              <svg
+                v-else-if="toast.type === 'success'"
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <!-- Warning Icon -->
+              <svg
+                v-else-if="toast.type === 'warning'"
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <!-- Info Icon -->
+              <svg
+                v-else-if="toast.type === 'info'"
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <!-- Default Bell Icon -->
+              <svg
+                v-else
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   stroke-linecap="round"
@@ -1238,28 +1328,50 @@ onUnmounted(() => {
                 />
               </svg>
             </div>
+
+            <!-- Content -->
             <div class="flex-1 min-w-0">
-              <Toast.Title class="text-sm font-body font-semibold text-paper-white mb-1">
+              <Toast.Title class="text-sm font-body font-semibold mb-1 text-paper-white">
                 {{ toast.title }}
               </Toast.Title>
-              <Toast.Description class="text-xs text-paper-medium leading-relaxed font-body">
+              <Toast.Description
+                v-if="toast.description"
+                class="text-xs leading-relaxed font-body text-paper-medium"
+              >
                 {{ toast.description }}
               </Toast.Description>
             </div>
+
+            <!-- Close Button -->
             <Toast.CloseTrigger
-              class="shrink-0 p-1.5 rounded-lg text-paper-muted hover:text-paper-white hover:bg-vermillion-500/10 transition-colors cursor-pointer"
+              class="shrink-0 p-1.5 rounded-lg transition-[background-color,color] duration-200 cursor-pointer text-paper-muted hover:text-paper-white hover:bg-ink-lighter focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vermillion-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deepest"
+              aria-label="Đóng thông báo"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </Toast.CloseTrigger>
           </div>
+
+          <!-- Progress Bar (Optional) -->
+          <div
+            v-if="toast.duration"
+            :class="[
+              'h-1 rounded-b-2xl animate-toast-progress',
+              toast.type === 'error' && 'bg-vermillion-500/60',
+              toast.type === 'success' && 'bg-emerald-500/60',
+              toast.type === 'warning' && 'bg-amber-500/60',
+              toast.type === 'info' && 'bg-sky-500/60',
+              !toast.type && 'bg-vermillion-500/60'
+            ]"
+            :style="{ animationDuration: `${toast.duration}ms` }"
+          />
         </Toast.Root>
       </Toaster>
     </Teleport>
 
     <!-- Enhanced Header with Glassmorphism -->
-    <header class="glass flex justify-between items-center px-4 sm:px-8 py-4 border-b border-border-medium relative z-10">
+    <header class="glass flex justify-between items-center px-4 sm:px-8 py-4 relative z-10 after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-border-medium/50 after:to-transparent">
       <!-- Logo & Title -->
       <div class="flex items-center gap-4">
         <div class="hidden sm:flex w-12 h-12 rounded-2xl bg-gradient-to-br from-vermillion-500 to-vermillion-700 items-center justify-center shadow-lg shadow-vermillion-500/30">
@@ -1293,7 +1405,7 @@ onUnmounted(() => {
 
       <!-- Spreadsheet Area -->
       <div class="flex-1 p-3 sm:p-5 overflow-hidden">
-        <div class="relative h-full glass-card rounded-2xl sm:rounded-3xl overflow-hidden border border-border-medium shadow-xl z-0">
+        <div class="relative h-full glass-card rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl z-0" style="box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(242, 236, 226, 0.05);">
           <!-- Spreadsheet container -->
           <div ref="containerRef" class="w-full h-full"></div>
 
@@ -1303,7 +1415,7 @@ onUnmounted(() => {
             class="absolute inset-0 bg-ink-deep/80 backdrop-blur-sm items-center justify-center z-50 hidden"
             style="display: none"
           >
-            <div class="flex flex-col items-center gap-5 p-8 glass rounded-2xl border border-border-medium">
+            <div class="flex flex-col items-center gap-5 p-8 glass rounded-2xl shadow-2xl" style="box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(242, 236, 226, 0.08);">
               <div class="w-12 h-12 border-4 border-vermillion-500 border-t-transparent rounded-full animate-spin"></div>
               <span class="text-sm text-paper-medium font-body">Đang tải dữ liệu...</span>
             </div>

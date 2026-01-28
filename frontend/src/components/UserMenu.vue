@@ -55,12 +55,12 @@ const roleBadgeClasses = computed(() => {
   const baseClasses = 'mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase w-fit';
 
   const roleStyles: Record<string, string> = {
-    asm: 'bg-gold-500 text-white border border-gold-600',
-    cht: 'bg-vermillion-500 text-white border border-vermillion-600',
-    employee: 'bg-sky-500 text-white border border-sky-600',
+    asm: 'bg-gold-500 text-white',
+    cht: 'bg-vermillion-500 text-white',
+    employee: 'bg-sky-500 text-white',
   };
 
-  const style = roleStyles[role] || 'bg-ink-lighter text-paper-muted border border-ink-faint';
+  const style = roleStyles[role] || 'bg-ink-lighter text-paper-muted';
   return `${baseClasses} ${style}`;
 });
 
@@ -72,7 +72,10 @@ const handleLogout = () => {
 <template>
   <Menu.Root>
     <Menu.Trigger
-      :class="`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-[background-color,border-color] duration-300 hover:bg-vermillion-500/10 group shadow-sm border border-transparent hover:border-vermillion-500/10 ${FOCUS_RING_CLASSES.replace('focus-visible:ring-offset-2', 'focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deepest')}`"
+      :class="`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-[background-color,box-shadow] duration-300 hover:bg-vermillion-500/10 group shadow-sm ${FOCUS_RING_CLASSES.replace('focus-visible:ring-offset-2', 'focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deepest')}`"
+      :style="{ boxShadow: 'inset 0 0 0 1px transparent' }"
+      @mouseenter="(e) => e.currentTarget.style.boxShadow = 'inset 0 0 0 1px rgba(216, 74, 58, 0.1)'"
+      @mouseleave="(e) => e.currentTarget.style.boxShadow = 'inset 0 0 0 1px transparent'"
     >
       <!-- Avatar with notification badge -->
       <div class="relative">
@@ -106,9 +109,9 @@ const handleLogout = () => {
     </Menu.Trigger>
 
     <Menu.Positioner>
-      <Menu.Content class="animate-bureau-scale z-[60] min-w-[280px] max-w-xs bg-ink-deep backdrop-blur-xl border shadow-2xl rounded-lg" style="border-color: var(--border-strong);">
+      <Menu.Content class="animate-bureau-scale z-[60] min-w-[280px] max-w-xs bg-ink-deep backdrop-blur-xl shadow-2xl rounded-lg" style="box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(242, 236, 226, 0.08);">
         <!-- User Info Header -->
-        <div class="px-4 py-4 border-b" style="border-bottom-color: var(--border-medium);">
+        <div class="px-4 py-4 relative after:content-[''] after:absolute after:bottom-0 after:left-4 after:right-4 after:h-px after:bg-gradient-to-r after:from-transparent after:via-border-medium/70 after:to-transparent">
           <div class="flex items-center gap-3">
             <Avatar.Root class="w-12 h-12 shrink-0 ring-2 ring-vermillion-500/20">
               <Avatar.Fallback class="text-base bg-gradient-to-br from-vermillion-600 to-vermillion-800">
@@ -133,7 +136,7 @@ const handleLogout = () => {
           v-if="notificationMessage"
           class="px-3 py-3"
         >
-          <div class="px-3 py-2.5 rounded-lg bg-vermillion-500/10 border border-vermillion-500/15">
+          <div class="px-3 py-2.5 rounded-lg bg-vermillion-500/10" style="box-shadow: inset 0 0 0 1px rgba(216, 74, 58, 0.15);">
             <div class="flex items-start gap-2">
               <div class="shrink-0 mt-0.5">
                 <svg

@@ -1,22 +1,39 @@
 <script setup lang="ts">
 import { Avatar, Menu } from '@ark-ui/vue';
 import { computed } from 'vue';
+import { useRoleDisplay } from '@/composables/useRoleDisplay';
+import ChevronIcon from '@/components/icons/ChevronIcon.vue';
+import { FOCUS_RING_CLASSES } from '@/constants/ui';
 
-type Props = {
+defineOptions({
+  name: 'UserMenu',
+});
+
+interface Props {
   userName: string;
   userEmail?: string;
   role: string;
   avatarUrl?: string;
   notificationCount?: number;
   notificationMessage?: string;
-};
+}
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  userEmail: '',
+  avatarUrl: '',
+  notificationCount: 0,
+  notificationMessage: '',
+});
 
 const emit = defineEmits<{
   logout: [];
 }>();
 
+const { getRoleDisplay } = useRoleDisplay();
+
+/**
+ * Compute user initials from name
+ */
 const userInitials = computed(() => {
   const parts = props.userName.split(' ');
   if (parts.length >= 2) {
@@ -25,13 +42,26 @@ const userInitials = computed(() => {
   return props.userName.slice(0, 2);
 });
 
-const roleDisplay = computed(() => {
-  const roleMap: Record<string, string> = {
-    asm: 'ASM',
-    cht: 'CHT',
-    employee: 'Employee',
+/**
+ * Get display name for role
+ */
+const roleDisplay = computed(() => getRoleDisplay(props.role));
+
+/**
+ * Get CSS classes for role badge based on role type
+ */
+const roleBadgeClasses = computed(() => {
+  const role = props.role.toLowerCase();
+  const baseClasses = 'mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase w-fit';
+
+  const roleStyles: Record<string, string> = {
+    asm: 'bg-gold-500 text-white border border-gold-600',
+    cht: 'bg-vermillion-500 text-white border border-vermillion-600',
+    employee: 'bg-sky-500 text-white border border-sky-600',
   };
-  return roleMap[props.role.toLowerCase()] || props.role;
+
+  const style = roleStyles[role] || 'bg-ink-lighter text-paper-muted border border-ink-faint';
+  return `${baseClasses} ${style}`;
 });
 
 const handleLogout = () => {
@@ -42,7 +72,7 @@ const handleLogout = () => {
 <template>
   <Menu.Root>
     <Menu.Trigger
-      class="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 hover:bg-vermillion-500/10 group shadow-sm border border-transparent hover:border-vermillion-500/10"
+      :class="`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-[background-color,border-color] duration-300 hover:bg-vermillion-500/10 group shadow-sm border border-transparent hover:border-vermillion-500/10 ${FOCUS_RING_CLASSES.replace('focus-visible:ring-offset-2', 'focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deepest')}`"
     >
       <!-- Avatar with notification badge -->
       <div class="relative">
@@ -69,19 +99,10 @@ const handleLogout = () => {
       </div>
 
       <!-- Dropdown indicator -->
-      <svg
+      <ChevronIcon
+        direction="down"
         class="w-5 h-5 text-paper-muted group-hover:text-vermillion-400 transition-colors hidden md:block"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M19 9l-7 7-7-7"
-        />
-      </svg>
+      />
     </Menu.Trigger>
 
     <Menu.Positioner>
@@ -100,28 +121,7 @@ const handleLogout = () => {
               <span v-if="userEmail" class="block text-xs text-paper-muted truncate mt-0.5 font-body">
                 {{ userEmail }}
               </span>
-              <span
-                v-if="role.toLowerCase() === 'asm'"
-                class="mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase bg-gold-500 text-white border border-gold-600 w-fit"
-              >
-                {{ roleDisplay }}
-              </span>
-              <span
-                v-else-if="role.toLowerCase() === 'cht'"
-                class="mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase bg-vermillion-500 text-white border border-vermillion-600 w-fit"
-              >
-                {{ roleDisplay }}
-              </span>
-              <span
-                v-else-if="role.toLowerCase() === 'employee'"
-                class="mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase bg-sky-500 text-white border border-sky-600 w-fit"
-              >
-                {{ roleDisplay }}
-              </span>
-              <span
-                v-else
-                class="mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase bg-ink-lighter text-paper-muted border border-ink-faint w-fit"
-              >
+              <span :class="roleBadgeClasses">
                 {{ roleDisplay }}
               </span>
             </div>
@@ -159,13 +159,14 @@ const handleLogout = () => {
 
         <!-- Menu Items -->
         <div class="py-1">
-          <Menu.Item value="profile" class="px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 hover:bg-ink-lighter transition-all duration-200 rounded-lg cursor-pointer">
+          <Menu.Item value="profile" :class="`px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 hover:bg-ink-lighter transition-[background-color,color] duration-200 rounded-lg cursor-pointer ${FOCUS_RING_CLASSES} focus-visible:ring-inset`">
             <div class="p-1.5 rounded-lg bg-vermillion-500/10 text-vermillion-400">
               <svg
                 class="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   stroke-linecap="round"
@@ -178,13 +179,14 @@ const handleLogout = () => {
             <span class="text-sm font-medium text-paper-medium hover:text-paper-white transition-colors font-body flex-1">Trang cá nhân</span>
           </Menu.Item>
 
-          <Menu.Item value="settings" class="px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 hover:bg-ink-lighter transition-all duration-200 rounded-lg cursor-pointer">
+          <Menu.Item value="settings" :class="`px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 hover:bg-ink-lighter transition-[background-color,color] duration-200 rounded-lg cursor-pointer ${FOCUS_RING_CLASSES} focus-visible:ring-inset`">
             <div class="p-1.5 rounded-lg bg-gold-500/10 text-gold-400">
               <svg
                 class="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   stroke-linecap="round"
@@ -205,13 +207,14 @@ const handleLogout = () => {
 
           <Menu.Separator class="my-1 h-px" style="background-color: var(--border-subtle);" />
 
-          <Menu.Item value="logout" class="px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 text-vermillion-400 hover:bg-vermillion-500/10 transition-all duration-200 rounded-lg cursor-pointer" @click="handleLogout">
+          <Menu.Item value="logout" :class="`px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 text-vermillion-400 hover:bg-vermillion-500/10 transition-[background-color,color] duration-200 rounded-lg cursor-pointer ${FOCUS_RING_CLASSES} focus-visible:ring-inset`" @click="handleLogout">
             <div class="p-1.5 rounded-lg bg-vermillion-500/10 text-vermillion-400">
               <svg
                 class="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   stroke-linecap="round"

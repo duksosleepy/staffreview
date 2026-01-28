@@ -7,8 +7,7 @@ import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-v
 import type { FUniver, Univer } from '@univerjs/presets';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { useDebounceFn } from '@vueuse/core';
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
-import EmployeeSidebar from '@/components/EmployeeSidebar.vue';
+import { computed, defineAsyncComponent, nextTick, onErrorCaptured, onMounted, onUnmounted, ref } from 'vue';
 import UserMenu from '@/components/UserMenu.vue';
 import { usePermission } from '@/composables/usePermission';
 import {
@@ -23,6 +22,15 @@ import {
 import { useAuthStore } from '@/stores/auth';
 import { useNotificationStore } from '@/stores/notifications';
 
+defineOptions({
+  name: 'SheetPage',
+});
+
+// Lazy load EmployeeSidebar for better initial load performance
+const EmployeeSidebar = defineAsyncComponent(() =>
+  import('@/components/EmployeeSidebar.vue')
+);
+
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
 
@@ -36,6 +44,28 @@ const toaster = createToaster({
   placement: 'top-end',
   overlap: true,
   gap: 16,
+});
+
+// Error handling
+const componentError = ref<string | null>(null);
+
+/**
+ * Global error handler for component errors
+ */
+onErrorCaptured((err, instance, info) => {
+  console.error('Component error:', err, info);
+  componentError.value = err.message;
+
+  // Show toast notification for user
+  toaster.create({
+    title: 'Lỗi ứng dụng',
+    description: 'Đã xảy ra lỗi. Vui lòng thử lại hoặc tải lại trang.',
+    type: 'error',
+    duration: 5000,
+  });
+
+  // Prevent error from propagating
+  return false;
 });
 
 // Show sidebar only for CHT/ASM
@@ -1241,10 +1271,7 @@ onUnmounted(() => {
           <h1 class="m-0 font-display text-xl sm:text-2xl font-normal text-paper-white tracking-tight">
             Checklist
           </h1>
-          <p v-if="selectedStaffName" class="hidden sm:block text-sm text-vermillion-400 mt-1 font-body">
-            Đang xem: {{ selectedStaffName }}
-          </p>
-          <p v-else class="hidden sm:block text-sm text-paper-muted mt-1 font-body">Hệ thống kiểm tra công việc</p>
+          <p class="hidden sm:block text-sm text-paper-muted mt-1 font-body">Hệ thống kiểm tra công việc</p>
         </div>
       </div>
 

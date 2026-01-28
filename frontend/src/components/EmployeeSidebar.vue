@@ -1,19 +1,58 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, shallowRef } from 'vue';
+import { useLocalStorage, useAsyncState } from '@vueuse/core';
 import { fetchStoreEmployees, type StoreEmployee } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
+import { useRoleDisplay } from '@/composables/useRoleDisplay';
+import ChevronIcon from '@/components/icons/ChevronIcon.vue';
+import { FOCUS_RING_CLASSES } from '@/constants/ui';
+
+defineOptions({
+  name: 'EmployeeSidebar',
+});
+
+interface Props {
+  initialSelectedId?: string;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  initialSelectedId: undefined,
+});
 
 const auth = useAuthStore();
+const { getRoleBadgeClass, getRoleDisplay } = useRoleDisplay();
 
-const emit = defineEmits<(e: 'select', employee: StoreEmployee | null) => void>();
+const emit = defineEmits<{
+  select: [employee: StoreEmployee | null];
+}>();
 
-const employees = ref<StoreEmployee[]>([]);
-const isLoading = ref(false);
-const error = ref<string | null>(null);
-const isCollapsed = ref(false);
-const selectedId = ref<string | null>(null);
+// Use shallowRef for better performance with large arrays
+const {
+  state: employees,
+  isLoading,
+  error: asyncError,
+  execute: loadEmployees,
+} = useAsyncState(
+  () => fetchStoreEmployees(),
+  [],
+  {
+    immediate: false,
+    onError: (e) => {
+      console.error('Failed to load employees:', e);
+    },
+  }
+);
 
-// Group employees by store
+const error = computed(() => asyncError.value ? 'Không thể tải danh sách nhân viên' : null);
+
+// Persist sidebar collapse state
+const isCollapsed = useLocalStorage('sidebar-collapsed', false);
+const selectedId = shallowRef<string | null>(props.initialSelectedId || null);
+
+/**
+ * Groups employees by their assigned stores
+ * @returns Map where keys are store names and values are employee arrays
+ */
 const employeesByStore = computed(() => {
   const grouped = new Map<string, StoreEmployee[]>();
   for (const emp of employees.value) {
@@ -29,33 +68,11 @@ const employeesByStore = computed(() => {
   return grouped;
 });
 
-const roleBadgeClass = (role: string) => {
-  const normalizedRole = role.toLowerCase();
-  switch (normalizedRole) {
-    case 'asm':
-      return 'bg-gold-500 text-white border border-gold-600'; // Highest role - strongest color
-    case 'cht':
-      return 'bg-vermillion-500 text-white border border-vermillion-600'; // Medium role
-    case 'employee':
-      return 'bg-sky-500 text-white border border-sky-600'; // Base role
-    default:
-      return 'bg-ink-lighter text-paper-muted border border-ink-faint';
-  }
-};
-
-// Map role codes to display names for consistency with UserMenu
-const roleDisplay = computed(() => {
-  const roleMap: Record<string, string> = {
-    asm: 'ASM',
-    cht: 'CHT',
-    employee: 'Employee',
-  };
-
-  return (role: string) => roleMap[role.toLowerCase()] || role;
-});
-
-// Get the effective role for an employee, correcting for cases where the current user's role is incorrectly reported
-const getEffectiveRole = (employee: StoreEmployee) => {
+/**
+ * Get the effective role for an employee
+ * Corrects for cases where the current user's role is incorrectly reported
+ */
+const getEffectiveRole = (employee: StoreEmployee): string => {
   // If this employee is the current user, use the current user's actual role
   if (employee.casdoor_id === auth.casdoorId) {
     return auth.role || employee.role;
@@ -63,28 +80,25 @@ const getEffectiveRole = (employee: StoreEmployee) => {
   return employee.role;
 };
 
+/**
+ * Select an employee from the list
+ */
 const selectEmployee = (emp: StoreEmployee) => {
   if (selectedId.value === emp.id) {
-    // Deselect — go back to viewing all
-    selectedId.value = null;
-    emit('select', null);
-  } else {
-    selectedId.value = emp.id;
-    emit('select', emp);
+    // Already selected - do nothing to avoid unnecessary reloads
+    return;
   }
+
+  selectedId.value = emp.id;
+  emit('select', emp);
 };
 
-const loadEmployees = async () => {
-  isLoading.value = true;
-  error.value = null;
-  try {
-    employees.value = await fetchStoreEmployees();
-  } catch (e) {
-    error.value = 'Không thể tải danh sách nhân viên';
-    console.error('Failed to load employees:', e);
-  } finally {
-    isLoading.value = false;
-  }
+/**
+ * Clear the current employee selection
+ */
+const clearSelection = () => {
+  selectedId.value = null;
+  emit('select', null);
 };
 
 onMounted(loadEmployees);
@@ -92,37 +106,44 @@ onMounted(loadEmployees);
 
 <template>
   <aside
-    class="h-full flex flex-col border-r bg-ink-deep transition-all duration-300 relative"
-    :class="isCollapsed ? 'w-16' : 'w-72'"
+    class="h-full flex flex-col border-r bg-ink-deep transition-[width] duration-300 relative"
+    :class="isCollapsed ? 'w-16' : 'w-72 md:w-64 lg:w-72'"
     style="border-right-color: var(--border-strong);"
   >
     <!-- Sidebar Header -->
-    <div class="flex items-center px-4 py-4 border-b relative" :class="isCollapsed ? 'justify-center' : 'justify-between'" style="border-bottom-color: var(--border-medium);">
-      <div v-if="!isCollapsed" class="flex items-center gap-2.5 min-w-0">
-        <svg class="w-5 h-5 text-vermillion-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
+    <div v-if="!isCollapsed" class="flex items-center px-4 py-3 border-b relative justify-between" style="border-bottom-color: var(--border-subtle);">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="min-w-0 flex-1">
-          <h2 class="text-sm font-medium text-paper-white truncate font-body">Nhân viên</h2>
-          <p class="text-xs text-paper-muted truncate font-body">{{ employees.length }} người</p>
+          <h2 class="text-xs font-semibold text-paper-light uppercase tracking-wider truncate font-body">Nhân viên</h2>
         </div>
+        <span class="text-xs text-paper-muted font-body tabular-nums">{{ employees.length }}</span>
       </div>
       <button
-        class="p-2 rounded-lg hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-all duration-200"
+        :class="`p-2 rounded-md hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-colors duration-200 ${FOCUS_RING_CLASSES}`"
         @click="isCollapsed = !isCollapsed"
+        title="Thu gọn"
+        aria-label="Thu gọn danh sách nhân viên"
+        :aria-expanded="true"
       >
-        <svg class="w-4 h-4 transition-transform duration-200" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
+        <ChevronIcon direction="left" double class="w-5 h-5" />
       </button>
     </div>
 
-    <!-- Collapsed state: just show icon -->
-    <div v-if="isCollapsed" class="flex-1 flex flex-col items-center pt-6 gap-3">
+    <!-- Collapsed state: show centered collapse button -->
+    <div v-if="isCollapsed" key="collapsed" class="flex-1 flex items-center justify-center">
+      <button
+        :class="`p-2 rounded-md hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-colors duration-200 ${FOCUS_RING_CLASSES}`"
+        @click="isCollapsed = !isCollapsed"
+        title="Mở rộng"
+        aria-label="Mở rộng danh sách nhân viên"
+        :aria-expanded="false"
+      >
+        <ChevronIcon direction="right" double class="w-5 h-5" />
+      </button>
     </div>
 
     <!-- Expanded state: employee list -->
-    <div v-else class="flex-1 overflow-y-auto">
+    <div v-else key="expanded" class="flex-1 overflow-y-auto">
       <!-- Loading -->
       <div v-if="isLoading" class="flex flex-col items-center justify-center py-16">
         <div class="w-8 h-8 border-3 border-vermillion-500 border-t-transparent rounded-full animate-spin mb-3"></div>
@@ -138,7 +159,7 @@ onMounted(loadEmployees);
         </div>
         <p class="text-sm text-vermillion-400 mb-3 font-body">{{ error }}</p>
         <button
-          class="px-3 py-1.5 text-sm font-body text-vermillion-400 hover:bg-vermillion-500/10 rounded-lg transition-colors border border-vermillion-500/20"
+          :class="`w-full px-4 py-2 text-sm font-body text-vermillion-400 hover:bg-vermillion-500/10 rounded-lg transition-colors duration-200 border border-vermillion-500/20 ${FOCUS_RING_CLASSES}`"
           @click="loadEmployees"
         >
           Thử lại
@@ -161,19 +182,24 @@ onMounted(loadEmployees);
 
           <!-- Employees in this store -->
           <div class="space-y-1 px-2">
-            <div
+            <button
               v-for="emp in storeEmployees"
               :key="emp.id"
-              class="px-3 py-2.5 rounded-lg transition-all duration-200 cursor-pointer group border"
-              :class="selectedId === emp.id
-                ? 'bg-vermillion-500/10 border-vermillion-500/40'
-                : 'hover:bg-ink-lighter border-transparent'"
+              v-memo="[selectedId === emp.id, emp.displayName, emp.role, emp.casdoor_id]"
+              type="button"
+              :class="`w-full text-left px-3 py-2.5 rounded-lg transition-[background-color,border-color,color] duration-200 group border ${FOCUS_RING_CLASSES} ${
+                selectedId === emp.id
+                  ? 'bg-vermillion-500/10 border-vermillion-500/40'
+                  : 'hover:bg-ink-lighter border-transparent'
+              }`"
+              :aria-pressed="selectedId === emp.id"
+              :aria-label="`Xem dữ liệu của ${emp.displayName}, vai trò ${getRoleDisplay(getEffectiveRole(emp))}`"
               @click="selectEmployee(emp)"
             >
               <div class="flex items-center gap-3">
                 <!-- Avatar -->
                 <div
-                  class="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-semibold shrink-0 transition-all duration-200"
+                  class="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-semibold shrink-0 transition-[background-color] duration-200"
                   :class="selectedId === emp.id
                     ? 'bg-vermillion-500'
                     : 'bg-ink-lighter'"
@@ -183,20 +209,31 @@ onMounted(loadEmployees);
                 <!-- Info -->
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center justify-between gap-2 mb-0.5">
-                    <span class="text-sm font-medium truncate" :class="selectedId === emp.id ? 'text-vermillion-300' : 'text-paper-white'">{{ emp.displayName }}</span>
+                    <span
+                      class="text-sm font-medium truncate"
+                      :class="selectedId === emp.id ? 'text-vermillion-300' : 'text-paper-white'"
+                      :title="emp.displayName"
+                    >
+                      {{ emp.displayName }}
+                    </span>
                     <span
                       class="text-[10px] px-1.5 py-0.5 rounded font-medium uppercase shrink-0"
-                      :class="roleBadgeClass(getEffectiveRole(emp))"
+                      :class="getRoleBadgeClass(getEffectiveRole(emp))"
+                      :title="`Vai trò: ${getRoleDisplay(getEffectiveRole(emp))}`"
                     >
-                      {{ roleDisplay(getEffectiveRole(emp)) }}
+                      {{ getRoleDisplay(getEffectiveRole(emp)) }}
                     </span>
                   </div>
-                  <p v-if="emp.casdoor_id" class="text-[10px] text-paper-muted truncate font-body">
+                  <p
+                    v-if="emp.casdoor_id"
+                    class="text-[10px] text-paper-muted truncate font-body"
+                    :title="`ID: ${emp.casdoor_id}`"
+                  >
                     ID: {{ emp.casdoor_id }}
                   </p>
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 

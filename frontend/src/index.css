@@ -867,4 +867,23 @@ p {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* Disable specific animations */
+  .animate-spin,
+  .animate-pulse-glow,
+  .animate-bureau-enter,
+  .animate-bureau-fade,
+  .animate-bureau-scale,
+  .animate-stamp,
+  .animate-shimmer,
+  .animate-float,
+  .animate-glow-pulse {
+    animation: none !important;
+  }
+
+  /* Keep functional transforms but remove animation */
+  .transition-transform,
+  .transition-all {
+    transition: none !important;
+  }
 }

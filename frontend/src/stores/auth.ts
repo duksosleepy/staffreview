@@ -16,7 +16,8 @@ export const useAuthStore = defineStore("auth", () => {
   const isAuthenticated = computed(() => !!user.value);
   const role = computed(() => user.value?.role ?? null);
   const permissions = computed(() => user.value?.permissions ?? []);
-  const userName = computed(() => user.value?.name ?? "");
+  const userName = computed(() => user.value?.displayName ?? user.value?.name ?? "");
+  const userDisplayName = computed(() => user.value?.displayName ?? user.value?.name ?? "");
   const userEmail = computed(() => user.value?.email ?? "");
   const stores = computed(() => user.value?.stores ?? []);
   const casdoorId = computed(() => user.value?.casdoor_id ?? "");

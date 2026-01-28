@@ -43,8 +43,8 @@ const roleBadgeClass = (role: string) => {
 // Map role codes to display names for consistency with UserMenu
 const roleDisplay = computed(() => {
   const roleMap: Record<string, string> = {
-    asm: "Area Manager",
-    cht: "Team Lead",
+    asm: "ASM",
+    cht: "CHT",
     employee: "Employee",
   };
 

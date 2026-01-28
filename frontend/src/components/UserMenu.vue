@@ -27,8 +27,8 @@ const userInitials = computed(() => {
 
 const roleDisplay = computed(() => {
   const roleMap: Record<string, string> = {
-    asm: "Area Manager",
-    cht: "Team Lead",
+    asm: "ASM",
+    cht: "CHT",
     employee: "Employee",
   };
   return roleMap[props.role.toLowerCase()] || props.role;

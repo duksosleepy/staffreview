@@ -11,6 +11,7 @@ export type Permission =
 export type AuthUser = {
   sub: string;
   name: string;
+  displayName: string;
   email: string;
   role: Role;
   permissions: Permission[];

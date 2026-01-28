@@ -129,6 +129,7 @@ export const createAppJwt = async (user: AuthUser): Promise<string> => {
   return new jose.SignJWT({
     sub: user.sub,
     name: user.name,
+    displayName: user.displayName,
     email: user.email,
     role: user.role,
     stores: user.stores,
@@ -148,6 +149,7 @@ export const verifyAppJwt = async (token: string): Promise<AuthUser> => {
   return {
     sub: payload.sub as string,
     name: payload.name as string,
+    displayName: (payload.displayName as string) || (payload.name as string),
     email: payload.email as string,
     role: payload.role as Role,
     stores: (payload.stores as string[]) ?? [],
@@ -268,6 +270,7 @@ export const decodeIdToken = (idToken: string): OIDCUserInfo => {
   return {
     sub: payload.sub as string,
     name: (payload.name as string) || "",
+    displayName: (payload.displayName as string) || (payload.name as string),
     email: (payload.email as string) || "",
     preferred_username: payload.preferred_username as string | undefined,
     groups: payload.groups as string[] | undefined,

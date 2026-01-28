@@ -30,6 +30,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
 export type AuthUser = {
   sub: string;
   name: string;
+  displayName: string;
   email: string;
   role: Role;
   stores: string[];
@@ -50,6 +51,7 @@ export type OIDCTokenResponse = {
 export type OIDCUserInfo = {
   sub: string;
   name: string;
+  displayName?: string;
   email: string;
   preferred_username?: string;
   groups?: string[];

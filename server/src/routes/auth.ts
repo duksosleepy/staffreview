@@ -67,6 +67,7 @@ export const authRoutes = new Hono<Env>()
       const appJwt = await createAppJwt({
         sub: userInfo.sub,
         name: userInfo.name,
+        displayName: userInfo.displayName || userInfo.name,
         email: userInfo.email,
         role,
         stores,

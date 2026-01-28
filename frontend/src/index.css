@@ -1,6 +1,56 @@
 @import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&display=swap");
 
+@theme {
+  /* Tailwind v4 color definitions */
+  --color-vermillion-50: #FEF2F0;
+  --color-vermillion-100: #FDE0DC;
+  --color-vermillion-200: #FBC0B8;
+  --color-vermillion-300: #F49385;
+  --color-vermillion-400: #E8614F;
+  --color-vermillion-500: #D84A3A;
+  --color-vermillion-600: #B8352A;
+  --color-vermillion-700: #962B22;
+  --color-vermillion-800: #7A2520;
+  --color-vermillion-900: #662420;
+
+  --color-gold-50: #FBF7EB;
+  --color-gold-100: #F5ECD0;
+  --color-gold-200: #ECD9A4;
+  --color-gold-300: #DFBF6E;
+  --color-gold-400: #D4A844;
+  --color-gold-500: #C9A84C;
+  --color-gold-600: #A98332;
+  --color-gold-700: #86622A;
+  --color-gold-800: #6F4F29;
+  --color-gold-900: #5F4327;
+
+  --color-sky-50: #F0F9FF;
+  --color-sky-100: #E0F2FE;
+  --color-sky-200: #BAE6FD;
+  --color-sky-300: #7DD3FC;
+  --color-sky-400: #38BDF8;
+  --color-sky-500: #0EA5E9;
+  --color-sky-600: #0284C7;
+  --color-sky-700: #0369A1;
+  --color-sky-800: #075985;
+  --color-sky-900: #0C4A6E;
+
+  --color-ink-deepest: #191919;
+  --color-ink-deep: #1c1c1c;
+  --color-ink-medium: #272725;
+  --color-ink-light: #2a2a28;
+  --color-ink-lighter: #323230;
+  --color-ink-faint: #3a3a38;
+
+  --color-paper-white: #F2ECE2;
+  --color-paper-light: #E8DFD0;
+  --color-paper-medium: #C4B9A8;
+  --color-paper-muted: #8A7F72;
+  --color-paper-dim: #5C554B;
+  --color-paper-dark: #3D382F;
+}
+
 :root {
   /* === MIDNIGHT BUREAU — Editorial Design System === */
 

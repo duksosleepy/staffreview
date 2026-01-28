@@ -30,11 +30,14 @@ const employeesByStore = computed(() => {
 });
 
 const roleBadgeClass = (role: string) => {
-  switch (role) {
+  const normalizedRole = role.toLowerCase();
+  switch (normalizedRole) {
     case 'asm':
-      return 'bg-gold-500 text-white border border-gold-600';
+      return 'bg-gold-500 text-white border border-gold-600'; // Highest role - strongest color
     case 'cht':
-      return 'bg-vermillion-500 text-white border border-vermillion-600';
+      return 'bg-vermillion-500 text-white border border-vermillion-600'; // Medium role
+    case 'employee':
+      return 'bg-sky-500 text-white border border-sky-600'; // Base role
     default:
       return 'bg-ink-lighter text-paper-muted border border-ink-faint';
   }

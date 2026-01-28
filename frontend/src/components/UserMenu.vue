@@ -101,14 +101,20 @@ const handleLogout = () => {
                 {{ userEmail }}
               </span>
               <span
-                v-if="role === 'asm'"
+                v-if="role.toLowerCase() === 'asm'"
                 class="mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase bg-gold-500 text-white border border-gold-600 w-fit"
               >
                 {{ roleDisplay }}
               </span>
               <span
-                v-else-if="role === 'cht'"
+                v-else-if="role.toLowerCase() === 'cht'"
                 class="mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase bg-vermillion-500 text-white border border-vermillion-600 w-fit"
+              >
+                {{ roleDisplay }}
+              </span>
+              <span
+                v-else-if="role.toLowerCase() === 'employee'"
+                class="mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase bg-sky-500 text-white border border-sky-600 w-fit"
               >
                 {{ roleDisplay }}
               </span>

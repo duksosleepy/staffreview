@@ -1,6 +1,6 @@
-import type { Client } from "gel";
-import type pino from "pino";
-import type { AuthUser } from "../types/auth.js";
+import type { Client } from 'gel';
+import type pino from 'pino';
+import type { AuthUser } from '../types/auth.js';
 
 // Typed environment for Hono context
 export type Env = {

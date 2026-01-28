@@ -16,13 +16,13 @@
  * - Sheet 2: DetailMonthlyRecord (monthly tracking with 31 daily checkboxes)
  */
 
-const API_BASE = "/api/checklist";
+const API_BASE = '/api/checklist';
 
 // ===================================================
 // Types
 // ===================================================
 
-export type DetailCategoryType = "daily" | "weekly" | "monthly";
+export type DetailCategoryType = 'daily' | 'weekly' | 'monthly';
 
 export type DetailCategory = {
   id: string;
@@ -118,7 +118,7 @@ class ApiError extends Error {
     message: string,
   ) {
     super(message);
-    this.name = "ApiError";
+    this.name = 'ApiError';
   }
 }
 
@@ -126,8 +126,8 @@ async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) {
       // Redirect to login on auth error
-      window.location.href = "/login";
-      throw new ApiError(401, "Unauthorized");
+      window.location.href = '/login';
+      throw new ApiError(401, 'Unauthorized');
     }
     throw new ApiError(response.status, `API error: ${response.statusText}`);
   }
@@ -143,21 +143,18 @@ async function handleResponse<T>(response: Response): Promise<T> {
  * Server automatically filters by user's role and employee_id
  * Items come from DetailChecklistItem (shared with Sheet 2)
  */
-export async function fetchAllChecklistItems(
-  date?: string,
-  staffId?: string,
-): Promise<ChecklistItemWithRecord[]> {
+export async function fetchAllChecklistItems(date?: string, staffId?: string): Promise<ChecklistItemWithRecord[]> {
   const url = new URL(`${API_BASE}/items`, window.location.origin);
   if (date) {
-    url.searchParams.set("date", date);
+    url.searchParams.set('date', date);
   }
   if (staffId) {
-    url.searchParams.set("staff_id", staffId);
+    url.searchParams.set('staff_id', staffId);
   }
 
   const response = await fetch(url.toString(), {
-    method: "GET",
-    credentials: "include",
+    method: 'GET',
+    credentials: 'include',
   });
 
   return handleResponse<ChecklistItemWithRecord[]>(response);
@@ -169,8 +166,8 @@ export async function fetchAllChecklistItems(
  */
 export async function fetchAvailableAssessmentDates(): Promise<string[]> {
   const response = await fetch(`${API_BASE}/assessment-dates`, {
-    method: "GET",
-    credentials: "include",
+    method: 'GET',
+    credentials: 'include',
   });
 
   return handleResponse<string[]>(response);
@@ -188,18 +185,18 @@ export async function fetchAllDetailChecklistItems(
 ): Promise<DetailChecklistItemWithRecord[]> {
   const url = new URL(`${API_BASE}/detail-items`, window.location.origin);
   if (month !== undefined) {
-    url.searchParams.set("month", month.toString());
+    url.searchParams.set('month', month.toString());
   }
   if (year !== undefined) {
-    url.searchParams.set("year", year.toString());
+    url.searchParams.set('year', year.toString());
   }
   if (staffId) {
-    url.searchParams.set("staff_id", staffId);
+    url.searchParams.set('staff_id', staffId);
   }
 
   const response = await fetch(url.toString(), {
-    method: "GET",
-    credentials: "include",
+    method: 'GET',
+    credentials: 'include',
   });
 
   return handleResponse<DetailChecklistItemWithRecord[]>(response);
@@ -210,8 +207,8 @@ export async function fetchAllDetailChecklistItems(
  */
 export async function fetchDetailCategories(): Promise<DetailCategory[]> {
   const response = await fetch(`${API_BASE}/categories`, {
-    method: "GET",
-    credentials: "include",
+    method: 'GET',
+    credentials: 'include',
   });
 
   return handleResponse<DetailCategory[]>(response);
@@ -222,13 +219,13 @@ export async function fetchDetailCategories(): Promise<DetailCategory[]> {
 // ===================================================
 
 export type ChecklistSummaryEmployee = {
-  role: "employee";
+  role: 'employee';
   uncheckedItems: number;
   totalItems: number;
 };
 
 export type ChecklistSummaryManager = {
-  role: "asm" | "cht";
+  role: 'asm' | 'cht';
   incompleteStaff: number;
   totalStaff: number;
 };
@@ -242,8 +239,8 @@ export type ChecklistSummary = ChecklistSummaryEmployee | ChecklistSummaryManage
  */
 export async function fetchChecklistSummary(): Promise<ChecklistSummary> {
   const response = await fetch(`${API_BASE}/summary`, {
-    method: "GET",
-    credentials: "include",
+    method: 'GET',
+    credentials: 'include',
   });
 
   return handleResponse<ChecklistSummary>(response);
@@ -268,9 +265,9 @@ export type StoreEmployee = {
  * Returns 403 for employees (only CHT/ASM can access).
  */
 export async function fetchStoreEmployees(): Promise<StoreEmployee[]> {
-  const response = await fetch("/api/employees/by-store", {
-    method: "GET",
-    credentials: "include",
+  const response = await fetch('/api/employees/by-store', {
+    method: 'GET',
+    credentials: 'include',
   });
 
   return handleResponse<StoreEmployee[]>(response);
@@ -305,24 +302,21 @@ export async function upsertChecklistRecord(
   payload: UpsertChecklistRecordPayload,
 ): Promise<UpsertChecklistRecordResponse> {
   const response = await fetch(`${API_BASE}/records/upsert`, {
-    method: "POST",
-    credentials: "include",
+    method: 'POST',
+    credentials: 'include',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     if (response.status === 401) {
-      window.location.href = "/login";
-      throw new ApiError(401, "Unauthorized");
+      window.location.href = '/login';
+      throw new ApiError(401, 'Unauthorized');
     }
     const errorData = await response.json().catch(() => ({}));
-    throw new ApiError(
-      response.status,
-      errorData.error || `API error: ${response.statusText}`,
-    );
+    throw new ApiError(response.status, errorData.error || `API error: ${response.statusText}`);
   }
 
   return response.json();
@@ -352,24 +346,21 @@ export async function upsertDetailMonthlyRecord(
   payload: UpsertDetailMonthlyRecordPayload,
 ): Promise<UpsertDetailMonthlyRecordResponse> {
   const response = await fetch(`${API_BASE}/detail-records/upsert`, {
-    method: "POST",
-    credentials: "include",
+    method: 'POST',
+    credentials: 'include',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     if (response.status === 401) {
-      window.location.href = "/login";
-      throw new ApiError(401, "Unauthorized");
+      window.location.href = '/login';
+      throw new ApiError(401, 'Unauthorized');
     }
     const errorData = await response.json().catch(() => ({}));
-    throw new ApiError(
-      response.status,
-      errorData.error || `API error: ${response.statusText}`,
-    );
+    throw new ApiError(response.status, errorData.error || `API error: ${response.statusText}`);
   }
 
   return response.json();

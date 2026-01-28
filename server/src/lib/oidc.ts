@@ -1,24 +1,19 @@
-import * as jose from "jose";
-import type {
-  AuthUser,
-  OIDCTokenResponse,
-  OIDCUserInfo,
-  Role,
-} from "../types/auth.js";
+import * as jose from 'jose';
+import type { AuthUser, OIDCTokenResponse, OIDCUserInfo, Role } from '../types/auth.js';
 
 // OIDC Provider configuration from environment
 export const oidcConfig = {
-  endpoint: process.env.OIDC_ENDPOINT || "",
-  clientId: process.env.OIDC_CLIENT_ID || "",
-  clientSecret: process.env.OIDC_CLIENT_SECRET || "",
-  redirectUri: process.env.OIDC_REDIRECT_URI || "",
-  scope: process.env.OIDC_SCOPE || "openid profile email",
+  endpoint: process.env.OIDC_ENDPOINT || '',
+  clientId: process.env.OIDC_CLIENT_ID || '',
+  clientSecret: process.env.OIDC_CLIENT_SECRET || '',
+  redirectUri: process.env.OIDC_REDIRECT_URI || '',
+  scope: process.env.OIDC_SCOPE || 'openid profile email',
 };
 
 // JWT configuration
 export const jwtConfig = {
-  secret: process.env.JWT_SECRET || "change-this-secret-in-production",
-  expiresIn: "7d",
+  secret: process.env.JWT_SECRET || 'change-this-secret-in-production',
+  expiresIn: '7d',
 };
 
 // Build authorization URL for OIDC login
@@ -26,7 +21,7 @@ export const buildAuthorizationUrl = (state: string): string => {
   const params = new URLSearchParams({
     client_id: oidcConfig.clientId,
     redirect_uri: oidcConfig.redirectUri,
-    response_type: "code",
+    response_type: 'code',
     scope: oidcConfig.scope,
     state,
   });
@@ -35,25 +30,20 @@ export const buildAuthorizationUrl = (state: string): string => {
 };
 
 // Exchange authorization code for tokens
-export const exchangeCodeForTokens = async (
-  code: string,
-): Promise<OIDCTokenResponse> => {
+export const exchangeCodeForTokens = async (code: string): Promise<OIDCTokenResponse> => {
   const params = new URLSearchParams({
-    grant_type: "authorization_code",
+    grant_type: 'authorization_code',
     client_id: oidcConfig.clientId,
     client_secret: oidcConfig.clientSecret,
     code,
     redirect_uri: oidcConfig.redirectUri,
   });
 
-  const response = await fetch(
-    `${oidcConfig.endpoint}/api/login/oauth/access_token`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
-    },
-  );
+  const response = await fetch(`${oidcConfig.endpoint}/api/login/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
 
   const data = await response.json();
 
@@ -67,13 +57,13 @@ export const exchangeCodeForTokens = async (
 
 // Helper to extract string value from role/group (handles both string and object formats)
 const extractRoleString = (value: unknown): string | null => {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return value.toLowerCase();
   }
   // Casdoor returns roles as objects like { name: "admin" }
-  if (value && typeof value === "object" && "name" in value) {
+  if (value && typeof value === 'object' && 'name' in value) {
     const name = (value as { name: unknown }).name;
-    if (typeof name === "string") {
+    if (typeof name === 'string') {
       return name.toLowerCase();
     }
   }
@@ -101,15 +91,15 @@ export const extractRole = (userInfo: OIDCUserInfo): Role => {
   }
 
   // Default to employee
-  return "employee";
+  return 'employee';
 };
 
 // Map Casdoor tag display names to internal role codes
 const TAG_TO_ROLE: Record<string, Role> = {
-  "area manager": "asm",
-  "asm": "asm",
-  "cht": "cht",
-  "employee": "employee",
+  'area manager': 'asm',
+  asm: 'asm',
+  cht: 'cht',
+  employee: 'employee',
 };
 
 // Normalize a tag/role string to an internal Role, or return null
@@ -119,7 +109,7 @@ const normalizeRole = (value: string): Role | null => {
 
 // Validate role string
 const isValidRole = (role: string): role is Role => {
-  return ["asm", "cht", "employee"].includes(role);
+  return ['asm', 'cht', 'employee'].includes(role);
 };
 
 // Create app JWT with user info and role
@@ -135,7 +125,7 @@ export const createAppJwt = async (user: AuthUser): Promise<string> => {
     stores: user.stores,
     casdoor_id: user.casdoor_id,
   })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(jwtConfig.expiresIn)
     .sign(secret);
@@ -153,32 +143,30 @@ export const verifyAppJwt = async (token: string): Promise<AuthUser> => {
     email: payload.email as string,
     role: payload.role as Role,
     stores: (payload.stores as string[]) ?? [],
-    casdoor_id: (payload.casdoor_id as string) ?? "",
+    casdoor_id: (payload.casdoor_id as string) ?? '',
   };
 };
 
 // Fetch full Casdoor user object via API (includes properties like CUAHANG, ID)
-export const fetchCasdoorUserInfo = async (
-  accessToken: string,
-): Promise<{ stores: string[]; casdoor_id: string }> => {
-  const response = await fetch(
-    `${oidcConfig.endpoint}/api/get-account`,
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    },
-  );
+export const fetchCasdoorUserInfo = async (accessToken: string): Promise<{ stores: string[]; casdoor_id: string }> => {
+  const response = await fetch(`${oidcConfig.endpoint}/api/get-account`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   const data = await response.json();
 
   // Casdoor wraps user object inside data.data
   const userData = data?.data ?? {};
   const properties = userData.properties ?? {};
-  const cuahang = properties.CUAHANG ?? "";
-  const casdoorId = properties.ID ?? "";
+  const cuahang = properties.CUAHANG ?? '';
+  const casdoorId = properties.ID ?? '';
 
   // CUAHANG is comma-separated store IDs, e.g. "S001,S002"
   const stores = cuahang
-    ? cuahang.split(",").map((s: string) => s.trim()).filter(Boolean)
+    ? cuahang
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter(Boolean)
     : [];
 
   return { stores, casdoor_id: casdoorId };
@@ -195,27 +183,75 @@ export type CasdoorEmployee = {
   role: string;
 };
 
-// Fetch all users from Casdoor org, filtered by store IDs
-export const fetchCasdoorUsersByStores = async (
-  storeIds: string[],
-): Promise<CasdoorEmployee[]> => {
-  // Casdoor API: GET /api/get-users?owner={org}&clientId={id}&clientSecret={secret}
-  const owner = process.env.CASDOOR_ORG || "lug.vn";
+// Fetch role assignments from Casdoor's /api/get-roles endpoint.
+// Each Casdoor Role has a Users[] array listing assigned user IDs (format: "org/username").
+// Returns a Map of "org/username" → role name.
+const fetchCasdoorRoleMapping = async (): Promise<Map<string, Role>> => {
+  const owner = process.env.CASDOOR_ORG || 'lug.vn';
   const params = new URLSearchParams({
     owner,
     clientId: oidcConfig.clientId,
     clientSecret: oidcConfig.clientSecret,
   });
 
-  const response = await fetch(
-    `${oidcConfig.endpoint}/api/get-users?${params.toString()}`,
-  );
+  const response = await fetch(`${oidcConfig.endpoint}/api/get-roles?${params.toString()}`);
 
   if (!response.ok) {
-    throw new Error(`Casdoor get-users failed: ${response.status}`);
+    console.error(`Casdoor get-roles failed: ${response.status}`);
+    return new Map();
   }
 
   const rawBody = await response.json();
+
+  // Casdoor may wrap in { data: [...] } or return array directly
+  const roles = Array.isArray(rawBody) ? rawBody : (rawBody?.data ?? rawBody);
+
+  if (!Array.isArray(roles)) {
+    return new Map();
+  }
+
+  const userRoleMap = new Map<string, Role>();
+
+  for (const role of roles) {
+    const roleName = (role.name as string)?.toLowerCase();
+    if (!roleName || !isValidRole(roleName)) continue;
+
+    const users: string[] = role.users ?? [];
+    for (const userId of users) {
+      // userId format is "org/username", map each user to their role
+      userRoleMap.set(userId, roleName as Role);
+    }
+  }
+
+  return userRoleMap;
+};
+
+// Fetch all users from Casdoor org, filtered by store IDs and requester role.
+// Resolves roles via Casdoor's /api/get-roles (each role lists its assigned users).
+// CHT: can only see employees and other CHTs (no ASMs)
+// ASM: can see all users in their stores
+export const fetchCasdoorUsersByStores = async (
+  storeIds: string[],
+  requesterRole: Role = 'employee',
+): Promise<CasdoorEmployee[]> => {
+  const owner = process.env.CASDOOR_ORG || 'lug.vn';
+  const params = new URLSearchParams({
+    owner,
+    clientId: oidcConfig.clientId,
+    clientSecret: oidcConfig.clientSecret,
+  });
+
+  // Fetch users and role assignments in parallel
+  const [usersResponse, roleMap] = await Promise.all([
+    fetch(`${oidcConfig.endpoint}/api/get-users?${params.toString()}`),
+    fetchCasdoorRoleMapping(),
+  ]);
+
+  if (!usersResponse.ok) {
+    throw new Error(`Casdoor get-users failed: ${usersResponse.status}`);
+  }
+
+  const rawBody = await usersResponse.json();
 
   // Casdoor may return array directly or wrapped in { data: [...] }
   const users = Array.isArray(rawBody) ? rawBody : (rawBody?.data ?? rawBody);
@@ -230,32 +266,34 @@ export const fetchCasdoorUsersByStores = async (
 
   for (const user of users) {
     const properties = user.properties ?? {};
-    const cuahang = properties.CUAHANG ?? "";
+    const cuahang = properties.CUAHANG ?? '';
     const userStores = cuahang
-      ? cuahang.split(",").map((s: string) => s.trim()).filter(Boolean)
+      ? cuahang
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean)
       : [];
 
     // Check if any of the user's stores match
     const hasMatchingStore = userStores.some((s: string) => storeSet.has(s));
     if (!hasMatchingStore) continue;
 
-    // Extract role: check roles array first, then tag field as fallback
-    let role: Role = "employee";
-    if (user.roles?.length) {
-      const r = extractRoleString(user.roles[0]);
-      if (r && isValidRole(r)) role = r;
-    } else if (user.tag) {
-      const mapped = normalizeRole(user.tag);
-      if (mapped) role = mapped;
+    // Resolve role from Casdoor role assignments (userId format: "org/username")
+    const userId = `${owner}/${user.name}`;
+    const role: Role = roleMap.get(userId) ?? 'employee';
+
+    // RBAC: CHT can only see employees and other CHTs, not ASMs
+    if (requesterRole === 'cht' && role === 'asm') {
+      continue;
     }
 
     employees.push({
       id: user.id,
       name: user.name,
       displayName: user.displayName || user.name,
-      email: user.email || "",
+      email: user.email || '',
       stores: userStores,
-      casdoor_id: properties.ID ?? "",
+      casdoor_id: properties.ID ?? '',
       role,
     });
   }
@@ -269,9 +307,9 @@ export const decodeIdToken = (idToken: string): OIDCUserInfo => {
 
   return {
     sub: payload.sub as string,
-    name: (payload.name as string) || "",
+    name: (payload.name as string) || '',
     displayName: (payload.displayName as string) || (payload.name as string),
-    email: (payload.email as string) || "",
+    email: (payload.email as string) || '',
     preferred_username: payload.preferred_username as string | undefined,
     groups: payload.groups as string[] | undefined,
     roles: payload.roles as string[] | undefined,

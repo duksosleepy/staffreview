@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { Avatar, Menu } from "@ark-ui/vue";
+import { Avatar, Menu } from '@ark-ui/vue';
+import { computed } from 'vue';
 
 type Props = {
   userName: string;
@@ -18,7 +18,7 @@ const emit = defineEmits<{
 }>();
 
 const userInitials = computed(() => {
-  const parts = props.userName.split(" ");
+  const parts = props.userName.split(' ');
   if (parts.length >= 2) {
     return `${parts[0][0]}${parts[1][0]}`;
   }
@@ -27,15 +27,15 @@ const userInitials = computed(() => {
 
 const roleDisplay = computed(() => {
   const roleMap: Record<string, string> = {
-    asm: "ASM",
-    cht: "CHT",
-    employee: "Employee",
+    asm: 'ASM',
+    cht: 'CHT',
+    employee: 'Employee',
   };
   return roleMap[props.role.toLowerCase()] || props.role;
 });
 
 const handleLogout = () => {
-  emit("logout");
+  emit('logout');
 };
 </script>
 

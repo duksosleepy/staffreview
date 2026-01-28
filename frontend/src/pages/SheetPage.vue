@@ -1,26 +1,26 @@
 <script setup lang="ts">
+import { createToaster, Toast, Toaster } from '@ark-ui/vue/toast';
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import UniverPresetSheetsCoreEnUS from '@univerjs/preset-sheets-core/locales/en-US';
 import { UniverSheetsDataValidationPreset } from '@univerjs/preset-sheets-data-validation';
 import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-validation/locales/en-US';
 import type { FUniver, Univer } from '@univerjs/presets';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import EmployeeSidebar from '@/components/EmployeeSidebar.vue';
+import UserMenu from '@/components/UserMenu.vue';
+import { usePermission } from '@/composables/usePermission';
 import {
   type ChecklistItemWithRecord,
   type DetailChecklistItemWithRecord,
-  type StoreEmployee,
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
+  type StoreEmployee,
   upsertChecklistRecord,
   upsertDetailMonthlyRecord,
 } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
-import { usePermission } from '@/composables/usePermission';
-import { Toast, Toaster, createToaster } from '@ark-ui/vue/toast';
-import UserMenu from '@/components/UserMenu.vue';
-import EmployeeSidebar from '@/components/EmployeeSidebar.vue';
 import { useNotificationStore } from '@/stores/notifications';
 
 import '@univerjs/preset-sheets-core/lib/index.css';
@@ -55,10 +55,7 @@ const onEmployeeSelect = async (employee: StoreEmployee | null) => {
     selectedStaffName.value = '';
   }
   // Refresh both sheets with the selected employee's data
-  await Promise.all([
-    refreshSheet1(selectedDate.value || undefined),
-    refreshSheet2(),
-  ]);
+  await Promise.all([refreshSheet1(selectedDate.value || undefined), refreshSheet2()]);
   // Ensure Sheet 1 stays active after refresh
   const wb = univerAPI?.getActiveWorkbook();
   if (wb) {
@@ -126,14 +123,8 @@ function groupItemsByCategory1(items: ChecklistItemWithRecord[]) {
   return grouped;
 }
 
-function buildSheet1CellData(
-  items: ChecklistItemWithRecord[],
-  dateValue: string,
-) {
-  const cells: Record<
-    number,
-    Record<number, { v: string | number; s?: object }>
-  > = {};
+function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: string) {
+  const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
 
   // Row 0: Date picker row with label and dropdown cell
   const datePickerLabelStyle = {
@@ -298,12 +289,7 @@ async function refreshSheet1(date?: string) {
       for (let r = DATA_START_ROW; r <= totalRows; r++) {
         const rowData = cells[r];
         if (rowData) {
-          dataArray.push([
-            rowData[0]?.v ?? '',
-            rowData[1]?.v ?? '',
-            rowData[2]?.v ?? '',
-            rowData[3]?.v ?? '',
-          ]);
+          dataArray.push([rowData[0]?.v ?? '', rowData[1]?.v ?? '', rowData[2]?.v ?? '', rowData[3]?.v ?? '']);
         } else {
           dataArray.push(['', '', '', '']);
         }
@@ -322,23 +308,16 @@ async function refreshSheet1(date?: string) {
     const checkboxStartRow = DATA_START_ROW + 1;
     sheet
       .getRange(`B${checkboxStartRow}:B${totalRows}`)
-      ?.setDataValidation(
-        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
-      );
+      ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
     sheet
       .getRange(`C${checkboxStartRow}:C${totalRows}`)
-      ?.setDataValidation(
-        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
-      );
+      ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
     sheet
       .getRange(`D${checkboxStartRow}:D${totalRows}`)
-      ?.setDataValidation(
-        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
-      );
+      ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
 
     // Auto-resize rows to fit text-wrapped content
     sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
-
   } finally {
     hideLoadingOverlay();
   }
@@ -394,7 +373,7 @@ function calculateSummaryValues(
   // Count checked and unchecked days (only count up to daysInMonth)
   const relevantChecks = dailyChecks.slice(0, daysInMonth);
   const successfulCompletions = relevantChecks.filter(Boolean).length;
-  const implementationIssuesCount = relevantChecks.filter(v => v === false).length;
+  const implementationIssuesCount = relevantChecks.filter((v) => v === false).length;
 
   let achievementPercentage: number;
   let scoreAchieved: number;
@@ -458,15 +437,8 @@ function getDaysInMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-function buildSheet2CellData(
-  items: DetailChecklistItemWithRecord[],
-  month: number,
-  year: number,
-) {
-  const cells: Record<
-    number,
-    Record<number, { v: string | number; s?: object }>
-  > = {};
+function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: number, year: number) {
+  const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
   const daysInMonth = getDaysInMonth(month, year);
 
   const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, fs: 10 };
@@ -552,13 +524,7 @@ function buildSheet2CellData(
       const score = item.score;
 
       // Calculate summary values based on category type
-      const summary = calculateSummaryValues(
-        dailyChecks,
-        categoryType,
-        baseline,
-        score,
-        daysInMonth,
-      );
+      const summary = calculateSummaryValues(dailyChecks, categoryType, baseline, score, daysInMonth);
 
       const row: Record<number, { v: string | number; s?: object }> = {
         0: { v: item.item_number },
@@ -639,18 +605,11 @@ function getColumnLetter(index: number): string {
 async function refreshSheet2() {
   if (!univerAPI) return;
 
-  const items = await fetchAllDetailChecklistItems(
-    undefined, undefined, selectedStaffId.value,
-  ).catch(
+  const items = await fetchAllDetailChecklistItems(undefined, undefined, selectedStaffId.value).catch(
     () => [] as DetailChecklistItemWithRecord[],
   );
 
-  const {
-    cells,
-    totalRows,
-    daysInMonth,
-    summaryColStart,
-  } = buildSheet2CellData(items, sheet2Month, sheet2Year);
+  const { cells, totalRows, daysInMonth, summaryColStart } = buildSheet2CellData(items, sheet2Month, sheet2Year);
 
   const workbook = univerAPI.getActiveWorkbook();
   const sheet = workbook?.getSheetBySheetId('sheet2');
@@ -693,9 +652,7 @@ async function refreshSheet2() {
     const colLetter = getColumnLetter(dayColStart + day);
     sheet
       .getRange(`${colLetter}2:${colLetter}${totalRows}`)
-      ?.setDataValidation(
-        univerAPI.newDataValidation().requireCheckbox('1', '0').build(),
-      );
+      ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
   }
 
   // Auto-resize rows to fit text-wrapped content
@@ -708,15 +665,9 @@ onMounted(async () => {
   const { univer, univerAPI: api } = createUniver({
     locale: LocaleType.EN_US,
     locales: {
-      [LocaleType.EN_US]: mergeLocales(
-        UniverPresetSheetsCoreEnUS,
-        UniverPresetSheetsDataValidationEnUS,
-      ),
+      [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS, UniverPresetSheetsDataValidationEnUS),
     },
-    presets: [
-      UniverSheetsCorePreset({ container: containerRef.value }),
-      UniverSheetsDataValidationPreset(),
-    ],
+    presets: [UniverSheetsCorePreset({ container: containerRef.value }), UniverSheetsDataValidationPreset()],
   });
 
   univerInstance = univer;
@@ -736,10 +687,7 @@ onMounted(async () => {
   ]);
 
   // Build Sheet 1 data with selected date
-  const { cells: cells1, totalRows: totalRows1 } = buildSheet1CellData(
-    sheet1Items,
-    selectedDate.value,
-  );
+  const { cells: cells1, totalRows: totalRows1 } = buildSheet1CellData(sheet1Items, selectedDate.value);
 
   // Build Sheet 2 data
   const currentDate = new Date();
@@ -835,34 +783,24 @@ onMounted(async () => {
       const maxDate = new Date(2030, 11, 31);
       sheet1
         .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
-        ?.setDataValidation(
-          api.newDataValidation().requireDateBetween(minDate, maxDate).build(),
-        );
+        ?.setDataValidation(api.newDataValidation().requireDateBetween(minDate, maxDate).build());
 
       // Set initial date value using the correct format for Univer
       const todayFormatted = `${today.getMonth() + 1}/${today.getDate()}/${today.getFullYear()}`;
-      sheet1
-        .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
-        ?.setValue(todayFormatted);
+      sheet1.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)?.setValue(todayFormatted);
 
       // Apply checkbox validation (columns B, C, D for checkboxes)
       const checkboxStartRow = DATA_START_ROW + 1;
       const endRow1 = totalRows1;
       sheet1
         .getRange(`B${checkboxStartRow}:B${endRow1}`)
-        ?.setDataValidation(
-          api.newDataValidation().requireCheckbox('1', '0').build(),
-        );
+        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
       sheet1
         .getRange(`C${checkboxStartRow}:C${endRow1}`)
-        ?.setDataValidation(
-          api.newDataValidation().requireCheckbox('1', '0').build(),
-        );
+        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
       sheet1
         .getRange(`D${checkboxStartRow}:D${endRow1}`)
-        ?.setDataValidation(
-          api.newDataValidation().requireCheckbox('1', '0').build(),
-        );
+        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
 
       // Note: CHT/ASM column visibility is set in sheet1ColumnData configuration above
     }
@@ -880,9 +818,7 @@ onMounted(async () => {
         const colLetter = getColumnLetter(dayColStart + day);
         sheet2
           .getRange(`${colLetter}2:${colLetter}${totalRows2}`)
-          ?.setDataValidation(
-            api.newDataValidation().requireCheckbox('1', '0').build(),
-          );
+          ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
       }
     }
 
@@ -1172,9 +1108,7 @@ onMounted(async () => {
 
       // Get the new value from the cell
       const sheet = workbook.getSheetBySheetId('sheet1');
-      const cellValue = sheet
-        ?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
-        ?.getValue();
+      const cellValue = sheet?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)?.getValue();
 
       if (cellValue) {
         let isoDate = '';

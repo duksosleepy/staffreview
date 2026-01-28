@@ -1,6 +1,6 @@
-import { computed } from "vue";
-import { useAuthStore } from "@/stores/auth";
-import type { Permission, Role } from "@/types/auth";
+import { computed } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+import type { Permission, Role } from '@/types/auth';
 
 export const usePermission = () => {
   const auth = useAuthStore();
@@ -31,15 +31,15 @@ export const usePermission = () => {
   };
 
   // Computed helpers for common checks
-  const canCheckEmployee = computed(() => can("checklist:check_employee"));
-  const canCheckCht = computed(() => can("checklist:check_cht"));
-  const canCheckAsm = computed(() => can("checklist:check_asm"));
-  const canViewSheet = computed(() => can("sheet:view"));
+  const canCheckEmployee = computed(() => can('checklist:check_employee'));
+  const canCheckCht = computed(() => can('checklist:check_cht'));
+  const canCheckAsm = computed(() => can('checklist:check_asm'));
+  const canViewSheet = computed(() => can('sheet:view'));
 
   // Role checks
-  const isEmployee = computed(() => isRole("employee"));
-  const isCht = computed(() => isRole("cht"));
-  const isAsm = computed(() => isRole("asm"));
+  const isEmployee = computed(() => isRole('employee'));
+  const isCht = computed(() => isRole('cht'));
+  const isAsm = computed(() => isRole('asm'));
 
   return {
     // Permission checks

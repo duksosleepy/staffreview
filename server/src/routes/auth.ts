@@ -1,7 +1,7 @@
-import { Hono } from "hono";
-import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { HTTPException } from "hono/http-exception";
-import type { Env } from "../lib/env.js";
+import { Hono } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { HTTPException } from 'hono/http-exception';
+import type { Env } from '../lib/env.js';
 import {
   buildAuthorizationUrl,
   createAppJwt,
@@ -9,24 +9,24 @@ import {
   exchangeCodeForTokens,
   extractRole,
   fetchCasdoorUserInfo,
-} from "../lib/oidc.js";
-import { AUTH_COOKIE_NAME, authMiddleware } from "../middleware/auth.js";
-import { ROLE_PERMISSIONS } from "../types/auth.js";
+} from '../lib/oidc.js';
+import { AUTH_COOKIE_NAME, authMiddleware } from '../middleware/auth.js';
+import { ROLE_PERMISSIONS } from '../types/auth.js';
 
 // State cookie for CSRF protection
-const STATE_COOKIE_NAME = "oauth_state";
+const STATE_COOKIE_NAME = 'oauth_state';
 
 export const authRoutes = new Hono<Env>()
   // Redirect to IDP login
-  .get("/login", (c) => {
+  .get('/login', (c) => {
     const state = crypto.randomUUID();
 
     // Store state in cookie for verification
     setCookie(c, STATE_COOKIE_NAME, state, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Lax",
-      path: "/",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Lax',
+      path: '/',
       maxAge: 60 * 10, // 10 minutes
     });
 
@@ -35,18 +35,18 @@ export const authRoutes = new Hono<Env>()
   })
 
   // Handle IDP callback
-  .get("/callback", async (c) => {
-    const code = c.req.query("code");
-    const state = c.req.query("state");
+  .get('/callback', async (c) => {
+    const code = c.req.query('code');
+    const state = c.req.query('state');
     const storedState = getCookie(c, STATE_COOKIE_NAME);
 
     // Verify state to prevent CSRF
     if (!state || state !== storedState) {
-      throw new HTTPException(400, { message: "Invalid state parameter" });
+      throw new HTTPException(400, { message: 'Invalid state parameter' });
     }
 
     if (!code) {
-      throw new HTTPException(400, { message: "Missing authorization code" });
+      throw new HTTPException(400, { message: 'Missing authorization code' });
     }
 
     // Clear state cookie
@@ -77,33 +77,34 @@ export const authRoutes = new Hono<Env>()
       // Set auth cookie
       setCookie(c, AUTH_COOKIE_NAME, appJwt, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Lax",
-        path: "/",
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'Lax',
+        path: '/',
         maxAge: 60 * 60 * 24 * 7, // 7 days
       });
 
       // Redirect to frontend
-      const frontendUrl = process.env.FRONTEND_URL || "/";
+      const frontendUrl = process.env.FRONTEND_URL || '/';
       return c.redirect(frontendUrl);
     } catch (error) {
-      const errLog = c.get("log");
+      const errLog = c.get('log');
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
-      errLog?.error({ errorMessage, errorStack }, "Auth callback failed");
+      errLog?.error({ errorMessage, errorStack }, 'Auth callback failed');
       throw new HTTPException(500, { message: `Authentication failed: ${errorMessage}` });
     }
   })
 
   // Get current user info
-  .get("/me", authMiddleware, (c) => {
-    const user = c.get("user");
+  .get('/me', authMiddleware, (c) => {
+    const user = c.get('user');
     const permissions = ROLE_PERMISSIONS[user.role] || [];
 
     return c.json({
       user: {
         sub: user.sub,
         name: user.name,
+        displayName: user.displayName || user.name,
         email: user.email,
         role: user.role,
         permissions,
@@ -114,13 +115,13 @@ export const authRoutes = new Hono<Env>()
   })
 
   // Logout
-  .post("/logout", (c) => {
-    deleteCookie(c, AUTH_COOKIE_NAME, { path: "/" });
+  .post('/logout', (c) => {
+    deleteCookie(c, AUTH_COOKIE_NAME, { path: '/' });
     return c.json({ success: true });
   })
 
   // Check if authenticated (for frontend)
-  .get("/check", (c) => {
+  .get('/check', (c) => {
     const token = getCookie(c, AUTH_COOKIE_NAME);
     return c.json({ authenticated: !!token });
   });

@@ -1,13 +1,8 @@
-import { defineStore } from "pinia";
-import { computed, ref } from "vue";
-import type {
-  AuthCheckResponse,
-  AuthMeResponse,
-  AuthUser,
-  Permission,
-} from "@/types/auth";
+import { defineStore } from 'pinia';
+import { computed, ref } from 'vue';
+import type { AuthCheckResponse, AuthMeResponse, AuthUser, Permission } from '@/types/auth';
 
-export const useAuthStore = defineStore("auth", () => {
+export const useAuthStore = defineStore('auth', () => {
   const user = ref<AuthUser | null>(null);
   const isLoading = ref(true);
   const error = ref<string | null>(null);
@@ -16,11 +11,11 @@ export const useAuthStore = defineStore("auth", () => {
   const isAuthenticated = computed(() => !!user.value);
   const role = computed(() => user.value?.role ?? null);
   const permissions = computed(() => user.value?.permissions ?? []);
-  const userName = computed(() => user.value?.displayName ?? user.value?.name ?? "");
-  const userDisplayName = computed(() => user.value?.displayName ?? user.value?.name ?? "");
-  const userEmail = computed(() => user.value?.email ?? "");
+  const userName = computed(() => user.value?.displayName ?? user.value?.name ?? '');
+  const userDisplayName = computed(() => user.value?.displayName ?? user.value?.name ?? '');
+  const userEmail = computed(() => user.value?.email ?? '');
   const stores = computed(() => user.value?.stores ?? []);
-  const casdoorId = computed(() => user.value?.casdoor_id ?? "");
+  const casdoorId = computed(() => user.value?.casdoor_id ?? '');
 
   // Check if user has a specific permission
   const hasPermission = (permission: Permission): boolean => {
@@ -43,8 +38,8 @@ export const useAuthStore = defineStore("auth", () => {
     error.value = null;
 
     try {
-      const response = await fetch("/auth/me", {
-        credentials: "include",
+      const response = await fetch('/auth/me', {
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -56,7 +51,7 @@ export const useAuthStore = defineStore("auth", () => {
       user.value = null;
       return false;
     } catch (err) {
-      error.value = "Failed to fetch user";
+      error.value = 'Failed to fetch user';
       user.value = null;
       return false;
     } finally {
@@ -67,8 +62,8 @@ export const useAuthStore = defineStore("auth", () => {
   // Check if authenticated (quick check without full user data)
   const checkAuth = async (): Promise<boolean> => {
     try {
-      const response = await fetch("/auth/check", {
-        credentials: "include",
+      const response = await fetch('/auth/check', {
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -84,19 +79,19 @@ export const useAuthStore = defineStore("auth", () => {
 
   // Redirect to login
   const login = (): void => {
-    window.location.href = "/auth/login";
+    window.location.href = '/auth/login';
   };
 
   // Logout user
   const logout = async (): Promise<void> => {
     try {
-      await fetch("/auth/logout", {
-        method: "POST",
-        credentials: "include",
+      await fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
       });
     } finally {
       user.value = null;
-      window.location.href = "/";
+      window.location.href = '/';
     }
   };
 

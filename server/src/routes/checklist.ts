@@ -1,10 +1,10 @@
-import { Hono } from "hono";
-import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
-import { LocalDate } from "gel";
-import type { Env } from "../lib/env.js";
-import { authMiddleware } from "../middleware/auth.js";
-import type { AuthUser } from "../types/auth.js";
+import { zValidator } from '@hono/zod-validator';
+import { LocalDate } from 'gel';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import type { Env } from '../lib/env.js';
+import { authMiddleware } from '../middleware/auth.js';
+import type { AuthUser } from '../types/auth.js';
 
 // Query params validation
 const DateQuerySchema = z.object({
@@ -43,53 +43,53 @@ const UpsertDetailMonthlyRecordSchema = z.object({
  * - CHT/ASM viewing all: filter by store_id IN stores[]
  */
 function buildStaffFilter(user: AuthUser, targetStaffId?: string) {
-  if (user.role === "employee") {
+  if (user.role === 'employee') {
     return {
-      filterCondition: "and .staff_id = <str>$staffId",
-      params: { staffId: user.sub }
+      filterCondition: 'and .staff_id = <str>$staffId',
+      params: { staffId: user.sub },
     };
   }
   // CHT/ASM viewing a specific employee's records
   if (targetStaffId) {
     return {
-      filterCondition: "and .staff_id = <str>$staffId",
-      params: { staffId: targetStaffId }
+      filterCondition: 'and .staff_id = <str>$staffId',
+      params: { staffId: targetStaffId },
     };
   }
   // CHT and ASM: filter by store_id matching user's stores
   if (user.stores.length > 0) {
     return {
-      filterCondition: "and .store_id in array_unpack(<array<str>>$storeIds)",
-      params: { storeIds: user.stores }
+      filterCondition: 'and .store_id in array_unpack(<array<str>>$storeIds)',
+      params: { storeIds: user.stores },
     };
   }
   // No stores assigned — show nothing to prevent data leaks
   return {
-    filterCondition: "and false",
-    params: {}
+    filterCondition: 'and false',
+    params: {},
   };
 }
 
 export const checklistRoutes = new Hono<Env>()
   // All routes require authentication
-  .use("*", authMiddleware)
+  .use('*', authMiddleware)
 
   /**
    * GET /api/checklist/items
    * Fetch checklist items (from DetailChecklistItem) with Sheet 1 approval records
    * Both Sheet 1 and Sheet 2 now share the same checklist items
    */
-  .get("/items", zValidator("query", DateQuerySchema), async (c) => {
-    const { date, staff_id } = c.req.valid("query");
-    const db = c.get("db");
-    const user = c.get("user");
-    const log = c.get("log");
+  .get('/items', zValidator('query', DateQuerySchema), async (c) => {
+    const { date, staff_id } = c.req.valid('query');
+    const db = c.get('db');
+    const user = c.get('user');
+    const log = c.get('log');
 
     if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+      return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    log?.debug({ userId: user.sub, role: user.role, date, staff_id }, "Fetching checklist items");
+    log?.debug({ userId: user.sub, role: user.role, date, staff_id }, 'Fetching checklist items');
 
     const { filterCondition, params } = buildStaffFilter(user, staff_id);
 
@@ -176,11 +176,14 @@ export const checklistRoutes = new Hono<Env>()
         `;
 
     const result = date
-      ? await db.query(query, { ...params, date: new LocalDate(
-          Number.parseInt(date.split("-")[0], 10),
-          Number.parseInt(date.split("-")[1], 10),
-          Number.parseInt(date.split("-")[2], 10)
-        ) })
+      ? await db.query(query, {
+          ...params,
+          date: new LocalDate(
+            Number.parseInt(date.split('-')[0], 10),
+            Number.parseInt(date.split('-')[1], 10),
+            Number.parseInt(date.split('-')[2], 10),
+          ),
+        })
       : await db.query(query, params);
 
     return c.json(result);
@@ -190,22 +193,22 @@ export const checklistRoutes = new Hono<Env>()
    * GET /api/checklist/assessment-dates
    * Fetch available assessment dates from Sheet 1 records, filtered by user role
    */
-  .get("/assessment-dates", async (c) => {
-    const db = c.get("db");
-    const user = c.get("user");
-    const staffIdParam = c.req.query("staff_id");
+  .get('/assessment-dates', async (c) => {
+    const db = c.get('db');
+    const user = c.get('user');
+    const staffIdParam = c.req.query('staff_id');
 
     if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+      return c.json({ error: 'Unauthorized' }, 401);
     }
 
     // Build filter for staff_id / store_id
     const { filterCondition: rawFilter, params } = buildStaffFilter(user, staffIdParam);
     // Rewrite filter to use ChecklistRecord prefix instead of implicit `.`
     const filterCondition = rawFilter
-      .replace("and .staff_id", "and ChecklistRecord.staff_id")
-      .replace("and .store_id", "and ChecklistRecord.store_id")
-      .replace("and false", "and false");
+      .replace('and .staff_id', 'and ChecklistRecord.staff_id')
+      .replace('and .store_id', 'and ChecklistRecord.store_id')
+      .replace('and false', 'and false');
 
     const query = `
       select array_agg(distinct (
@@ -226,14 +229,14 @@ export const checklistRoutes = new Hono<Env>()
    * Fetch detail checklist items with Sheet 2 monthly records, filtered by user role
    * Both sheets share the same items, but Sheet 2 uses monthly_records backlink
    */
-  .get("/detail-items", zValidator("query", MonthYearQuerySchema), async (c) => {
-    const { month, year, staff_id } = c.req.valid("query");
-    const db = c.get("db");
-    const user = c.get("user");
-    const log = c.get("log");
+  .get('/detail-items', zValidator('query', MonthYearQuerySchema), async (c) => {
+    const { month, year, staff_id } = c.req.valid('query');
+    const db = c.get('db');
+    const user = c.get('user');
+    const log = c.get('log');
 
     if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+      return c.json({ error: 'Unauthorized' }, 401);
     }
 
     const currentDate = new Date();
@@ -242,7 +245,7 @@ export const checklistRoutes = new Hono<Env>()
 
     log?.debug(
       { userId: user.sub, role: user.role, month: targetMonth, year: targetYear, staff_id },
-      "Fetching detail checklist items"
+      'Fetching detail checklist items',
     );
 
     const { filterCondition, params: staffParams } = buildStaffFilter(user, staff_id);
@@ -302,8 +305,8 @@ export const checklistRoutes = new Hono<Env>()
    * GET /api/checklist/categories
    * Fetch detail categories (no user filtering needed - just metadata)
    */
-  .get("/categories", async (c) => {
-    const db = c.get("db");
+  .get('/categories', async (c) => {
+    const db = c.get('db');
 
     const query = `
       select DetailCategory {
@@ -326,22 +329,18 @@ export const checklistRoutes = new Hono<Env>()
    * - Employee: count of unchecked items for today
    * - CHT/ASM: count of staff with incomplete checklists today
    */
-  .get("/summary", async (c) => {
-    const db = c.get("db");
-    const user = c.get("user");
+  .get('/summary', async (c) => {
+    const db = c.get('db');
+    const user = c.get('user');
 
     if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+      return c.json({ error: 'Unauthorized' }, 401);
     }
 
     const today = new Date();
-    const todayLocal = new LocalDate(
-      today.getFullYear(),
-      today.getMonth() + 1,
-      today.getDate(),
-    );
+    const todayLocal = new LocalDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
 
-    if (user.role === "employee") {
+    if (user.role === 'employee') {
       // Employee: count total items and items with employee_checked = true for today
       const totalQuery = `select count(DetailChecklistItem filter .is_deleted = false)`;
       const checkedQuery = `
@@ -369,7 +368,7 @@ export const checklistRoutes = new Hono<Env>()
       const checkedItems = checkedResult;
 
       return c.json({
-        role: "employee",
+        role: 'employee',
         uncheckedItems: totalItems - checkedItems,
         totalItems,
       });
@@ -457,68 +456,68 @@ export const checklistRoutes = new Hono<Env>()
    * Create or update a ChecklistRecord (Sheet 1 approval workflow) for the current user
    * Uses INSERT ... UNLESS CONFLICT to handle upsert
    */
-  .post("/records/upsert", zValidator("json", UpsertChecklistRecordSchema), async (c) => {
-    const body = c.req.valid("json");
-    const db = c.get("db");
-    const user = c.get("user");
-    const log = c.get("log");
+  .post('/records/upsert', zValidator('json', UpsertChecklistRecordSchema), async (c) => {
+    const body = c.req.valid('json');
+    const db = c.get('db');
+    const user = c.get('user');
+    const log = c.get('log');
 
     if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+      return c.json({ error: 'Unauthorized' }, 401);
     }
 
     // Role-based permission check for checkbox fields
     // - Employee: can only set employee_checked
     // - CHT: can set employee_checked and cht_checked
     // - ASM: can set all checkboxes
-    const allowedFields: string[] = ["employee_checked"];
-    if (user.role === "cht" || user.role === "asm") {
-      allowedFields.push("cht_checked");
+    const allowedFields: string[] = ['employee_checked'];
+    if (user.role === 'cht' || user.role === 'asm') {
+      allowedFields.push('cht_checked');
     }
-    if (user.role === "asm") {
-      allowedFields.push("asm_checked");
+    if (user.role === 'asm') {
+      allowedFields.push('asm_checked');
     }
 
     // Build the SET clause for fields that are provided and allowed
     const setClauses: string[] = [];
-    const storeId = user.stores[0] ?? "";
+    const storeId = user.stores[0] ?? '';
     const params: Record<string, unknown> = {
       checklistItemId: body.checklist_item_id,
       staffId: user.sub,
       storeId,
       assessmentDate: new LocalDate(
-        Number.parseInt(body.assessment_date.split("-")[0], 10),
-        Number.parseInt(body.assessment_date.split("-")[1], 10),
-        Number.parseInt(body.assessment_date.split("-")[2], 10)
+        Number.parseInt(body.assessment_date.split('-')[0], 10),
+        Number.parseInt(body.assessment_date.split('-')[1], 10),
+        Number.parseInt(body.assessment_date.split('-')[2], 10),
       ),
     };
 
-    if (body.employee_checked !== undefined && allowedFields.includes("employee_checked")) {
-      setClauses.push("employee_checked := <bool>$employeeChecked");
+    if (body.employee_checked !== undefined && allowedFields.includes('employee_checked')) {
+      setClauses.push('employee_checked := <bool>$employeeChecked');
       params.employeeChecked = body.employee_checked;
     }
-    if (body.cht_checked !== undefined && allowedFields.includes("cht_checked")) {
-      setClauses.push("cht_checked := <bool>$chtChecked");
+    if (body.cht_checked !== undefined && allowedFields.includes('cht_checked')) {
+      setClauses.push('cht_checked := <bool>$chtChecked');
       params.chtChecked = body.cht_checked;
     }
-    if (body.asm_checked !== undefined && allowedFields.includes("asm_checked")) {
-      setClauses.push("asm_checked := <bool>$asmChecked");
+    if (body.asm_checked !== undefined && allowedFields.includes('asm_checked')) {
+      setClauses.push('asm_checked := <bool>$asmChecked');
       params.asmChecked = body.asm_checked;
     }
 
     // Always update the updated_at timestamp
-    setClauses.push("updated_at := datetime_current()");
+    setClauses.push('updated_at := datetime_current()');
 
     // Build INSERT fields dynamically
     const insertFields: string[] = [];
-    if (body.employee_checked !== undefined && allowedFields.includes("employee_checked")) {
-      insertFields.push("employee_checked := <bool>$employeeChecked");
+    if (body.employee_checked !== undefined && allowedFields.includes('employee_checked')) {
+      insertFields.push('employee_checked := <bool>$employeeChecked');
     }
-    if (body.cht_checked !== undefined && allowedFields.includes("cht_checked")) {
-      insertFields.push("cht_checked := <bool>$chtChecked");
+    if (body.cht_checked !== undefined && allowedFields.includes('cht_checked')) {
+      insertFields.push('cht_checked := <bool>$chtChecked');
     }
-    if (body.asm_checked !== undefined && allowedFields.includes("asm_checked")) {
-      insertFields.push("asm_checked := <bool>$asmChecked");
+    if (body.asm_checked !== undefined && allowedFields.includes('asm_checked')) {
+      insertFields.push('asm_checked := <bool>$asmChecked');
     }
 
     // Use INSERT ... UNLESS CONFLICT for upsert
@@ -530,7 +529,7 @@ export const checklistRoutes = new Hono<Env>()
         checklist_item := item,
         staff_id := <str>$staffId,
         store_id := <str>$storeId,
-        assessment_date := <cal::local_date>$assessmentDate${insertFields.length > 0 ? ",\n        " + insertFields.join(",\n        ") : ""},
+        assessment_date := <cal::local_date>$assessmentDate${insertFields.length > 0 ? ',\n        ' + insertFields.join(',\n        ') : ''},
         created_at := datetime_current(),
         updated_at := datetime_current()
       }
@@ -538,7 +537,7 @@ export const checklistRoutes = new Hono<Env>()
       else (
         update ChecklistRecord
         set {
-          ${setClauses.join(",\n          ")}
+          ${setClauses.join(',\n          ')}
         }
       )
     `;
@@ -547,8 +546,8 @@ export const checklistRoutes = new Hono<Env>()
       const result = await db.query(query, params);
       return c.json({ success: true, data: result });
     } catch (error) {
-      log?.error({ error, params }, "Failed to upsert checklist record");
-      return c.json({ error: "Failed to save record" }, 500);
+      log?.error({ error, params }, 'Failed to upsert checklist record');
+      return c.json({ error: 'Failed to save record' }, 500);
     }
   })
 
@@ -557,19 +556,19 @@ export const checklistRoutes = new Hono<Env>()
    * Create or update a DetailMonthlyRecord (Sheet 2 monthly tracking) for the current user
    * Uses INSERT ... UNLESS CONFLICT to handle upsert
    */
-  .post("/detail-records/upsert", zValidator("json", UpsertDetailMonthlyRecordSchema), async (c) => {
-    const body = c.req.valid("json");
-    const db = c.get("db");
-    const user = c.get("user");
-    const log = c.get("log");
+  .post('/detail-records/upsert', zValidator('json', UpsertDetailMonthlyRecordSchema), async (c) => {
+    const body = c.req.valid('json');
+    const db = c.get('db');
+    const user = c.get('user');
+    const log = c.get('log');
 
     if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+      return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    log?.debug({ userId: user.sub, body }, "Upserting detail monthly record");
+    log?.debug({ userId: user.sub, body }, 'Upserting detail monthly record');
 
-    const storeId = user.stores[0] ?? "";
+    const storeId = user.stores[0] ?? '';
     const params: Record<string, unknown> = {
       detailItemId: body.detail_item_id,
       staffId: user.sub,
@@ -639,7 +638,7 @@ export const checklistRoutes = new Hono<Env>()
       const result = await db.query(query, params);
       return c.json({ success: true, data: result });
     } catch (error) {
-      log?.error({ error, params }, "Failed to upsert detail monthly record");
-      return c.json({ error: "Failed to save record" }, 500);
+      log?.error({ error, params }, 'Failed to upsert detail monthly record');
+      return c.json({ error: 'Failed to save record' }, 500);
     }
   });

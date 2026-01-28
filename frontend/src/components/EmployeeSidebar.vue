@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { fetchStoreEmployees, type StoreEmployee } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
 
@@ -43,9 +43,9 @@ const roleBadgeClass = (role: string) => {
 // Map role codes to display names for consistency with UserMenu
 const roleDisplay = computed(() => {
   const roleMap: Record<string, string> = {
-    asm: "ASM",
-    cht: "CHT",
-    employee: "Employee",
+    asm: 'ASM',
+    cht: 'CHT',
+    employee: 'Employee',
   };
 
   return (role: string) => roleMap[role.toLowerCase()] || role;

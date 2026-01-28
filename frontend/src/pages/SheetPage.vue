@@ -49,6 +49,11 @@ const onEmployeeSelect = async (employee: StoreEmployee | null) => {
     refreshSheet1(selectedDate.value || undefined),
     refreshSheet2(),
   ]);
+  // Ensure Sheet 1 stays active after refresh
+  const wb = univerAPI?.getActiveWorkbook();
+  if (wb) {
+    wb.setActiveSheet('sheet1');
+  }
 };
 
 const containerRef = ref<HTMLDivElement | null>(null);

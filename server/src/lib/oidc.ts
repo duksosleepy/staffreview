@@ -94,14 +94,27 @@ export const extractRole = (userInfo: OIDCUserInfo): Role => {
     if (group && isValidRole(group)) return group;
   }
 
-  // Check tag field (some IDPs use this)
+  // Check tag field (some IDPs use this) — map display names to role codes
   if (userInfo.tag) {
-    const tag = userInfo.tag.toLowerCase();
-    if (isValidRole(tag)) return tag;
+    const role = normalizeRole(userInfo.tag);
+    if (role) return role;
   }
 
   // Default to employee
   return "employee";
+};
+
+// Map Casdoor tag display names to internal role codes
+const TAG_TO_ROLE: Record<string, Role> = {
+  "area manager": "asm",
+  "asm": "asm",
+  "cht": "cht",
+  "employee": "employee",
+};
+
+// Normalize a tag/role string to an internal Role, or return null
+const normalizeRole = (value: string): Role | null => {
+  return TAG_TO_ROLE[value.toLowerCase()] ?? null;
 };
 
 // Validate role string
@@ -225,13 +238,13 @@ export const fetchCasdoorUsersByStores = async (
     if (!hasMatchingStore) continue;
 
     // Extract role: check roles array first, then tag field as fallback
-    let role = "employee";
+    let role: Role = "employee";
     if (user.roles?.length) {
       const r = extractRoleString(user.roles[0]);
       if (r && isValidRole(r)) role = r;
     } else if (user.tag) {
-      const t = user.tag.toLowerCase();
-      if (isValidRole(t)) role = t;
+      const mapped = normalizeRole(user.tag);
+      if (mapped) role = mapped;
     }
 
     employees.push({

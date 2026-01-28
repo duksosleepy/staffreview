@@ -19,6 +19,7 @@ import {
   type StoreEmployee,
   upsertChecklistRecord,
   upsertDetailMonthlyRecord,
+  validateDeadlines,
 } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
 import { useNotificationStore } from '@/stores/notifications';
@@ -693,6 +694,21 @@ async function refreshSheet2() {
 
 onMounted(async () => {
   if (!containerRef.value) return;
+
+  // Validate deadlines on page load (invalidate expired tasks without CHT validation)
+  try {
+    const validationResult = await validateDeadlines();
+    if (validationResult.invalidatedCount > 0) {
+      toaster.create({
+        type: 'warning',
+        title: 'Nhiệm vụ đã hết hạn',
+        description: `${validationResult.invalidatedCount} nhiệm vụ đã bị hủy do quá hạn 3 ngày mà không có xác nhận từ CHT.`,
+        duration: 7000,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to validate deadlines:', error);
+  }
 
   const { univer, univerAPI: api } = createUniver({
     locale: LocaleType.EN_US,

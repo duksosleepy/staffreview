@@ -39,6 +39,14 @@ export type ChecklistRecord = {
   employee_checked: boolean;
   cht_checked: boolean;
   asm_checked: boolean;
+  // 3-day deadline tracking
+  employee_checked_at: string | null;
+  cht_checked_at: string | null;
+  asm_checked_at: string | null;
+  deadline_date: string | null;
+  is_locked: boolean;
+  locked_at: string | null;
+  // Summary fields
   achievement_percentage: number | null;
   successful_completions: number | null;
   implementation_issues: string | null;
@@ -352,6 +360,39 @@ export async function upsertDetailMonthlyRecord(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      window.location.href = '/login';
+      throw new ApiError(401, 'Unauthorized');
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new ApiError(response.status, errorData.error || `API error: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Validate deadlines and invalidate expired tasks
+ * Call this periodically (e.g., on page load) to automatically:
+ * - Find tasks past 3-day deadline without CHT validation
+ * - Uncheck employee checkbox in Sheet 1
+ * - Uncheck corresponding day in Sheet 2
+ * - Lock the records
+ */
+export async function validateDeadlines(): Promise<{
+  success: boolean;
+  invalidatedCount: number;
+  sheet2UpdatedCount: number;
+}> {
+  const response = await fetch(`${API_BASE}/records/validate-deadlines`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
   });
 
   if (!response.ok) {

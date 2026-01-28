@@ -386,67 +386,51 @@ export const checklistRoutes = new Hono<Env>()
     const totalItemsQuery = `select count(DetailChecklistItem filter .is_deleted = false)`;
     const totalItems = await db.queryRequiredSingle<number>(totalItemsQuery);
 
-    // Get distinct staff_ids in user's stores that have at least one record today
-    const staffQuery = `
-      with
-        all_staff := (
-          select distinct ChecklistRecord.staff_id
-          filter ChecklistRecord.is_deleted = false
-            and ChecklistRecord.store_id in array_unpack(<array<str>>$storeIds)
-            and ChecklistRecord.assessment_date = <cal::local_date>$today
-        ),
-        complete_staff := (
-          select distinct ChecklistRecord.staff_id
-          filter ChecklistRecord.is_deleted = false
-            and ChecklistRecord.store_id in array_unpack(<array<str>>$storeIds)
-            and ChecklistRecord.assessment_date = <cal::local_date>$today
-            and ChecklistRecord.employee_checked = true
-          group by ChecklistRecord.staff_id
-          having count(ChecklistRecord) >= <int64>$totalItems
-        )
-      select {
-        total_staff := count(all_staff),
-        complete_staff := count(complete_staff),
-      }
+    // Get all employees from Casdoor for these stores
+    const { fetchCasdoorUsersByStores } = await import('../lib/oidc.js');
+    const allEmployees = await fetchCasdoorUsersByStores(user.stores, user.role);
+
+    // Build a set of staff_ids (user.sub) from employees, excluding current user
+    // Note: ChecklistRecord.staff_id stores user.sub (OIDC sub claim), not casdoor_id
+    // We need to map from employee list to their corresponding user.sub values
+    // For now, we'll filter in the database query instead
+    const totalStaff = allEmployees.length - 1; // Exclude current user from count
+
+    // Get staff IDs who have completed all items today (employee_checked = true for all items)
+    // Exclude the current user from this query as well
+    const completeStaffQuery = `
+      select distinct ChecklistRecord.staff_id
+      filter ChecklistRecord.is_deleted = false
+        and ChecklistRecord.store_id in array_unpack(<array<str>>$storeIds)
+        and ChecklistRecord.assessment_date = <cal::local_date>$today
+        and ChecklistRecord.employee_checked = true
+        and ChecklistRecord.staff_id != <str>$currentUserId
+      group by ChecklistRecord.staff_id
+      having count(ChecklistRecord) >= <int64>$totalItems
     `;
 
     try {
-      const result = await db.queryRequiredSingle<{
-        total_staff: number;
-        complete_staff: number;
-      }>(staffQuery, {
+      const completeStaffIds = await db.query<string>(completeStaffQuery, {
         storeIds: user.stores,
         today: todayLocal,
         totalItems,
+        currentUserId: user.sub,
       });
+
+      const completeStaffCount = completeStaffIds.length;
+      const incompleteStaffCount = totalStaff - completeStaffCount;
 
       return c.json({
         role: user.role,
-        incompleteStaff: result.total_staff - result.complete_staff,
-        totalStaff: result.total_staff,
+        incompleteStaff: incompleteStaffCount,
+        totalStaff: totalStaff,
       });
     } catch {
-      // Fallback: simpler query if the grouped query fails
-      const simpleStaffQuery = `
-        select count(distinct (
-          select ChecklistRecord.staff_id
-          filter ChecklistRecord.is_deleted = false
-            and ChecklistRecord.store_id in array_unpack(<array<str>>$storeIds)
-            and ChecklistRecord.assessment_date = <cal::local_date>$today
-        ))
-      `;
-
-      const staffResult = await db.query<number[]>(simpleStaffQuery, {
-        storeIds: user.stores,
-        today: todayLocal,
-      });
-
-      const totalStaff = staffResult[0] ?? 0;
-
+      // Fallback: if query fails, assume all staff are incomplete
       return c.json({
         role: user.role,
         incompleteStaff: totalStaff,
-        totalStaff,
+        totalStaff: totalStaff,
       });
     }
   })
@@ -492,18 +476,51 @@ export const checklistRoutes = new Hono<Env>()
       ),
     };
 
+    // Calculate deadline_date (assessment_date + 3 days)
+    const assessmentDateObj = new Date(
+      params.assessmentDate.year,
+      params.assessmentDate.month - 1,
+      params.assessmentDate.day
+    );
+    assessmentDateObj.setDate(assessmentDateObj.getDate() + 3);
+    const deadlineDate = new LocalDate(
+      assessmentDateObj.getFullYear(),
+      assessmentDateObj.getMonth() + 1,
+      assessmentDateObj.getDate()
+    );
+    params.deadlineDate = deadlineDate;
+
+    // Check if current date is past deadline
+    const today = new Date();
+    const isPastDeadline = today > assessmentDateObj;
+
     if (body.employee_checked !== undefined && allowedFields.includes('employee_checked')) {
       setClauses.push('employee_checked := <bool>$employeeChecked');
       params.employeeChecked = body.employee_checked;
+      // Set timestamp when checking (not unchecking)
+      if (body.employee_checked) {
+        setClauses.push('employee_checked_at := datetime_current()');
+      }
     }
     if (body.cht_checked !== undefined && allowedFields.includes('cht_checked')) {
       setClauses.push('cht_checked := <bool>$chtChecked');
       params.chtChecked = body.cht_checked;
+      // Set timestamp when checking (not unchecking)
+      if (body.cht_checked) {
+        setClauses.push('cht_checked_at := datetime_current()');
+      }
     }
     if (body.asm_checked !== undefined && allowedFields.includes('asm_checked')) {
       setClauses.push('asm_checked := <bool>$asmChecked');
       params.asmChecked = body.asm_checked;
+      // Set timestamp when checking (not unchecking)
+      if (body.asm_checked) {
+        setClauses.push('asm_checked_at := datetime_current()');
+      }
     }
+
+    // Set deadline_date if not already set
+    setClauses.push('deadline_date := <cal::local_date>$deadlineDate ?? .deadline_date');
 
     // Always update the updated_at timestamp
     setClauses.push('updated_at := datetime_current()');
@@ -512,13 +529,24 @@ export const checklistRoutes = new Hono<Env>()
     const insertFields: string[] = [];
     if (body.employee_checked !== undefined && allowedFields.includes('employee_checked')) {
       insertFields.push('employee_checked := <bool>$employeeChecked');
+      if (body.employee_checked) {
+        insertFields.push('employee_checked_at := datetime_current()');
+      }
     }
     if (body.cht_checked !== undefined && allowedFields.includes('cht_checked')) {
       insertFields.push('cht_checked := <bool>$chtChecked');
+      if (body.cht_checked) {
+        insertFields.push('cht_checked_at := datetime_current()');
+      }
     }
     if (body.asm_checked !== undefined && allowedFields.includes('asm_checked')) {
       insertFields.push('asm_checked := <bool>$asmChecked');
+      if (body.asm_checked) {
+        insertFields.push('asm_checked_at := datetime_current()');
+      }
     }
+    // Always set deadline_date on insert
+    insertFields.push('deadline_date := <cal::local_date>$deadlineDate');
 
     // Use INSERT ... UNLESS CONFLICT for upsert
     // Now using DetailChecklistItem instead of ChecklistItem
@@ -640,5 +668,132 @@ export const checklistRoutes = new Hono<Env>()
     } catch (error) {
       log?.error({ error, params }, 'Failed to upsert detail monthly record');
       return c.json({ error: 'Failed to save record' }, 500);
+    }
+  })
+
+  /**
+   * POST /api/checklist/records/validate-deadlines
+   * Validate and invalidate records that are past the 3-day deadline without CHT approval
+   * This should be called periodically (e.g., on page load or daily cron job)
+   */
+  .post('/records/validate-deadlines', async (c) => {
+    const db = c.get('db');
+    const user = c.get('user');
+    const log = c.get('log');
+
+    if (!user) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    try {
+      // Find all records where:
+      // 1. deadline_date < today
+      // 2. employee_checked = true
+      // 3. cht_checked = false (CHT didn't validate within deadline)
+      // 4. is_locked = false (not already locked)
+
+      const query = `
+        with
+          today := cal::to_local_date(datetime_current(), 'UTC'),
+          expired_records := (
+            select ChecklistRecord
+            filter
+              .deadline_date < today
+              and .employee_checked = true
+              and .cht_checked = false
+              and .is_locked = false
+          )
+        update expired_records
+        set {
+          # Uncheck employee checkbox
+          employee_checked := false,
+          # Lock the record
+          is_locked := true,
+          locked_at := datetime_current(),
+          updated_at := datetime_current()
+        }
+      `;
+
+      const result = await db.query(query);
+
+      // Get the invalidated records to sync with Sheet 2
+      const getInvalidatedQuery = `
+        with
+          today := cal::to_local_date(datetime_current(), 'UTC')
+        select ChecklistRecord {
+          id,
+          checklist_item: { id },
+          staff_id,
+          assessment_date
+        }
+        filter
+          .is_locked = true
+          and .locked_at >= datetime_current() - <duration>'1 hour'
+      `;
+
+      const invalidatedRecords = await db.query(getInvalidatedQuery);
+
+      // For each invalidated record, uncheck the corresponding day in Sheet 2
+      for (const record of invalidatedRecords as any[]) {
+        const assessmentDate = record.assessment_date;
+        const month = assessmentDate.month;
+        const year = assessmentDate.year;
+        const day = assessmentDate.day;
+
+        // Update the corresponding DetailMonthlyRecord
+        const updateSheet2Query = `
+          with
+            item := (select DetailChecklistItem filter .id = <uuid>$itemId),
+            existing := (
+              select DetailMonthlyRecord
+              filter
+                .detail_item = item
+                and .staff_id = <str>$staffId
+                and .month = <int32>$month
+                and .year = <int32>$year
+              limit 1
+            ),
+            current_checks := existing.daily_checks ?? array_agg((
+              for i in range_unpack(range(0, 31))
+              union (select false)
+            )),
+            updated_checks := (
+              select array_agg((
+                for idx in range_unpack(range(0, 31))
+                union (
+                  select (
+                    if idx = (<int32>$day - 1)
+                    then false
+                    else current_checks[idx] ?? false
+                  )
+                )
+              ))
+            )
+          update existing
+          set {
+            daily_checks := updated_checks,
+            updated_at := datetime_current()
+          }
+        `;
+
+        await db.query(updateSheet2Query, {
+          itemId: record.checklist_item.id,
+          staffId: record.staff_id,
+          month,
+          year,
+          day
+        });
+      }
+
+      log?.info({ count: result.length, invalidatedCount: invalidatedRecords.length }, 'Validated deadlines and invalidated expired tasks');
+
+      return c.json({
+        success: true,
+        invalidatedCount: result.length,
+        sheet2UpdatedCount: invalidatedRecords.length
+      });
+    } catch (error) {
+      log?.error({ error }, 'Failed to validate deadlines');
+      return c.json({ error: 'Failed to validate deadlines' }, 500);
     }
   });

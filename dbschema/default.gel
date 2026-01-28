@@ -57,6 +57,27 @@ module default {
             default := false;
         }
 
+        # ===================================================
+        # 3-DAY DEADLINE TRACKING
+        # ===================================================
+
+        # Timestamps when each role checked the task
+        employee_checked_at: datetime;
+        cht_checked_at: datetime;
+        asm_checked_at: datetime;
+
+        # Deadline date (assessment_date + 3 days)
+        # After this date, tasks without CHT check become invalid
+        deadline_date: cal::local_date;
+
+        # Whether this task is locked/invalidated (past deadline without CHT validation)
+        is_locked: bool {
+            default := false;
+        }
+
+        # When the task was locked/invalidated
+        locked_at: datetime;
+
         # Achievement percentage (TL (%) ĐẠT)
         achievement_percentage: float32 {
             default := 0.0;

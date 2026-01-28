@@ -18,8 +18,10 @@ import {
 } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
 import { usePermission } from '@/composables/usePermission';
+import { Toast, Toaster, createToaster } from '@ark-ui/vue/toast';
 import UserMenu from '@/components/UserMenu.vue';
 import EmployeeSidebar from '@/components/EmployeeSidebar.vue';
+import { useNotificationStore } from '@/stores/notifications';
 
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
@@ -27,6 +29,14 @@ import '@univerjs/preset-sheets-data-validation/lib/index.css';
 // Auth
 const auth = useAuthStore();
 const { canCheckCht, canCheckAsm, isCht, isAsm } = usePermission();
+
+// Notifications
+const notificationStore = useNotificationStore();
+const toaster = createToaster({
+  placement: 'top-end',
+  overlap: true,
+  gap: 16,
+});
 
 // Show sidebar only for CHT/ASM
 const showSidebar = computed(() => isCht.value || isAsm.value);
@@ -1196,6 +1206,20 @@ onMounted(async () => {
   // Mark initial load as complete and ensure Sheet 1 is active after all setup
   isInitialLoad = false;
 
+  // Fetch notification summary (fire and forget, don't block UI)
+  if (!notificationStore.hasLoaded) {
+    notificationStore.fetchSummary().then(() => {
+      if (notificationStore.notificationCount > 0) {
+        toaster.create({
+          title: 'Thong bao',
+          description: notificationStore.notificationMessage,
+          type: 'info',
+          duration: 5000,
+        });
+      }
+    });
+  }
+
   // Use nextTick to ensure Sheet 1 is shown after UI is fully rendered
   await nextTick();
   if (workbook) {
@@ -1227,6 +1251,46 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col h-screen w-full bg-[#26232B]">
+    <!-- Notification Toast (Ark UI) -->
+    <Teleport to="body">
+      <Toaster :toaster="toaster" v-slot="toast">
+        <Toast.Root
+          class="min-w-[300px] max-w-sm rounded-xl bg-gray-900/95 backdrop-blur-sm border border-white/10 shadow-2xl shadow-black/40 p-4"
+        >
+          <div class="flex items-start gap-3">
+            <svg
+              class="w-5 h-5 mt-0.5 shrink-0 text-amber-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+              />
+            </svg>
+            <div class="flex-1 min-w-0">
+              <Toast.Title class="text-sm font-semibold text-white">
+                {{ toast.title }}
+              </Toast.Title>
+              <Toast.Description class="text-xs text-gray-300 mt-1 leading-relaxed">
+                {{ toast.description }}
+              </Toast.Description>
+            </div>
+            <Toast.CloseTrigger
+              class="shrink-0 p-0.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </Toast.CloseTrigger>
+          </div>
+        </Toast.Root>
+      </Toaster>
+    </Teleport>
+
     <!-- Enhanced Header with Glassmorphism -->
     <header class="glass flex justify-between items-center px-4 sm:px-8 py-3 border-b border-white/10">
       <!-- Logo & Title -->
@@ -1252,6 +1316,8 @@ onUnmounted(() => {
         :user-name="auth.userName"
         :user-email="auth.userEmail"
         :role="auth.role"
+        :notification-count="notificationStore.notificationCount"
+        :notification-message="notificationStore.notificationMessage"
         @logout="auth.logout"
       />
     </header>

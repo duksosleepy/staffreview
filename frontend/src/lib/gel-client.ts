@@ -218,6 +218,38 @@ export async function fetchDetailCategories(): Promise<DetailCategory[]> {
 }
 
 // ===================================================
+// Checklist Summary (for notifications)
+// ===================================================
+
+export type ChecklistSummaryEmployee = {
+  role: "employee";
+  uncheckedItems: number;
+  totalItems: number;
+};
+
+export type ChecklistSummaryManager = {
+  role: "asm" | "cht";
+  incompleteStaff: number;
+  totalStaff: number;
+};
+
+export type ChecklistSummary = ChecklistSummaryEmployee | ChecklistSummaryManager;
+
+/**
+ * Fetch checklist summary for notifications.
+ * - Employee: unchecked items count for today
+ * - CHT/ASM: incomplete staff count for today
+ */
+export async function fetchChecklistSummary(): Promise<ChecklistSummary> {
+  const response = await fetch(`${API_BASE}/summary`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  return handleResponse<ChecklistSummary>(response);
+}
+
+// ===================================================
 // Employee Listing (for CHT/ASM sidebar)
 // ===================================================
 

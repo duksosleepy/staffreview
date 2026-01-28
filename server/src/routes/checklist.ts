@@ -321,6 +321,138 @@ export const checklistRoutes = new Hono<Env>()
   })
 
   /**
+   * GET /api/checklist/summary
+   * Returns notification summary based on role:
+   * - Employee: count of unchecked items for today
+   * - CHT/ASM: count of staff with incomplete checklists today
+   */
+  .get("/summary", async (c) => {
+    const db = c.get("db");
+    const user = c.get("user");
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const today = new Date();
+    const todayLocal = new LocalDate(
+      today.getFullYear(),
+      today.getMonth() + 1,
+      today.getDate(),
+    );
+
+    if (user.role === "employee") {
+      // Employee: count total items and items with employee_checked = true for today
+      const totalQuery = `select count(DetailChecklistItem filter .is_deleted = false)`;
+      const checkedQuery = `
+        select count(
+          DetailChecklistItem filter .is_deleted = false
+            and exists (
+              select .checklist_records filter
+                .is_deleted = false
+                and .staff_id = <str>$staffId
+                and .assessment_date = <cal::local_date>$today
+                and .employee_checked = true
+            )
+        )
+      `;
+
+      const [totalResult, checkedResult] = await Promise.all([
+        db.queryRequiredSingle<number>(totalQuery),
+        db.queryRequiredSingle<number>(checkedQuery, {
+          staffId: user.sub,
+          today: todayLocal,
+        }),
+      ]);
+
+      const totalItems = totalResult;
+      const checkedItems = checkedResult;
+
+      return c.json({
+        role: "employee",
+        uncheckedItems: totalItems - checkedItems,
+        totalItems,
+      });
+    }
+
+    // CHT/ASM: count staff with incomplete checklists in their stores
+    if (user.stores.length === 0) {
+      return c.json({
+        role: user.role,
+        incompleteStaff: 0,
+        totalStaff: 0,
+      });
+    }
+
+    const totalItemsQuery = `select count(DetailChecklistItem filter .is_deleted = false)`;
+    const totalItems = await db.queryRequiredSingle<number>(totalItemsQuery);
+
+    // Get distinct staff_ids in user's stores that have at least one record today
+    const staffQuery = `
+      with
+        all_staff := (
+          select distinct ChecklistRecord.staff_id
+          filter ChecklistRecord.is_deleted = false
+            and ChecklistRecord.store_id in array_unpack(<array<str>>$storeIds)
+            and ChecklistRecord.assessment_date = <cal::local_date>$today
+        ),
+        complete_staff := (
+          select distinct ChecklistRecord.staff_id
+          filter ChecklistRecord.is_deleted = false
+            and ChecklistRecord.store_id in array_unpack(<array<str>>$storeIds)
+            and ChecklistRecord.assessment_date = <cal::local_date>$today
+            and ChecklistRecord.employee_checked = true
+          group by ChecklistRecord.staff_id
+          having count(ChecklistRecord) >= <int64>$totalItems
+        )
+      select {
+        total_staff := count(all_staff),
+        complete_staff := count(complete_staff),
+      }
+    `;
+
+    try {
+      const result = await db.queryRequiredSingle<{
+        total_staff: number;
+        complete_staff: number;
+      }>(staffQuery, {
+        storeIds: user.stores,
+        today: todayLocal,
+        totalItems,
+      });
+
+      return c.json({
+        role: user.role,
+        incompleteStaff: result.total_staff - result.complete_staff,
+        totalStaff: result.total_staff,
+      });
+    } catch {
+      // Fallback: simpler query if the grouped query fails
+      const simpleStaffQuery = `
+        select count(distinct (
+          select ChecklistRecord.staff_id
+          filter ChecklistRecord.is_deleted = false
+            and ChecklistRecord.store_id in array_unpack(<array<str>>$storeIds)
+            and ChecklistRecord.assessment_date = <cal::local_date>$today
+        ))
+      `;
+
+      const staffResult = await db.query<number[]>(simpleStaffQuery, {
+        storeIds: user.stores,
+        today: todayLocal,
+      });
+
+      const totalStaff = staffResult[0] ?? 0;
+
+      return c.json({
+        role: user.role,
+        incompleteStaff: totalStaff,
+        totalStaff,
+      });
+    }
+  })
+
+  /**
    * POST /api/checklist/records/upsert
    * Create or update a ChecklistRecord (Sheet 1 approval workflow) for the current user
    * Uses INSERT ... UNLESS CONFLICT to handle upsert

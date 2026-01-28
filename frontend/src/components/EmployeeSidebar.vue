@@ -5,9 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
 
-const emit = defineEmits<{
-  (e: 'select', employee: StoreEmployee | null): void;
-}>();
+const emit = defineEmits<(e: 'select', employee: StoreEmployee | null) => void>();
 
 const employees = ref<StoreEmployee[]>([]);
 const isLoading = ref(false);

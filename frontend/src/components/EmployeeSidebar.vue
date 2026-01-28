@@ -40,6 +40,26 @@ const roleBadgeClass = (role: string) => {
   }
 };
 
+// Map role codes to display names for consistency with UserMenu
+const roleDisplay = computed(() => {
+  const roleMap: Record<string, string> = {
+    asm: "Area Manager",
+    cht: "Team Lead",
+    employee: "Employee",
+  };
+
+  return (role: string) => roleMap[role.toLowerCase()] || role;
+});
+
+// Get the effective role for an employee, correcting for cases where the current user's role is incorrectly reported
+const getEffectiveRole = (employee: StoreEmployee) => {
+  // If this employee is the current user, use the current user's actual role
+  if (employee.casdoor_id === auth.casdoorId) {
+    return auth.role || employee.role;
+  }
+  return employee.role;
+};
+
 const selectEmployee = (emp: StoreEmployee) => {
   if (selectedId.value === emp.id) {
     // Deselect — go back to viewing all
@@ -57,7 +77,7 @@ const loadEmployees = async () => {
   try {
     employees.value = await fetchStoreEmployees();
   } catch (e) {
-    error.value = 'Khong the tai danh sach nhan vien';
+    error.value = 'Không thể tải danh sách nhân viên';
     console.error('Failed to load employees:', e);
   } finally {
     isLoading.value = false;
@@ -69,124 +89,145 @@ onMounted(loadEmployees);
 
 <template>
   <aside
-    class="h-full flex flex-col border-r border-white/10 bg-[#1e1b24] transition-all duration-300"
-    :class="isCollapsed ? 'w-12' : 'w-64'"
+    class="h-full flex flex-col border-r border-white/10 bg-[#1e1b24] transition-all duration-300 shadow-lg"
+    :class="isCollapsed ? 'w-16' : 'w-72'"
   >
     <!-- Sidebar Header -->
-    <div class="flex items-center justify-between px-3 py-3 border-b border-white/10">
-      <div v-if="!isCollapsed" class="flex items-center gap-2 min-w-0">
-        <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-        <span class="text-sm font-semibold text-white truncate">Nhan vien</span>
+    <div class="flex items-center px-4 py-4 border-b border-white/10 bg-gradient-to-r from-[#26232b]/50 to-[#1e1b24]" :class="isCollapsed ? 'justify-center' : 'justify-between'">
+      <div v-if="!isCollapsed" class="flex items-center gap-3 min-w-0">
+        <div class="p-2 rounded-lg bg-gradient-to-br from-teal-600 to-teal-700 shadow-md">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <span class="text-base font-semibold text-white truncate">Nhân Viên</span>
+          <p class="text-xs text-gray-400 truncate">Quản lý nhân sự</p>
+        </div>
       </div>
       <button
-        class="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors shrink-0"
+        class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all duration-200 group flex items-center justify-center"
         @click="isCollapsed = !isCollapsed"
       >
-        <svg class="w-4 h-4 transition-transform" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 transition-transform duration-300 group-hover:scale-110" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
         </svg>
       </button>
     </div>
 
     <!-- Collapsed state: just show icon -->
-    <div v-if="isCollapsed" class="flex-1 flex flex-col items-center pt-3 gap-2">
+    <div v-if="isCollapsed" class="flex-1 flex flex-col items-center justify-center pt-4 gap-3">
       <button
-        class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-        title="Nhan vien"
+        class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all duration-200 group"
+        title="Danh sách nhân viên"
         @click="isCollapsed = false"
       >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-6 h-6 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       </button>
     </div>
 
     <!-- Expanded state: employee list -->
-    <div v-else class="flex-1 overflow-y-auto">
+    <div v-else class="flex-1 overflow-y-auto py-4">
       <!-- Loading -->
-      <div v-if="isLoading" class="flex items-center justify-center py-8">
-        <div class="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+      <div v-if="isLoading" class="flex flex-col items-center justify-center py-12">
+        <div class="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p class="text-sm text-gray-400">Đang tải dữ liệu...</p>
       </div>
 
       <!-- Error -->
-      <div v-else-if="error" class="px-3 py-4 text-center">
-        <p class="text-xs text-red-400">{{ error }}</p>
+      <div v-else-if="error" class="px-4 py-6 text-center">
+        <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 mb-3">
+          <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p class="text-sm text-red-400 mb-2">{{ error }}</p>
         <button
-          class="mt-2 text-xs text-teal-400 hover:text-teal-300 underline"
+          class="px-4 py-2 text-sm text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 rounded-lg transition-colors"
           @click="loadEmployees"
         >
-          Thu lai
+          Thử lại
         </button>
       </div>
 
       <!-- Employee List grouped by store -->
-      <div v-else class="py-2">
-        <div v-for="[storeName, storeEmployees] in employeesByStore" :key="storeName" class="mb-2">
+      <div v-else class="space-y-4">
+        <div v-for="[storeName, storeEmployees] in employeesByStore" :key="storeName" class="px-2">
           <!-- Store header -->
-          <div class="px-3 py-1.5 flex items-center gap-2">
-            <svg class="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ storeName }}</span>
-            <span class="text-[10px] text-gray-500 ml-auto">({{ storeEmployees.length }})</span>
+          <div class="px-4 py-2 flex items-center gap-3 mb-2">
+            <div class="p-1.5 rounded-lg bg-gray-700/50">
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <span class="text-sm font-semibold text-gray-300 uppercase tracking-wide">{{ storeName }}</span>
+              <span class="text-xs text-gray-500 ml-2">({{ storeEmployees.length }})</span>
+            </div>
           </div>
 
           <!-- Employees in this store -->
-          <div
-            v-for="emp in storeEmployees"
-            :key="emp.id"
-            class="mx-2 px-2 py-2 rounded-lg transition-colors cursor-pointer group"
-            :class="selectedId === emp.id
-              ? 'bg-teal-500/15 border border-teal-500/30'
-              : 'hover:bg-white/5 border border-transparent'"
-            @click="selectEmployee(emp)"
-          >
-            <div class="flex items-center gap-2.5">
-              <!-- Avatar -->
-              <div
-                class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
-                :class="selectedId === emp.id
-                  ? 'bg-gradient-to-br from-teal-400 to-teal-500 ring-2 ring-teal-400/50'
-                  : 'bg-gradient-to-br from-teal-600 to-teal-700'"
-              >
-                {{ emp.displayName.charAt(0).toUpperCase() }}
-              </div>
-              <!-- Info -->
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-1.5">
-                  <span class="text-sm font-medium truncate" :class="selectedId === emp.id ? 'text-teal-300' : 'text-white'">{{ emp.displayName }}</span>
-                  <span
-                    class="text-[10px] px-1.5 py-0.5 rounded border font-medium uppercase shrink-0"
-                    :class="roleBadgeClass(emp.role)"
-                  >
-                    {{ emp.role }}
-                  </span>
+          <div class="space-y-1">
+            <div
+              v-for="emp in storeEmployees"
+              :key="emp.id"
+              class="mx-2 px-3 py-3 rounded-xl transition-all duration-200 cursor-pointer group hover:shadow-md"
+              :class="selectedId === emp.id
+                ? 'bg-gradient-to-r from-teal-500/15 to-teal-600/10 border border-teal-500/30 shadow-md'
+                : 'hover:bg-white/5 border border-transparent'"
+              @click="selectEmployee(emp)"
+            >
+              <div class="flex items-center gap-3">
+                <!-- Avatar -->
+                <div
+                  class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0 shadow-md"
+                  :class="selectedId === emp.id
+                    ? 'bg-gradient-to-br from-teal-400 to-teal-500 ring-2 ring-teal-400/50'
+                    : 'bg-gradient-to-br from-teal-600 to-teal-700'"
+                >
+                  {{ emp.displayName.charAt(0).toUpperCase() }}
                 </div>
-                <p v-if="emp.casdoor_id" class="text-[11px] text-gray-500 truncate mt-0.5">
-                  ID: {{ emp.casdoor_id }}
-                </p>
+                <!-- Info -->
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium truncate" :class="selectedId === emp.id ? 'text-teal-300' : 'text-white'">{{ emp.displayName }}</span>
+                    <span
+                      class="text-[11px] px-2 py-0.5 rounded-full font-medium uppercase shrink-0"
+                      :class="roleBadgeClass(getEffectiveRole(emp))"
+                    >
+                      {{ roleDisplay(getEffectiveRole(emp)) }}
+                    </span>
+                  </div>
+                  <p v-if="emp.casdoor_id" class="text-xs text-gray-500 truncate mt-1">
+                    ID: {{ emp.casdoor_id }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Empty state -->
-        <div v-if="employeesByStore.size === 0 && !isLoading" class="px-3 py-8 text-center">
-          <svg class="w-10 h-10 text-gray-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          <p class="text-xs text-gray-500">Khong co nhan vien</p>
+        <div v-if="employeesByStore.size === 0 && !isLoading" class="px-4 py-12 text-center">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-700/30 mb-4">
+            <svg class="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <p class="text-sm text-gray-500 mb-1">Không có nhân viên</p>
+          <p class="text-xs text-gray-600">Dữ liệu sẽ được cập nhật khi có nhân viên mới</p>
         </div>
       </div>
     </div>
 
     <!-- Footer: store count -->
-    <div v-if="!isCollapsed && !isLoading && employees.length > 0" class="px-3 py-2 border-t border-white/10">
-      <p class="text-[10px] text-gray-500 text-center">
-        {{ employees.length }} nhan vien &middot; {{ employeesByStore.size }} cua hang
-      </p>
+    <div v-if="!isCollapsed && !isLoading && employees.length > 0" class="px-4 py-3 border-t border-white/10 bg-[#1e1b24]/50">
+      <div class="flex items-center justify-between text-xs text-gray-500">
+        <span>{{ employees.length }} nhân viên</span>
+        <span>{{ employeesByStore.size }} cửa hàng</span>
+      </div>
     </div>
   </aside>
 </template>

@@ -1255,32 +1255,34 @@ onUnmounted(() => {
     <Teleport to="body">
       <Toaster :toaster="toaster" v-slot="toast">
         <Toast.Root
-          class="min-w-[300px] max-w-sm rounded-xl bg-gray-900/95 backdrop-blur-sm border border-white/10 shadow-2xl shadow-black/40 p-4"
+          class="min-w-[320px] max-w-sm rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/50 p-4"
         >
           <div class="flex items-start gap-3">
-            <svg
-              class="w-5 h-5 mt-0.5 shrink-0 text-amber-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-              />
-            </svg>
+            <div class="mt-0.5 p-1.5 rounded-lg bg-amber-500/10">
+              <svg
+                class="w-5 h-5 text-amber-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                />
+              </svg>
+            </div>
             <div class="flex-1 min-w-0">
-              <Toast.Title class="text-sm font-semibold text-white">
+              <Toast.Title class="text-sm font-semibold text-white mb-1">
                 {{ toast.title }}
               </Toast.Title>
-              <Toast.Description class="text-xs text-gray-300 mt-1 leading-relaxed">
+              <Toast.Description class="text-xs text-gray-300 leading-relaxed">
                 {{ toast.description }}
               </Toast.Description>
             </div>
             <Toast.CloseTrigger
-              class="shrink-0 p-0.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              class="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

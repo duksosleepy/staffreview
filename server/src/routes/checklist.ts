@@ -471,22 +471,23 @@ export const checklistRoutes = new Hono<Env>()
     // Build the SET clause for fields that are provided and allowed
     const setClauses: string[] = [];
     const storeId = user.stores[0] ?? '';
+    const assessmentDate = new LocalDate(
+      Number.parseInt(body.assessment_date.split('-')[0], 10),
+      Number.parseInt(body.assessment_date.split('-')[1], 10),
+      Number.parseInt(body.assessment_date.split('-')[2], 10),
+    );
     const params: Record<string, unknown> = {
       checklistItemId: body.checklist_item_id,
       staffId: user.sub,
       storeId,
-      assessmentDate: new LocalDate(
-        Number.parseInt(body.assessment_date.split('-')[0], 10),
-        Number.parseInt(body.assessment_date.split('-')[1], 10),
-        Number.parseInt(body.assessment_date.split('-')[2], 10),
-      ),
+      assessmentDate,
     };
 
     // Calculate deadline_date (assessment_date + 3 days)
     const assessmentDateObj = new Date(
-      params.assessmentDate.year,
-      params.assessmentDate.month - 1,
-      params.assessmentDate.day
+      assessmentDate.year,
+      assessmentDate.month - 1,
+      assessmentDate.day
     );
     assessmentDateObj.setDate(assessmentDateObj.getDate() + 3);
     const deadlineDate = new LocalDate(

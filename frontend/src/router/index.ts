@@ -4,7 +4,6 @@ import { useAuthStore } from '@/stores/auth';
 
 // Lazy load pages
 const SheetPage = () => import('@/pages/SheetPage.vue');
-const LoginPage = () => import('@/pages/LoginPage.vue');
 
 const routes = [
   {
@@ -12,12 +11,6 @@ const routes = [
     name: 'Home',
     component: SheetPage,
     meta: { requiresAuth: true },
-  },
-  {
-    path: '/login',
-    name: 'Login',
-    component: LoginPage,
-    meta: { requiresAuth: false, isAuthPage: true },
   },
 ];
 
@@ -36,18 +29,12 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
   }
 
   const requiresAuth = to.meta.requiresAuth !== false;
-  const isAuthPage = to.meta.isAuthPage === true;
 
   // Redirect directly to Casdoor SSO if not authenticated and route requires auth
   if (requiresAuth && !auth.isAuthenticated) {
     // Redirect to backend auth endpoint which will redirect to Casdoor
     window.location.href = '/auth/login';
     return false;
-  }
-
-  // Redirect to home if already authenticated and trying to access auth pages
-  if (isAuthPage && auth.isAuthenticated) {
-    return { name: 'Home' };
   }
 
   return true;

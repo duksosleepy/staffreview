@@ -251,7 +251,7 @@ const totalStores = computed(() => employeesByStore.value.size);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0.5rem;
   padding-left: 2.75rem;
-  padding-right: 5rem;
+  padding-right: 3rem;
   padding-top: 0.625rem;
   padding-bottom: 0.625rem;
   font-size: 0.875rem;
@@ -270,22 +270,59 @@ const totalStores = computed(() => employeesByStore.value.size);
   background-color: rgba(39, 39, 37, 0.5);
 }
 
-/* Optimized indicator dot with hardware-accelerated animations */
+/* Indicator dot without animations for instant feedback */
 .indicator-dot {
   width: 6px;
   height: 6px;
-  background-color: rgba(138, 127, 114, 0.4);
-  transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  /* Use GPU acceleration for smoother performance */
-  will-change: height, background-color;
+  background-color: transparent;
 }
 
 .indicator-dot.active {
   height: 20px;
   background-color: rgb(216, 74, 58);
   box-shadow: 0 4px 12px rgba(216, 74, 58, 0.3);
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background-color: transparent;
+  color: #8A7F72;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #F2ECE2;
+}
+
+.sidebar-toggle-btn:active {
+  background-color: rgba(255, 255, 255, 0.08);
+  transform: scale(0.95);
+}
+
+.sidebar-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.15s ease;
+}
+
+/* Collapsed state - centered toggle */
+.sidebar-collapsed-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  border-t: 1px solid rgba(255, 255, 255, 0.05);
 }
 </style>
 
@@ -294,81 +331,57 @@ const totalStores = computed(() => employeesByStore.value.size);
     class="h-full flex flex-col bg-ink-deep border-r border-white/5 relative transition-[width] duration-200"
     :class="isCollapsed ? 'w-16' : 'w-72'"
   >
-    <!-- Header with Search -->
-    <div class="p-3 border-b border-white/5">
-      <!-- Expanded header with search -->
-      <div v-if="!isCollapsed" class="flex items-center gap-2">
-        <div class="relative flex-1 min-w-0">
-          <div class="relative flex items-center">
-            <!-- Search Icon - outside input for better spacing control -->
-            <svg
-              class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-muted transition-colors duration-150 shrink-0 z-10 pointer-events-none"
-              :class="searchQuery ? 'text-vermillion-400' : ''"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+    <!-- Header with Search (only when expanded) -->
+    <div v-if="!isCollapsed" class="p-3 border-b border-white/5">
+      <div class="relative flex-1 min-w-0">
+        <div class="relative flex items-center">
+          <!-- Search Icon -->
+          <svg
+            class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-muted transition-colors duration-150 shrink-0 z-10 pointer-events-none"
+            :class="searchQuery ? 'text-vermillion-400' : ''"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
 
-            <input
-              ref="searchInputRef"
-              v-model="searchQuery"
-              type="text"
-              placeholder="Tìm nhân viên..."
-              class="sidebar-search-input"
-              aria-label="Tìm kiếm nhân viên"
-            />
-          </div>
-
-          <!-- Right side actions (visible on hover/focus) -->
-          <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
-            <!-- Clear button -->
-            <button
-              v-if="searchQuery"
-              class="p-1 text-paper-muted hover:text-paper-white transition-colors duration-150 pointer-events-auto"
-              @click="searchQuery = ''"
-              aria-label="Xóa tìm kiếm"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            <!-- Keyboard shortcut hint -->
-            <kbd
-              v-if="!searchQuery"
-              class="px-1.5 py-0.5 text-[10px] text-paper-muted bg-ink-light rounded border border-white/10 font-mono"
-            >
-              /
-            </kbd>
-          </div>
+          <input
+            ref="searchInputRef"
+            v-model="searchQuery"
+            type="text"
+            placeholder="Tìm nhân viên..."
+            class="sidebar-search-input"
+            aria-label="Tìm kiếm nhân viên"
+          />
         </div>
 
-        <button
-          :class="`p-2 rounded-lg hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-colors duration-150 ${FOCUS_RING_CLASSES}`"
-          @click="isCollapsed = true"
-          title="Thu gọn"
-          aria-label="Thu gọn thanh bên"
-        >
-          <ChevronIcon direction="left" class="w-4 h-4" />
-        </button>
-      </div>
+        <!-- Right side actions -->
+        <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+          <!-- Clear button -->
+          <button
+            v-if="searchQuery"
+            class="p-1 text-paper-muted hover:text-paper-white transition-colors duration-150 pointer-events-auto"
+            @click="searchQuery = ''"
+            aria-label="Xóa tìm kiếm"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
 
-      <!-- Collapsed header - collapse button only -->
-      <div v-else class="flex items-center justify-center">
-        <button
-          :class="`p-2 rounded-lg hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-colors duration-150 ${FOCUS_RING_CLASSES}`"
-          @click="isCollapsed = false"
-          title="Mở rộng"
-          aria-label="Mở rộng thanh bên"
-        >
-          <ChevronIcon direction="right" class="w-4 h-4" />
-        </button>
+          <!-- Keyboard shortcut hint -->
+          <kbd
+            v-if="!searchQuery"
+            class="px-1.5 py-0.5 text-[10px] text-paper-muted bg-ink-light rounded border border-white/10 font-mono"
+          >
+            /
+          </kbd>
+        </div>
       </div>
     </div>
 
-    <!-- Content Area -->
+    <!-- Content Area (Expanded only) -->
     <div v-if="!isCollapsed" class="flex-1 overflow-y-auto">
       <!-- Loading State -->
       <div v-if="isLoading" class="flex flex-col items-center justify-center py-16">
@@ -501,15 +514,56 @@ const totalStores = computed(() => employeesByStore.value.size);
       </div>
     </div>
 
-    <!-- Footer -->
+    <!-- Spacer for collapsed state to push button to bottom -->
+    <div v-if="isCollapsed" class="flex-1"></div>
+
+    <!-- Footer with Toggle Button (Expanded) -->
     <div
       v-if="!isCollapsed && !isLoading && totalEmployees > 0"
-      class="px-4 py-2.5 bg-ink-medium/30 border-t border-white/5"
+      class="px-4 py-2.5 bg-ink-medium/30 border-t border-white/5 flex items-center justify-between"
     >
-      <div class="flex items-center justify-between text-[11px] text-paper-muted">
+      <div class="flex items-center gap-3 text-[11px] text-paper-muted">
         <span>{{ totalEmployees }} nhân viên</span>
         <span>{{ totalStores }} cửa hàng</span>
       </div>
+      <button
+        class="sidebar-toggle-btn"
+        @click="isCollapsed = true"
+        title="Thu gọn thanh bên"
+        aria-label="Thu gọn thanh bên"
+        :aria-expanded="!isCollapsed"
+      >
+        <svg
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Footer with Toggle Button (Collapsed) -->
+    <div v-if="isCollapsed" class="sidebar-collapsed-footer">
+      <button
+        class="sidebar-toggle-btn"
+        @click="isCollapsed = false"
+        title="Mở rộng thanh bên"
+        aria-label="Mở rộng thanh bên"
+        :aria-expanded="!isCollapsed"
+      >
+        <svg
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+        </svg>
+      </button>
     </div>
   </aside>
 </template>

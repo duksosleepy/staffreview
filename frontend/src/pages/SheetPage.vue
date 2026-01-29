@@ -955,7 +955,7 @@ onMounted(async () => {
 
           if (!isRole(columnConfig.role)) {
             toaster.create({
-              title: 'Unauthorized',
+              title: 'Không có quyền',
               description: `You can only edit your own column (${columnConfig.name})`,
               type: 'error',
             });

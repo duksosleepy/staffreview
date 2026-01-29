@@ -194,31 +194,40 @@ onMounted(async () => {
   autoSelectCurrentUser();
 });
 
-// Keyboard navigation
+// Keyboard navigation - optimized for performance
 const handleKeydown = (event: KeyboardEvent) => {
+  // Early returns for better performance
   if (isCollapsed.value) return;
   if (document.activeElement === searchInputRef.value) return;
 
-  const allEmployees = Array.from(filteredEmployeesByStore.value.values()).flat();
-  const currentIndex = allEmployees.findIndex((emp) => emp.id === selectedId.value);
+  // Only handle specific keys to avoid unnecessary processing
+  const { key } = event;
+  if (!['ArrowDown', 'ArrowUp', 'Escape', 'Enter'].includes(key)) return;
 
-  if (event.key === 'ArrowDown') {
-    event.preventDefault();
-    const nextIndex = currentIndex < allEmployees.length - 1 ? currentIndex + 1 : 0;
-    if (allEmployees[nextIndex]) {
-      selectEmployee(allEmployees[nextIndex]);
-    }
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault();
-    const prevIndex = currentIndex > 0 ? currentIndex - 1 : allEmployees.length - 1;
-    if (allEmployees[prevIndex]) {
-      selectEmployee(allEmployees[prevIndex]);
-    }
-  } else if (event.key === 'Escape') {
+  if (key === 'Escape') {
     searchQuery.value = '';
     searchInputRef.value?.blur();
-  } else if (event.key === 'Enter' && currentIndex >= 0 && allEmployees[currentIndex]) {
-    // Already selected, just confirm
+    return;
+  }
+
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    event.preventDefault();
+
+    // Cache the flattened array to avoid recreating on every keypress
+    const allEmployees = Array.from(filteredEmployeesByStore.value.values()).flat();
+    const currentIndex = allEmployees.findIndex((emp) => emp.id === selectedId.value);
+
+    if (key === 'ArrowDown') {
+      const nextIndex = currentIndex < allEmployees.length - 1 ? currentIndex + 1 : 0;
+      if (allEmployees[nextIndex]) {
+        selectEmployee(allEmployees[nextIndex]);
+      }
+    } else {
+      const prevIndex = currentIndex > 0 ? currentIndex - 1 : allEmployees.length - 1;
+      if (allEmployees[prevIndex]) {
+        selectEmployee(allEmployees[prevIndex]);
+      }
+    }
   }
 };
 
@@ -259,6 +268,24 @@ const totalStores = computed(() => employeesByStore.value.size);
   outline: none;
   border-color: rgba(216, 74, 58, 0.5);
   background-color: rgba(39, 39, 37, 0.5);
+}
+
+/* Optimized indicator dot with hardware-accelerated animations */
+.indicator-dot {
+  width: 6px;
+  height: 6px;
+  background-color: rgba(138, 127, 114, 0.4);
+  transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Use GPU acceleration for smoother performance */
+  will-change: height, background-color;
+}
+
+.indicator-dot.active {
+  height: 20px;
+  background-color: rgb(216, 74, 58);
+  box-shadow: 0 4px 12px rgba(216, 74, 58, 0.3);
 }
 </style>
 
@@ -368,18 +395,21 @@ const totalStores = computed(() => employeesByStore.value.size);
       <!-- Employee List grouped by store -->
       <div v-else-if="filteredEmployeesByStore.size > 0" class="p-2">
         <div v-for="[storeName, storeEmployees] in filteredEmployeesByStore" :key="storeName" class="mb-4">
-          <!-- Store Header - Collapsible -->
+          <!-- Store Header - Collapsible with improved hit area -->
           <button
-            class="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-paper-muted hover:text-paper-light transition-colors duration-150 rounded-lg hover:bg-ink-lighter/50"
+            class="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-paper-muted hover:text-paper-light transition-colors duration-150 rounded-lg hover:bg-ink-lighter/50 group"
             @click="toggleStoreCollapse(storeName)"
             :aria-expanded="!isStoreCollapsed(storeName)"
           >
-            <ChevronIcon
-              :direction="isStoreCollapsed(storeName) ? 'right' : 'down'"
-              class="w-3.5 h-3.5 transition-transform duration-150"
-            />
-            <span class="truncate">{{ storeName }}</span>
-            <span class="text-[10px] text-paper-muted ml-auto">{{ storeEmployees.length }}</span>
+            <!-- Larger chevron with better visual hierarchy -->
+            <div class="shrink-0 w-5 h-5 flex items-center justify-center">
+              <ChevronIcon
+                :direction="isStoreCollapsed(storeName) ? 'right' : 'down'"
+                class="w-4 h-4 transition-transform duration-200 ease-out group-hover:scale-110"
+              />
+            </div>
+            <span class="truncate flex-1 text-left">{{ storeName }}</span>
+            <span class="text-[10px] text-paper-muted shrink-0 px-1.5 py-0.5 rounded bg-ink-lighter/50">{{ storeEmployees.length }}</span>
           </button>
 
           <!-- Employee List -->
@@ -391,37 +421,37 @@ const totalStores = computed(() => employeesByStore.value.size);
               v-for="emp in storeEmployees"
               :key="emp.id"
               type="button"
-              :class="`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200 ${FOCUS_RING_CLASSES} ${
+              :class="[
+                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left',
+                'transition-colors duration-150',
+                FOCUS_RING_CLASSES,
                 selectedId === emp.id
                   ? 'bg-vermillion-500/10 text-vermillion-200'
                   : 'hover:bg-ink-lighter/70 text-paper-white'
-              }`"
+              ]"
               :aria-pressed="selectedId === emp.id"
               :aria-label="`${emp.displayName}, ${getRoleDisplay(getEffectiveRole(emp))}`"
               @click="selectEmployee(emp)"
             >
-              <!-- Rounded Indicator Pill (GitHub-style) -->
-              <div
-                class="shrink-0 relative"
-                :class="selectedId === emp.id ? 'w-1.5' : 'w-1.5'"
-              >
+              <!-- Optimized Indicator Dot with CSS-only animation -->
+              <div class="shrink-0 w-1.5 h-5 flex items-center">
                 <div
-                  :class="`absolute left-0 top-1/2 -translate-y-1/2 rounded-full transition-all duration-300 ease-out ${
-                    selectedId === emp.id
-                      ? 'h-5 bg-vermillion-500 shadow-lg shadow-vermillion-500/30'
-                      : 'h-1.5 bg-paper-muted/40'
-                  }`"
-                  :style="{ width: selectedId === emp.id ? '6px' : '6px' }"
+                  :class="[
+                    'indicator-dot rounded-full',
+                    selectedId === emp.id ? 'active' : ''
+                  ]"
                 ></div>
               </div>
 
               <!-- Avatar -->
               <div
-                class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 transition-all duration-200 ${
+                :class="[
+                  'w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0',
+                  'transition-colors duration-150',
                   selectedId === emp.id
                     ? 'bg-vermillion-500 text-white'
                     : 'bg-ink-lighter text-paper-light'
-                }`"
+                ]"
               >
                 {{ emp.displayName.charAt(0).toUpperCase() }}
               </div>

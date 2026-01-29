@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, shallowRef } from 'vue';
-import { useLocalStorage, useAsyncState } from '@vueuse/core';
+import { useAsyncState, useLocalStorage, useMagicKeys, whenever } from '@vueuse/core';
+import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
+import ChevronIcon from '@/components/icons/ChevronIcon.vue';
+import { useRoleDisplay } from '@/composables/useRoleDisplay';
+import { FOCUS_RING_CLASSES } from '@/constants/ui';
 import { fetchStoreEmployees, type StoreEmployee } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
-import { useRoleDisplay } from '@/composables/useRoleDisplay';
-import ChevronIcon from '@/components/icons/ChevronIcon.vue';
-import { FOCUS_RING_CLASSES } from '@/constants/ui';
 
 defineOptions({
   name: 'EmployeeSidebar',
@@ -30,32 +30,70 @@ const emit = defineEmits<{
   select: [employee: StoreEmployee | null];
 }>();
 
+// Search functionality
+const searchQuery = ref('');
+const searchInputRef = ref<HTMLInputElement | null>(null);
+
+// Keyboard shortcut to focus search
+const { Slash } = useMagicKeys();
+whenever(Slash, () => {
+  if (!isCollapsed.value) {
+    searchInputRef.value?.focus();
+    return false; // Prevent default
+  }
+});
+
+// Persist sidebar collapse state
+const isCollapsed = useLocalStorage('sidebar-collapsed', false);
+const collapsedStores = useLocalStorage<string[]>('sidebar-collapsed-stores', []);
+const selectedId = shallowRef<string | null>(props.initialSelectedId || null);
+
 // Use shallowRef for better performance with large arrays
 const {
   state: employees,
   isLoading,
   error: asyncError,
   execute: loadEmployees,
-} = useAsyncState(
-  () => fetchStoreEmployees(),
-  [],
-  {
-    immediate: false,
-    onError: (e) => {
-      console.error('Failed to load employees:', e);
-    },
-  }
-);
+} = useAsyncState(() => fetchStoreEmployees(), [], {
+  immediate: false,
+  onError: (e) => {
+    console.error('Failed to load employees:', e);
+  },
+});
 
-const error = computed(() => asyncError.value ? 'Không thể tải danh sách nhân viên' : null);
-
-// Persist sidebar collapse state
-const isCollapsed = useLocalStorage('sidebar-collapsed', false);
-const selectedId = shallowRef<string | null>(props.initialSelectedId || null);
+const error = computed(() => (asyncError.value ? 'Không thể tải danh sách nhân viên' : null));
 
 /**
- * Groups employees by their assigned stores and sorts by role level
- * @returns Map where keys are store names and values are employee arrays
+ * Get the effective role for an employee
+ */
+const getEffectiveRole = (employee: StoreEmployee): string => {
+  if (employee.casdoor_id === auth.casdoorId) {
+    return auth.role || employee.role;
+  }
+  return employee.role;
+};
+
+/**
+ * Toggle store section collapse
+ */
+const toggleStoreCollapse = (storeName: string) => {
+  const index = collapsedStores.value.indexOf(storeName);
+  if (index > -1) {
+    collapsedStores.value.splice(index, 1);
+  } else {
+    collapsedStores.value.push(storeName);
+  }
+};
+
+/**
+ * Check if store is collapsed
+ */
+const isStoreCollapsed = (storeName: string) => {
+  return collapsedStores.value.includes(storeName);
+};
+
+/**
+ * Group employees by store
  */
 const employeesByStore = computed(() => {
   const userStores = currentUserStores.value;
@@ -82,17 +120,14 @@ const employeesByStore = computed(() => {
       const aRole = getEffectiveRole(a);
       const bRole = getEffectiveRole(b);
 
-      // First by role level (descending)
       const roleDiff = (roleLevel[bRole] ?? 0) - (roleLevel[aRole] ?? 0);
       if (roleDiff !== 0) return roleDiff;
 
-      // Within same role: current user first
       const aIsCurrent = a.casdoor_id === userId;
       const bIsCurrent = b.casdoor_id === userId;
       if (aIsCurrent && !bIsCurrent) return -1;
       if (!aIsCurrent && bIsCurrent) return 1;
 
-      // Then alphabetically
       return a.displayName.localeCompare(b.displayName);
     });
   }
@@ -101,23 +136,33 @@ const employeesByStore = computed(() => {
 });
 
 /**
- * Get the effective role for an employee
- * Corrects for cases where the current user's role is incorrectly reported
+ * Filtered employees by search query
  */
-const getEffectiveRole = (employee: StoreEmployee): string => {
-  // If this employee is the current user, use the current user's actual role
-  if (employee.casdoor_id === auth.casdoorId) {
-    return auth.role || employee.role;
+const filteredEmployeesByStore = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return employeesByStore.value;
   }
-  return employee.role;
-};
+
+  const query = searchQuery.value.toLowerCase().trim();
+  const filtered = new Map<string, StoreEmployee[]>();
+
+  for (const [storeName, emps] of employeesByStore.value) {
+    const matching = emps.filter(
+      (emp) => emp.displayName.toLowerCase().includes(query) || getEffectiveRole(emp).toLowerCase().includes(query),
+    );
+    if (matching.length > 0) {
+      filtered.set(storeName, matching);
+    }
+  }
+
+  return filtered;
+});
 
 /**
  * Select an employee from the list
  */
 const selectEmployee = (emp: StoreEmployee) => {
   if (selectedId.value === emp.id) {
-    // Already selected - do nothing to avoid unnecessary reloads
     return;
   }
 
@@ -137,7 +182,7 @@ const clearSelection = () => {
  * Auto-select current user after employees are loaded
  */
 const autoSelectCurrentUser = () => {
-  const currentUser = employees.value.find(emp => emp.casdoor_id === currentUserId.value);
+  const currentUser = employees.value.find((emp) => emp.casdoor_id === currentUserId.value);
   if (currentUser && !selectedId.value) {
     selectedId.value = currentUser.id;
     emit('select', currentUser);
@@ -148,157 +193,277 @@ onMounted(async () => {
   await loadEmployees();
   autoSelectCurrentUser();
 });
+
+// Keyboard navigation
+const handleKeydown = (event: KeyboardEvent) => {
+  if (isCollapsed.value) return;
+  if (document.activeElement === searchInputRef.value) return;
+
+  const allEmployees = Array.from(filteredEmployeesByStore.value.values()).flat();
+  const currentIndex = allEmployees.findIndex((emp) => emp.id === selectedId.value);
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    const nextIndex = currentIndex < allEmployees.length - 1 ? currentIndex + 1 : 0;
+    if (allEmployees[nextIndex]) {
+      selectEmployee(allEmployees[nextIndex]);
+    }
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : allEmployees.length - 1;
+    if (allEmployees[prevIndex]) {
+      selectEmployee(allEmployees[prevIndex]);
+    }
+  } else if (event.key === 'Escape') {
+    searchQuery.value = '';
+    searchInputRef.value?.blur();
+  } else if (event.key === 'Enter' && currentIndex >= 0 && allEmployees[currentIndex]) {
+    // Already selected, just confirm
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown);
+});
+
+// Computed totals
+const totalEmployees = computed(() => employees.value.length);
+const totalStores = computed(() => employeesByStore.value.size);
 </script>
+
+<style scoped>
+.sidebar-search-input {
+  width: 100%;
+  background-color: rgba(39, 39, 37, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding-left: 2.75rem;
+  padding-right: 5rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  font-size: 0.875rem;
+  color: #F2ECE2;
+  transition: all 0.15s ease;
+}
+
+.sidebar-search-input::placeholder {
+  color: rgba(138, 127, 114, 0.7);
+  opacity: 1;
+}
+
+.sidebar-search-input:focus {
+  outline: none;
+  border-color: rgba(216, 74, 58, 0.5);
+  background-color: rgba(39, 39, 37, 0.5);
+}
+</style>
 
 <template>
   <aside
-    class="h-full flex flex-col bg-ink-deep transition-[width] duration-300 relative after:content-[''] after:absolute after:top-0 after:right-0 after:bottom-0 after:w-px after:bg-gradient-to-b after:from-transparent after:via-border-strong/50 after:to-transparent"
-    :class="isCollapsed ? 'w-16' : 'w-72 md:w-64 lg:w-72'"
+    class="h-full flex flex-col bg-ink-deep border-r border-white/5 relative transition-[width] duration-200"
+    :class="isCollapsed ? 'w-16' : 'w-72'"
   >
-    <!-- Sidebar Header -->
-    <div v-if="!isCollapsed" class="flex items-center px-4 py-3 relative justify-between after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-border-subtle/70 after:to-transparent">
-      <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="min-w-0 flex-1">
-          <h2 class="text-xs font-semibold text-paper-light uppercase tracking-wider truncate font-body">Nhân viên</h2>
+    <!-- Header with Search -->
+    <div class="p-3 border-b border-white/5">
+      <!-- Expanded header with search -->
+      <div v-if="!isCollapsed" class="flex items-center gap-2">
+        <div class="relative flex-1 min-w-0">
+          <div class="relative flex items-center">
+            <!-- Search Icon - outside input for better spacing control -->
+            <svg
+              class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-muted transition-colors duration-150 shrink-0 z-10 pointer-events-none"
+              :class="searchQuery ? 'text-vermillion-400' : ''"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+
+            <input
+              ref="searchInputRef"
+              v-model="searchQuery"
+              type="text"
+              placeholder="Tìm nhân viên..."
+              class="sidebar-search-input"
+              aria-label="Tìm kiếm nhân viên"
+            />
+          </div>
+
+          <!-- Right side actions (visible on hover/focus) -->
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+            <!-- Clear button -->
+            <button
+              v-if="searchQuery"
+              class="p-1 text-paper-muted hover:text-paper-white transition-colors duration-150 pointer-events-auto"
+              @click="searchQuery = ''"
+              aria-label="Xóa tìm kiếm"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <!-- Keyboard shortcut hint -->
+            <kbd
+              v-if="!searchQuery"
+              class="px-1.5 py-0.5 text-[10px] text-paper-muted bg-ink-light rounded border border-white/10 font-mono"
+            >
+              /
+            </kbd>
+          </div>
         </div>
-        <span class="text-xs text-paper-muted font-body tabular-nums">{{ employees.length }}</span>
+
+        <button
+          :class="`p-2 rounded-lg hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-colors duration-150 ${FOCUS_RING_CLASSES}`"
+          @click="isCollapsed = true"
+          title="Thu gọn"
+          aria-label="Thu gọn thanh bên"
+        >
+          <ChevronIcon direction="left" class="w-4 h-4" />
+        </button>
       </div>
-      <button
-        :class="`p-2 rounded-md hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-colors duration-200 ${FOCUS_RING_CLASSES}`"
-        @click="isCollapsed = !isCollapsed"
-        title="Thu gọn"
-        aria-label="Thu gọn danh sách nhân viên"
-        :aria-expanded="true"
-      >
-        <ChevronIcon direction="left" double class="w-5 h-5" />
-      </button>
+
+      <!-- Collapsed header - collapse button only -->
+      <div v-else class="flex items-center justify-center">
+        <button
+          :class="`p-2 rounded-lg hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-colors duration-150 ${FOCUS_RING_CLASSES}`"
+          @click="isCollapsed = false"
+          title="Mở rộng"
+          aria-label="Mở rộng thanh bên"
+        >
+          <ChevronIcon direction="right" class="w-4 h-4" />
+        </button>
+      </div>
     </div>
 
-    <!-- Collapsed state: show centered collapse button -->
-    <div v-if="isCollapsed" key="collapsed" class="flex-1 flex items-center justify-center">
-      <button
-        :class="`p-2 rounded-md hover:bg-ink-lighter text-paper-muted hover:text-paper-white transition-colors duration-200 ${FOCUS_RING_CLASSES}`"
-        @click="isCollapsed = !isCollapsed"
-        title="Mở rộng"
-        aria-label="Mở rộng danh sách nhân viên"
-        :aria-expanded="false"
-      >
-        <ChevronIcon direction="right" double class="w-5 h-5" />
-      </button>
-    </div>
-
-    <!-- Expanded state: employee list -->
-    <div v-else key="expanded" class="flex-1 overflow-y-auto">
-      <!-- Loading -->
+    <!-- Content Area -->
+    <div v-if="!isCollapsed" class="flex-1 overflow-y-auto">
+      <!-- Loading State -->
       <div v-if="isLoading" class="flex flex-col items-center justify-center py-16">
-        <div class="w-8 h-8 border-3 border-vermillion-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-        <p class="text-sm text-paper-muted font-body">Đang tải...</p>
+        <div class="w-6 h-6 border-2 border-white/10 border-t-vermillion-500 rounded-full animate-spin mb-3"></div>
+        <p class="text-xs text-paper-muted">Đang tải...</p>
       </div>
 
-      <!-- Error -->
+      <!-- Error State -->
       <div v-else-if="error" class="px-4 py-8 text-center">
-        <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-vermillion-500/10 mb-3">
-          <svg class="w-5 h-5 text-vermillion-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-vermillion-500/10 mb-3">
+          <svg class="w-4 h-4 text-vermillion-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <p class="text-sm text-vermillion-400 mb-3 font-body">{{ error }}</p>
+        <p class="text-xs text-vermillion-400 mb-3">{{ error }}</p>
         <button
-          :class="`w-full px-4 py-2 text-sm font-body text-vermillion-400 hover:bg-vermillion-500/10 rounded-lg transition-colors duration-200 border border-vermillion-500/20 ${FOCUS_RING_CLASSES}`"
-          @click="loadEmployees"
+          :class="`px-4 py-1.5 text-xs text-vermillion-400 hover:bg-vermillion-500/10 rounded-lg transition-colors duration-150 border border-vermillion-500/20 ${FOCUS_RING_CLASSES}`"
+          @click="loadEmployees()"
         >
           Thử lại
         </button>
       </div>
 
       <!-- Employee List grouped by store -->
-      <div v-else class="py-2">
-        <div v-for="[storeName, storeEmployees] in employeesByStore" :key="storeName" class="mb-6">
-          <!-- Store header -->
-          <div class="px-4 py-2 mb-2">
-            <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-vermillion-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-              <span class="text-xs font-semibold text-paper-white uppercase tracking-wider font-body">{{ storeName }}</span>
-              <span class="text-xs text-paper-muted font-body">({{ storeEmployees.length }})</span>
-            </div>
-          </div>
+      <div v-else-if="filteredEmployeesByStore.size > 0" class="p-2">
+        <div v-for="[storeName, storeEmployees] in filteredEmployeesByStore" :key="storeName" class="mb-4">
+          <!-- Store Header - Collapsible -->
+          <button
+            class="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-paper-muted hover:text-paper-light transition-colors duration-150 rounded-lg hover:bg-ink-lighter/50"
+            @click="toggleStoreCollapse(storeName)"
+            :aria-expanded="!isStoreCollapsed(storeName)"
+          >
+            <ChevronIcon
+              :direction="isStoreCollapsed(storeName) ? 'right' : 'down'"
+              class="w-3.5 h-3.5 transition-transform duration-150"
+            />
+            <span class="truncate">{{ storeName }}</span>
+            <span class="text-[10px] text-paper-muted ml-auto">{{ storeEmployees.length }}</span>
+          </button>
 
-          <!-- Employees in this store -->
-          <div class="space-y-1 px-2">
+          <!-- Employee List -->
+          <div
+            v-show="!isStoreCollapsed(storeName)"
+            class="space-y-0.5 mt-0.5 ml-2 pl-3 border-l border-white/10"
+          >
             <button
               v-for="emp in storeEmployees"
               :key="emp.id"
-              v-memo="[selectedId === emp.id, emp.displayName, emp.role]"
               type="button"
-              :class="`w-full text-left px-3 py-2.5 rounded-lg transition-[background-color,border-color,color] duration-200 group border ${FOCUS_RING_CLASSES} ${
+              :class="`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all duration-150 ${FOCUS_RING_CLASSES} ${
                 selectedId === emp.id
-                  ? 'bg-vermillion-500/10 border-vermillion-500/40'
-                  : 'hover:bg-ink-lighter border-transparent'
+                  ? 'bg-vermillion-500/8 border-l-2 border-vermillion-500 -ml-[17px] pl-[15px]'
+                  : 'hover:bg-ink-lighter/70 border-l-2 border-transparent -ml-[17px] pl-3'
               }`"
               :aria-pressed="selectedId === emp.id"
-              :aria-label="`Xem dữ liệu của ${emp.displayName}, vai trò ${getRoleDisplay(getEffectiveRole(emp))}`"
+              :aria-label="`${emp.displayName}, ${getRoleDisplay(getEffectiveRole(emp))}`"
               @click="selectEmployee(emp)"
             >
-              <div class="flex items-center gap-3">
-                <!-- Avatar -->
-                <div
-                  class="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-semibold shrink-0 transition-[background-color] duration-200"
-                  :class="selectedId === emp.id
-                    ? 'bg-vermillion-500'
-                    : 'bg-ink-lighter'"
-                >
-                  {{ emp.displayName.charAt(0).toUpperCase() }}
-                </div>
-                <!-- Info -->
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center justify-between gap-2 mb-0.5">
-                    <span
-                      class="text-sm font-medium truncate"
-                      :class="selectedId === emp.id ? 'text-vermillion-300' : 'text-paper-white'"
-                      :title="emp.displayName"
-                    >
-                      {{ emp.displayName }}
-                    </span>
-                    <span
-                      class="text-[10px] px-1.5 py-0.5 rounded font-medium uppercase shrink-0"
-                      :class="getRoleBadgeClass(getEffectiveRole(emp))"
-                      :title="`Vai trò: ${getRoleDisplay(getEffectiveRole(emp))}`"
-                    >
-                      {{ getRoleDisplay(getEffectiveRole(emp)) }}
-                    </span>
-                  </div>
-                  <p
-                    v-if="emp.casdoor_id"
-                    class="text-[10px] text-paper-muted truncate font-body"
-                    :title="`ID: ${emp.casdoor_id}`"
+              <!-- Avatar -->
+              <div
+                class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 transition-all duration-150"
+                :class="selectedId === emp.id
+                  ? 'bg-vermillion-500 text-white'
+                  : 'bg-ink-lighter text-paper-light'"
+              >
+                {{ emp.displayName.charAt(0).toUpperCase() }}
+              </div>
+
+              <!-- Info -->
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span
+                    class="text-sm truncate transition-colors duration-150"
+                    :class="selectedId === emp.id ? 'text-vermillion-200' : 'text-paper-white'"
+                    :title="emp.displayName"
                   >
-                    ID: {{ emp.casdoor_id }}
-                  </p>
+                    {{ emp.displayName }}
+                  </span>
+                  <span
+                    class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+                    :class="getRoleBadgeClass(getEffectiveRole(emp))"
+                    :title="`Vai trò: ${getRoleDisplay(getEffectiveRole(emp))}`"
+                  >
+                    {{ getRoleDisplay(getEffectiveRole(emp)) }}
+                  </span>
                 </div>
               </div>
             </button>
           </div>
         </div>
+      </div>
 
-        <!-- Empty state -->
-        <div v-if="employeesByStore.size === 0 && !isLoading" class="px-4 py-16 text-center">
-          <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-ink-lighter mb-3">
-            <svg class="w-7 h-7 text-paper-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <p class="text-sm text-paper-muted font-body">Không có nhân viên</p>
+      <!-- Empty Search State -->
+      <div v-else-if="searchQuery && filteredEmployeesByStore.size === 0" class="px-4 py-12 text-center">
+        <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-ink-lighter/50 mb-3">
+          <svg class="w-5 h-5 text-paper-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
         </div>
+        <p class="text-sm text-paper-muted">Không tìm thấy</p>
+        <p class="text-xs text-paper-muted mt-1">"{{ searchQuery }}" không khớp với nhân viên nào</p>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else-if="employeesByStore.size === 0" class="px-4 py-12 text-center">
+        <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-ink-lighter/50 mb-3">
+          <svg class="w-5 h-5 text-paper-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <p class="text-sm text-paper-muted">Không có nhân viên</p>
       </div>
     </div>
 
-    <!-- Footer: store count -->
-    <div v-if="!isCollapsed && !isLoading && employees.length > 0" class="px-4 py-3 bg-ink-medium/30 relative before:content-[''] before:absolute before:top-0 before:left-0 before:right-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-border-subtle/70 before:to-transparent">
-      <div class="flex items-center justify-between text-xs text-paper-muted font-body">
-        <span>{{ employees.length }} nhân viên</span>
-        <span>{{ employeesByStore.size }} cửa hàng</span>
+    <!-- Footer -->
+    <div
+      v-if="!isCollapsed && !isLoading && totalEmployees > 0"
+      class="px-4 py-2.5 bg-ink-medium/30 border-t border-white/5"
+    >
+      <div class="flex items-center justify-between text-[11px] text-paper-muted">
+        <span>{{ totalEmployees }} nhân viên</span>
+        <span>{{ totalStores }} cửa hàng</span>
       </div>
     </div>
   </aside>

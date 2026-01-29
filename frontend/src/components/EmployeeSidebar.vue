@@ -385,27 +385,43 @@ const totalStores = computed(() => employeesByStore.value.size);
           <!-- Employee List -->
           <div
             v-show="!isStoreCollapsed(storeName)"
-            class="space-y-0.5 mt-0.5 ml-2 pl-3 border-l border-white/10"
+            class="space-y-0.5 mt-0.5 ml-2 pl-3"
           >
             <button
               v-for="emp in storeEmployees"
               :key="emp.id"
               type="button"
-              :class="`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all duration-150 ${FOCUS_RING_CLASSES} ${
+              :class="`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200 ${FOCUS_RING_CLASSES} ${
                 selectedId === emp.id
-                  ? 'bg-vermillion-500/8 border-l-2 border-vermillion-500 -ml-[17px] pl-[15px]'
-                  : 'hover:bg-ink-lighter/70 border-l-2 border-transparent -ml-[17px] pl-3'
+                  ? 'bg-vermillion-500/10 text-vermillion-200'
+                  : 'hover:bg-ink-lighter/70 text-paper-white'
               }`"
               :aria-pressed="selectedId === emp.id"
               :aria-label="`${emp.displayName}, ${getRoleDisplay(getEffectiveRole(emp))}`"
               @click="selectEmployee(emp)"
             >
+              <!-- Rounded Indicator Pill (GitHub-style) -->
+              <div
+                class="shrink-0 relative"
+                :class="selectedId === emp.id ? 'w-1.5' : 'w-1.5'"
+              >
+                <div
+                  :class="`absolute left-0 top-1/2 -translate-y-1/2 rounded-full transition-all duration-300 ease-out ${
+                    selectedId === emp.id
+                      ? 'h-5 bg-vermillion-500 shadow-lg shadow-vermillion-500/30'
+                      : 'h-1.5 bg-paper-muted/40'
+                  }`"
+                  :style="{ width: selectedId === emp.id ? '6px' : '6px' }"
+                ></div>
+              </div>
+
               <!-- Avatar -->
               <div
-                class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 transition-all duration-150"
-                :class="selectedId === emp.id
-                  ? 'bg-vermillion-500 text-white'
-                  : 'bg-ink-lighter text-paper-light'"
+                class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 transition-all duration-200 ${
+                  selectedId === emp.id
+                    ? 'bg-vermillion-500 text-white'
+                    : 'bg-ink-lighter text-paper-light'
+                }`"
               >
                 {{ emp.displayName.charAt(0).toUpperCase() }}
               </div>
@@ -415,7 +431,6 @@ const totalStores = computed(() => employeesByStore.value.size);
                 <div class="flex items-center justify-between gap-2">
                   <span
                     class="text-sm truncate transition-colors duration-150"
-                    :class="selectedId === emp.id ? 'text-vermillion-200' : 'text-paper-white'"
                     :title="emp.displayName"
                   >
                     {{ emp.displayName }}

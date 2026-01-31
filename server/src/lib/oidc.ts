@@ -209,9 +209,11 @@ export type CasdoorEmployee = {
 };
 
 // Fetch role assignments from Casdoor's /api/get-roles endpoint.
-// Each Casdoor Role has a Users[] array listing assigned user IDs (format: "org/username").
-// Returns a Map of "org/username" → role name.
-const fetchCasdoorRoleMapping = async (): Promise<Map<string, Role>> => {
+// Returns user role map and group role map for resolving roles through group membership.
+const fetchCasdoorRoleMapping = async (): Promise<{
+  userRoleMap: Map<string, Role>;
+  groupRoleMap: Map<string, Role>;
+}> => {
   const owner = process.env.CASDOOR_ORG || 'lug.vn';
   const params = new URLSearchParams({
     owner,
@@ -223,7 +225,7 @@ const fetchCasdoorRoleMapping = async (): Promise<Map<string, Role>> => {
 
   if (!response.ok) {
     console.error(`Casdoor get-roles failed: ${response.status}`);
-    return new Map();
+    return { userRoleMap: new Map(), groupRoleMap: new Map() };
   }
 
   const rawBody = await response.json();
@@ -232,23 +234,30 @@ const fetchCasdoorRoleMapping = async (): Promise<Map<string, Role>> => {
   const roles = Array.isArray(rawBody) ? rawBody : (rawBody?.data ?? rawBody);
 
   if (!Array.isArray(roles)) {
-    return new Map();
+    return { userRoleMap: new Map(), groupRoleMap: new Map() };
   }
 
   const userRoleMap = new Map<string, Role>();
+  const groupRoleMap = new Map<string, Role>();
 
   for (const role of roles) {
     const roleName = (role.name as string)?.toLowerCase();
     if (!roleName || !isValidRole(roleName)) continue;
 
+    // Map users directly assigned to this role
     const users: string[] = role.users ?? [];
     for (const userId of users) {
-      // userId format is "org/username", map each user to their role
       userRoleMap.set(userId, roleName as Role);
+    }
+
+    // Map groups assigned to this role (e.g., "LUG.vn/ASM" → "asm")
+    const groups: string[] = role.groups ?? [];
+    for (const groupId of groups) {
+      groupRoleMap.set(groupId, roleName as Role);
     }
   }
 
-  return userRoleMap;
+  return { userRoleMap, groupRoleMap };
 };
 
 // Fetch all users from Casdoor org, filtered by store IDs and requester role.
@@ -267,10 +276,12 @@ export const fetchCasdoorUsersByStores = async (
   });
 
   // Fetch users and role assignments in parallel
-  const [usersResponse, roleMap] = await Promise.all([
+  const [usersResponse, roleMaps] = await Promise.all([
     fetch(`${oidcConfig.endpoint}/api/get-users?${params.toString()}`),
     fetchCasdoorRoleMapping(),
   ]);
+
+  const { userRoleMap, groupRoleMap } = roleMaps;
 
   if (!usersResponse.ok) {
     throw new Error(`Casdoor get-users failed: ${usersResponse.status}`);
@@ -305,17 +316,17 @@ export const fetchCasdoorUsersByStores = async (
 
     // Resolve role from Casdoor role assignments (userId format: "org/username")
     const userId = `${owner}/${user.name}`;
-    let role: Role = roleMap.get(userId) ?? 'employee';
-    const roleFromMapping = role;
+    let role: Role = userRoleMap.get(userId) ?? 'employee';
 
-    // FALLBACK: If role mapping doesn't have this user, try extracting from user object
-    // This ensures consistency with login flow and handles cases where role assignment is missing
-    if (role === 'employee') {
-      const extractedRole = extractRoleFromUser(user);
-      if (extractedRole !== 'employee') {
-        role = extractedRole;
-        // Log when fallback is used (helps debug role assignment issues)
-        console.log(`[Role Fallback] User ${userId}: mapping="${roleFromMapping}" -> extracted="${role}" (tag="${user.tag}", roles=${JSON.stringify(user.roles)})`);
+    // FALLBACK: Check if user belongs to any groups that have roles assigned
+    if (role === 'employee' && user.groups?.length) {
+      for (const groupId of user.groups) {
+        const groupRole = groupRoleMap.get(groupId);
+        if (groupRole && groupRole !== 'employee') {
+          role = groupRole;
+          console.log(`[Role via Group] User ${userId} assigned role "${role}" via group "${groupId}"`);
+          break; // Use first non-employee role found
+        }
       }
     }
 

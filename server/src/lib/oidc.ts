@@ -283,7 +283,11 @@ export const fetchCasdoorUsersByStores = async (
     const role: Role = roleMap.get(userId) ?? 'employee';
 
     // RBAC: CHT can only see employees and other CHTs, not ASMs
-    if (requesterRole === 'cht' && role === 'asm') {
+    // Normalize role strings to lowercase for case-insensitive comparison
+    const normalizedRequesterRole = (requesterRole || 'employee').toLowerCase().trim();
+    const normalizedUserRole = (role || 'employee').toLowerCase().trim();
+
+    if (normalizedRequesterRole === 'cht' && normalizedUserRole === 'asm') {
       continue;
     }
 

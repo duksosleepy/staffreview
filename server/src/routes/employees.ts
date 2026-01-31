@@ -29,7 +29,18 @@ export const employeeRoutes = new Hono<Env>()
     }
 
     try {
+      // Log requester role for debugging
+      log?.info({ requesterRole: user.role, stores: user.stores }, 'Fetching store employees');
+
       const employees = await fetchCasdoorUsersByStores(user.stores, user.role);
+
+      // Log result for debugging
+      log?.info({
+        requesterRole: user.role,
+        employeeCount: employees.length,
+        roles: employees.map(e => e.role)
+      }, 'Store employees fetched');
+
       return c.json(employees);
     } catch (error) {
       log?.error({ error }, 'Failed to fetch store employees from Casdoor');

@@ -98,9 +98,16 @@ const isStoreCollapsed = (storeName: string) => {
 const employeesByStore = computed(() => {
   const userStores = currentUserStores.value;
   const userId = currentUserId.value;
+  const userRole = auth.role;
   const grouped = new Map<string, StoreEmployee[]>();
 
   for (const emp of employees.value) {
+    // RBAC: CHT users should not see ASM users
+    const empRole = getEffectiveRole(emp);
+    if (userRole === 'cht' && empRole === 'asm') {
+      continue;
+    }
+
     for (const store of emp.stores) {
       if (userStores.includes(store)) {
         if (!grouped.has(store)) {
@@ -410,7 +417,7 @@ const totalStores = computed(() => employeesByStore.value.size);
         <div v-for="[storeName, storeEmployees] in filteredEmployeesByStore" :key="storeName" class="mb-4">
           <!-- Store Header - Collapsible with improved hit area -->
           <button
-            class="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-paper-muted hover:text-paper-light transition-colors duration-150 rounded-lg hover:bg-ink-lighter/50 group"
+            class="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium uppercase tracking-wider text-paper-white hover:text-paper-white/80 transition-colors duration-150 rounded-lg hover:bg-ink-lighter/50 group"
             @click="toggleStoreCollapse(storeName)"
             :aria-expanded="!isStoreCollapsed(storeName)"
           >
@@ -440,7 +447,7 @@ const totalStores = computed(() => employeesByStore.value.size);
                 FOCUS_RING_CLASSES,
                 selectedId === emp.id
                   ? 'bg-vermillion-500/10 text-vermillion-200'
-                  : 'hover:bg-ink-lighter/70 text-paper-white'
+                  : 'hover:bg-ink-lighter/70 text-paper-muted hover:text-paper-light'
               ]"
               :aria-pressed="selectedId === emp.id"
               :aria-label="`${emp.displayName}, ${getRoleDisplay(getEffectiveRole(emp))}`"
@@ -473,7 +480,7 @@ const totalStores = computed(() => employeesByStore.value.size);
               <div class="min-w-0 flex-1">
                 <div class="flex items-center justify-between gap-2">
                   <span
-                    class="text-sm truncate transition-colors duration-150"
+                    class="text-xs truncate transition-colors duration-150"
                     :title="emp.displayName"
                   >
                     {{ emp.displayName }}

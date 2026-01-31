@@ -13,6 +13,7 @@ import { FOCUS_RING_CLASSES } from '@/constants/ui';
 import { usePermission } from '@/composables/usePermission';
 import {
   type ChecklistItemWithRecord,
+  type ClassificationCriteria,
   type DetailChecklistItemWithRecord,
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
@@ -386,21 +387,23 @@ let itemIdToRow2 = new Map<string, number>();
 let sheet2Month = new Date().getMonth() + 1;
 let sheet2Year = new Date().getFullYear();
 
-// Store item metadata for formula calculations (row -> {categoryType, baseline, score})
+// Store item metadata for formula calculations (row -> {categoryType, baseline, score, criteria})
 type ItemMetadata = {
   categoryType: 'daily' | 'weekly' | 'monthly';
   baseline: number;
   score: number;
+  classificationCriteria: ClassificationCriteria;
 };
 let rowToItemMetadata2 = new Map<number, ItemMetadata>();
 
-// Calculate summary values for Sheet 2 based on category type
+// Calculate summary values for Sheet 2 using criteria from database
 function calculateSummaryValues(
   dailyChecks: boolean[],
   categoryType: 'daily' | 'weekly' | 'monthly',
   baseline: number,
   score: number,
   daysInMonth: number,
+  classificationCriteria: ClassificationCriteria,
 ): {
   achievementPercentage: number;
   successfulCompletions: number;
@@ -413,41 +416,25 @@ function calculateSummaryValues(
   const successfulCompletions = relevantChecks.filter(Boolean).length;
   const implementationIssuesCount = relevantChecks.filter((v) => v === false).length;
 
-  let achievementPercentage: number;
-  let scoreAchieved: number;
+  // Determine baseline: use category baseline for daily, item baseline for weekly/monthly
+  const effectiveBaseline = classificationCriteria.baseline || baseline || 1;
+
+  // Calculate achievement percentage and score
+  const achievementPercentage = (successfulCompletions / effectiveBaseline) * 100;
+  const scoreAchieved = (successfulCompletions / effectiveBaseline) * score;
+
+  // Classify based on score achieved using thresholds from database
+  const thresholds = classificationCriteria.thresholds;
   let classification: string;
 
-  if (categoryType === 'daily') {
-    // Daily items: use fixed baseline of 26
-    const dailyBaseline = 26;
-    achievementPercentage = (successfulCompletions / dailyBaseline) * 100;
-    scoreAchieved = (successfulCompletions / dailyBaseline) * score;
-
-    // Classification based on achievement percentage
-    const ratio = successfulCompletions / dailyBaseline;
-    if (ratio >= 0.9) {
-      classification = 'A';
-    } else if (ratio >= 0.8) {
-      classification = 'B';
-    } else if (ratio >= 0.7) {
-      classification = 'C';
-    } else {
-      classification = 'KHONG_DAT';
-    }
+  if (scoreAchieved >= thresholds.A) {
+    classification = 'A';
+  } else if (scoreAchieved >= thresholds.B) {
+    classification = 'B';
+  } else if (scoreAchieved >= thresholds.C) {
+    classification = 'C';
   } else {
-    // Weekly/Monthly items: use baseline from database
-    const itemBaseline = baseline || 1;
-    achievementPercentage = (successfulCompletions / itemBaseline) * 100;
-    scoreAchieved = (successfulCompletions / 26) * score;
-
-    // Classification based on score achieved
-    if (scoreAchieved >= 8) {
-      classification = 'A';
-    } else if (scoreAchieved >= 5) {
-      classification = 'B';
-    } else {
-      classification = 'C';
-    }
+    classification = 'KHONG_DAT';
   }
 
   return {
@@ -560,9 +547,17 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
       const categoryType = item.category.category_type;
       const baseline = item.baseline ?? 1;
       const score = item.score;
+      const classificationCriteria = item.category.classification_criteria;
 
       // Calculate summary values based on category type
-      const summary = calculateSummaryValues(dailyChecks, categoryType, baseline, score, daysInMonth);
+      const summary = calculateSummaryValues(
+        dailyChecks,
+        categoryType,
+        baseline,
+        score,
+        daysInMonth,
+        classificationCriteria,
+      );
 
       const row: Record<number, { v: string | number; s?: object }> = {
         0: { v: item.item_number },
@@ -594,7 +589,7 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
       // Reverse mapping: item ID to row (for syncing from Sheet 1)
       itemIdToRow2.set(item.id, currentRow);
       // Store metadata for recalculating when checkboxes change
-      rowToItemMetadata2.set(currentRow, { categoryType, baseline, score });
+      rowToItemMetadata2.set(currentRow, { categoryType, baseline, score, classificationCriteria });
       currentRow++;
     }
 
@@ -1061,6 +1056,7 @@ onMounted(async () => {
                         metadata.baseline,
                         metadata.score,
                         currentDaysInMonth,
+                        metadata.classificationCriteria,
                       );
 
                       // Update summary columns
@@ -1137,6 +1133,7 @@ onMounted(async () => {
                   metadata.baseline,
                   metadata.score,
                   currentDaysInMonth,
+                  metadata.classificationCriteria,
                 );
 
                 // Update summary columns (summaryColStart = dayColStart2 + currentDaysInMonth)

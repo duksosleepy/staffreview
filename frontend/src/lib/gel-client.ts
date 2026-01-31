@@ -24,12 +24,22 @@ const API_BASE = '/api/checklist';
 
 export type DetailCategoryType = 'daily' | 'weekly' | 'monthly';
 
+export type ClassificationCriteria = {
+  thresholds: {
+    A: number;
+    B: number;
+    C: number;
+  };
+  baseline?: number;
+};
+
 export type DetailCategory = {
   id: string;
   name: string;
   category_type: DetailCategoryType;
   description: string | null;
   order: number;
+  classification_criteria: ClassificationCriteria;
 };
 
 // Sheet 1 Record Type - Approval Workflow
@@ -88,7 +98,12 @@ export type ChecklistItemWithRecord = {
   order: number;
   notes: string | null;
   baseline: number | null; // Baseline for weekly/monthly items
-  category: { id: string; name: string; category_type: DetailCategoryType };
+  category: {
+    id: string;
+    name: string;
+    category_type: DetailCategoryType;
+    classification_criteria: ClassificationCriteria;
+  };
   // Sheet 1 uses this record type (approval workflow)
   record: ChecklistRecord | null;
 };
@@ -111,7 +126,12 @@ export type DetailChecklistItemWithRecord = {
   order: number;
   notes: string | null;
   baseline: number | null; // Baseline for weekly/monthly items
-  category: { id: string; name: string; category_type: DetailCategoryType };
+  category: {
+    id: string;
+    name: string;
+    category_type: DetailCategoryType;
+    classification_criteria: ClassificationCriteria;
+  };
   // Sheet 2 uses this record type (monthly tracking)
   record: DetailMonthlyRecord | null;
 };

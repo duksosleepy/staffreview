@@ -112,7 +112,7 @@ export const checklistRoutes = new Hono<Env>()
             order,
             notes,
             baseline,
-            category: { id, name, category_type },
+            category: { id, name, category_type, classification_criteria },
             record := assert_single((
               select .checklist_records {
                 id,
@@ -151,7 +151,7 @@ export const checklistRoutes = new Hono<Env>()
             order,
             notes,
             baseline,
-            category: { id, name, category_type },
+            category: { id, name, category_type, classification_criteria },
             record := assert_single((
               select .checklist_records {
                 id,
@@ -267,7 +267,7 @@ export const checklistRoutes = new Hono<Env>()
         order,
         notes,
         baseline,
-        category: { id, name, category_type },
+        category: { id, name, category_type, classification_criteria },
         record := assert_single((
           select .monthly_records {
             id,
@@ -315,7 +315,8 @@ export const checklistRoutes = new Hono<Env>()
         name,
         category_type,
         description,
-        order
+        order,
+        classification_criteria
       }
       order by .order
     `;

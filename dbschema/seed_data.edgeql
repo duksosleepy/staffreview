@@ -26,21 +26,24 @@ insert DetailCategory {
     name := "CHECK LIST HẰNG NGÀY CHI TIẾT",
     category_type := DetailCategoryType.daily,
     description := "Danh sách công việc kiểm tra hằng ngày chi tiết",
-    order := 1
+    order := 1,
+    classification_criteria := to_json('{"thresholds": {"A": 8.0, "B": 5.0, "C": 3.0}, "baseline": 26}')
 };
 
 insert DetailCategory {
     name := "CHECK LIST HẰNG TUẦN CHI TIẾT",
     category_type := DetailCategoryType.weekly,
     description := "Danh sách công việc kiểm tra hằng tuần chi tiết",
-    order := 2
+    order := 2,
+    classification_criteria := to_json('{"thresholds": {"A": 8.0, "B": 5.0, "C": 3.0}}')
 };
 
 insert DetailCategory {
     name := "CHECK LIST HẰNG THÁNG CHI TIẾT",
     category_type := DetailCategoryType.monthly,
     description := "Danh sách công việc kiểm tra hằng tháng chi tiết",
-    order := 3
+    order := 3,
+    classification_criteria := to_json('{"thresholds": {"A": 8.0, "B": 5.0, "C": 3.0}}')
 };
 
 

@@ -153,6 +153,13 @@ module default {
             constraint min_value(0);
         }
 
+        # Classification criteria stored as JSON
+        # Example structure:
+        # {"thresholds": {"A": 8.0, "B": 5.0, "C": 3.0}, "baseline": 26}
+        classification_criteria: json {
+            default := to_json('{"thresholds": {"A": 8.0, "B": 5.0, "C": 3.0}}');
+        }
+
         # Computed backlink to items
         multi items := .<category[is DetailChecklistItem];
 

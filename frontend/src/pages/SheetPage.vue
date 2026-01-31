@@ -802,7 +802,7 @@ function calculateValidDateRange(): { minDate: Date; maxDate: Date } {
 
   // All users follow the same 3-day deadline rule
   const minDate = new Date(today);
-  minDate.setDate(today.getDate() - 3);
+  minDate.setDate(today.getDate() - 2); // Changed from -3 to -2 to get exactly last 3 days including today
 
   const maxDate = new Date(today);
 
@@ -1503,6 +1503,7 @@ onMounted(async () => {
         // VALIDATION: Check if selected date is within the 3-day deadline window
         if (isoDate) {
           const selectedDateObj = new Date(isoDate);
+          selectedDateObj.setHours(0, 0, 0, 0); // Normalize to midnight for accurate comparison
           const { minDate, maxDate } = calculateValidDateRange();
 
           // Check if date is outside valid range

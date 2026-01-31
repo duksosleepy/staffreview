@@ -53,6 +53,9 @@ const toaster = createToaster({
 // Error handling
 const componentError = ref<string | null>(null);
 
+// Date picker validation state
+let isRevertingDatePicker = false;
+
 /**
  * Global error handler for component errors
  */
@@ -785,6 +788,59 @@ async function refreshSheet2() {
   sheet.autoResizeRows(1, totalRows);
 }
 
+/**
+ * Calculate valid date range for the date picker based on 3-day deadline rule
+ *
+ * Strategy A:
+ * - All users (employee/CHT/ASM/admin): Can only select dates from last 3 days
+ *   Formula: assessment_date + 3 days >= today => assessment_date >= today - 3 days
+ * - This prevents selecting dates where the deadline has already passed
+ */
+function calculateValidDateRange(): { minDate: Date; maxDate: Date } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // All users follow the same 3-day deadline rule
+  const minDate = new Date(today);
+  minDate.setDate(today.getDate() - 3);
+
+  const maxDate = new Date(today);
+
+  return { minDate, maxDate };
+}
+
+/**
+ * Apply or re-apply date validation to the date picker cell
+ * This should be called:
+ * - On initial setup
+ * - When page becomes visible (in case user left tab open overnight)
+ */
+function applyDatePickerValidation() {
+  if (!univerAPI) return;
+
+  const { minDate, maxDate } = calculateValidDateRange();
+
+  const workbook = univerAPI.getActiveWorkbook();
+  if (!workbook) return;
+
+  const sheet1 = workbook.getSheetBySheetId('sheet1');
+  if (!sheet1) return;
+
+  sheet1
+    .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
+    ?.setDataValidation(
+      univerAPI.newDataValidation()
+        .requireDateBetween(minDate, maxDate)
+        .build()
+    );
+
+  console.log('[DatePicker] Applied 3-day deadline validation:', {
+    role: auth.role,
+    minDate: minDate.toLocaleDateString(),
+    maxDate: maxDate.toLocaleDateString(),
+  });
+}
+
 onMounted(async () => {
   if (!containerRef.value) return;
 
@@ -920,8 +976,8 @@ onMounted(async () => {
       }
 
       // Set up date picker with DATE validation (shows calendar popup)
-      const minDate = new Date(2020, 0, 1);
-      const maxDate = new Date(2030, 11, 31);
+      // Dynamic date range based on role and 3-day deadline rule
+      const { minDate, maxDate } = calculateValidDateRange();
       sheet1
         .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
         ?.setDataValidation(api.newDataValidation().requireDateBetween(minDate, maxDate).build());
@@ -1395,6 +1451,11 @@ onMounted(async () => {
         return;
       }
 
+      // Skip if we're reverting the date picker (prevent infinite loop)
+      if (isRevertingDatePicker) {
+        return;
+      }
+
       const { effectedRanges } = params;
 
       // Check if the date picker cell (row 0, col 1) is in the affected ranges
@@ -1436,6 +1497,41 @@ onMounted(async () => {
             const month = String(parsed.getMonth() + 1).padStart(2, '0');
             const day = String(parsed.getDate()).padStart(2, '0');
             isoDate = `${year}-${month}-${day}`;
+          }
+        }
+
+        // VALIDATION: Check if selected date is within the 3-day deadline window
+        if (isoDate) {
+          const selectedDateObj = new Date(isoDate);
+          const { minDate, maxDate } = calculateValidDateRange();
+
+          // Check if date is outside valid range
+          if (selectedDateObj < minDate || selectedDateObj > maxDate) {
+            // REJECT: Revert to previous valid date
+            const previousDate = selectedDate.value || new Date().toISOString().split('T')[0];
+            const [year, month, day] = previousDate.split('-');
+            const revertFormatted = `${Number.parseInt(month)}/${Number.parseInt(day)}/${year}`;
+
+            // Set flag to prevent infinite loop
+            isRevertingDatePicker = true;
+
+            // Revert the cell value
+            sheet?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)?.setValue(revertFormatted);
+
+            // Reset flag after a short delay
+            setTimeout(() => {
+              isRevertingDatePicker = false;
+            }, 100);
+
+            // Show error message
+            toaster.create({
+              type: 'error',
+              title: 'Ngày không hợp lệ',
+              description: `Chỉ có thể chọn ngày từ ${minDate.toLocaleDateString('vi-VN')} đến ${maxDate.toLocaleDateString('vi-VN')} (3 ngày gần nhất)`,
+              duration: 5000,
+            });
+
+            return; // Stop processing
           }
         }
 
@@ -1486,9 +1582,28 @@ onMounted(async () => {
       wb.setActiveSheet('sheet1');
     }
   }, 300);
+
+  // Re-apply date validation when page becomes visible
+  // (in case user left tab open overnight and the 3-day window has shifted)
+  const visibilityHandler = () => {
+    if (!document.hidden) {
+      applyDatePickerValidation();
+    }
+  };
+  document.addEventListener('visibilitychange', visibilityHandler);
+
+  // Store handler for cleanup
+  (window as any).__datePickerVisibilityHandler = visibilityHandler;
 });
 
 onUnmounted(() => {
+  // Cleanup visibility change listener
+  const handler = (window as any).__datePickerVisibilityHandler;
+  if (handler) {
+    document.removeEventListener('visibilitychange', handler);
+    delete (window as any).__datePickerVisibilityHandler;
+  }
+
   univerAPI?.dispose();
   univerInstance?.dispose();
 });

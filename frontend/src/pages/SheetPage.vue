@@ -991,67 +991,86 @@ onMounted(async () => {
             const response = await upsertChecklistRecord(payload);
             if (!response.success) {
               sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
-            } else if (column === 1) {
-              // SYNC: When employee_checked changes in Sheet 1, also update Sheet 2
-              // Extract day from the assessment date
-              const [yearStr, monthStr, dayStr] = assessmentDate.split('-');
-              const day = Number.parseInt(dayStr, 10);
-              const month = Number.parseInt(monthStr, 10);
-              const year = Number.parseInt(yearStr, 10);
+            } else {
+              // SYNC LOGIC: Sync Sheet 1 changes to Sheet 2
+              // Column 1 (Employee): Always sync to Sheet 2
+              // Column 2 (CHT): Only sync if Employee column is empty AND CHT is viewing employee's data
+              let shouldSync = false;
 
-              // Only sync if the date matches Sheet 2's current month/year
-              if (month === sheet2Month && year === sheet2Year) {
-                // Find the corresponding row in Sheet 2
-                const sheet2Row = itemIdToRow2.get(itemId);
-                if (sheet2Row !== undefined) {
-                  // Calculate the column for the day in Sheet 2 (day columns start at 9)
-                  const dayColStart2 = 9;
-                  const dayCol = dayColStart2 + day - 1;
+              if (column === 1) {
+                // Employee column always syncs
+                shouldSync = true;
+              } else if (column === 2) {
+                // CHT column only syncs if:
+                // 1. Employee column is empty
+                // 2. CHT is viewing an employee's spreadsheet (selectedStaffId is set and not viewing own data)
+                const employeeValue = sheet?.getRange(row, 1, 1, 1)?.getValue();
+                const employeeChecked = employeeValue === 1 || employeeValue === '1' || employeeValue === true;
+                const isViewingEmployeeData = selectedStaffId.value !== undefined && selectedStaffId.value !== auth.casdoorId;
+                shouldSync = !employeeChecked && isViewingEmployeeData;
+              }
 
-                  // Update Sheet 2 cell
-                  const sheet2 = workbook.getSheetBySheetId('sheet2');
-                  sheet2?.getRange(sheet2Row, dayCol, 1, 1)?.setValue(isChecked ? 1 : 0);
+              if (shouldSync) {
+                // Extract day from the assessment date
+                const [yearStr, monthStr, dayStr] = assessmentDate.split('-');
+                const day = Number.parseInt(dayStr, 10);
+                const month = Number.parseInt(monthStr, 10);
+                const year = Number.parseInt(yearStr, 10);
 
-                  // Save to DetailMonthlyRecord
-                  await upsertDetailMonthlyRecord({
-                    detail_item_id: itemId,
-                    month: sheet2Month,
-                    year: sheet2Year,
-                    day: day,
-                    checked: isChecked,
-                  });
+                // Only sync if the date matches Sheet 2's current month/year
+                if (month === sheet2Month && year === sheet2Year) {
+                  // Find the corresponding row in Sheet 2
+                  const sheet2Row = itemIdToRow2.get(itemId);
+                  if (sheet2Row !== undefined) {
+                    // Calculate the column for the day in Sheet 2 (day columns start at 9)
+                    const dayColStart2 = 9;
+                    const dayCol = dayColStart2 + day - 1;
 
-                  // Recalculate and update summary columns in Sheet 2
-                  const metadata = rowToItemMetadata2.get(sheet2Row);
-                  const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
-                  if (metadata && sheet2) {
-                    // Read all daily checks from the row
-                    const dailyChecks: boolean[] = [];
-                    for (let d = 0; d < currentDaysInMonth; d++) {
-                      const val = sheet2.getRange(sheet2Row, dayColStart2 + d, 1, 1)?.getValue();
-                      dailyChecks.push(val === 1 || val === '1' || val === true);
+                    // Update Sheet 2 cell
+                    const sheet2 = workbook.getSheetBySheetId('sheet2');
+                    sheet2?.getRange(sheet2Row, dayCol, 1, 1)?.setValue(isChecked ? 1 : 0);
+
+                    // Save to DetailMonthlyRecord
+                    await upsertDetailMonthlyRecord({
+                      detail_item_id: itemId,
+                      month: sheet2Month,
+                      year: sheet2Year,
+                      day: day,
+                      checked: isChecked,
+                    });
+
+                    // Recalculate and update summary columns in Sheet 2
+                    const metadata = rowToItemMetadata2.get(sheet2Row);
+                    const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
+                    if (metadata && sheet2) {
+                      // Read all daily checks from the row
+                      const dailyChecks: boolean[] = [];
+                      for (let d = 0; d < currentDaysInMonth; d++) {
+                        const val = sheet2.getRange(sheet2Row, dayColStart2 + d, 1, 1)?.getValue();
+                        dailyChecks.push(val === 1 || val === '1' || val === true);
+                      }
+                      // Pad to 31 days
+                      while (dailyChecks.length < 31) {
+                        dailyChecks.push(false);
+                      }
+
+                      // Calculate new summary values
+                      const summary = calculateSummaryValues(
+                        dailyChecks,
+                        metadata.categoryType,
+                        metadata.baseline,
+                        metadata.score,
+                        currentDaysInMonth,
+                      );
+
+                      // Update summary columns
+                      const summaryCol = dayColStart2 + currentDaysInMonth;
+                      sheet2.getRange(sheet2Row, summaryCol, 1, 1)?.setValue(summary.achievementPercentage);
+                      sheet2.getRange(sheet2Row, summaryCol + 1, 1, 1)?.setValue(summary.successfulCompletions);
+                      sheet2.getRange(sheet2Row, summaryCol + 2, 1, 1)?.setValue(summary.implementationIssuesCount);
+                      sheet2.getRange(sheet2Row, summaryCol + 3, 1, 1)?.setValue(summary.scoreAchieved);
+                      sheet2.getRange(sheet2Row, summaryCol + 4, 1, 1)?.setValue(summary.classification);
                     }
-                    // Pad to 31 days
-                    while (dailyChecks.length < 31) {
-                      dailyChecks.push(false);
-                    }
-
-                    // Calculate new summary values
-                    const summary = calculateSummaryValues(
-                      dailyChecks,
-                      metadata.categoryType,
-                      metadata.baseline,
-                      metadata.score,
-                      currentDaysInMonth,
-                    );
-
-                    // Update summary columns
-                    const summaryCol = dayColStart2 + currentDaysInMonth;
-                    sheet2.getRange(sheet2Row, summaryCol, 1, 1)?.setValue(summary.achievementPercentage);
-                    sheet2.getRange(sheet2Row, summaryCol + 1, 1, 1)?.setValue(summary.successfulCompletions);
-                    sheet2.getRange(sheet2Row, summaryCol + 2, 1, 1)?.setValue(summary.implementationIssuesCount);
-                    sheet2.getRange(sheet2Row, summaryCol + 3, 1, 1)?.setValue(summary.scoreAchieved);
-                    sheet2.getRange(sheet2Row, summaryCol + 4, 1, 1)?.setValue(summary.classification);
                   }
                 }
               }

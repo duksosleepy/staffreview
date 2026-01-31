@@ -94,6 +94,31 @@ export const extractRole = (userInfo: OIDCUserInfo): Role => {
   return 'employee';
 };
 
+// Extract role from Casdoor user object (for user listing)
+// Similar to extractRole but works with user objects from /api/get-users
+const extractRoleFromUser = (user: any): Role => {
+  // Check roles array first (same structure as OIDC token)
+  if (user.roles?.length) {
+    const role = extractRoleString(user.roles[0]);
+    if (role && isValidRole(role)) return role;
+  }
+
+  // Check tag field
+  if (user.tag) {
+    const role = normalizeRole(user.tag);
+    if (role) return role;
+  }
+
+  // Check signupApplication field (Casdoor sometimes stores role here)
+  if (user.signupApplication) {
+    const role = normalizeRole(user.signupApplication);
+    if (role) return role;
+  }
+
+  // Default to employee
+  return 'employee';
+};
+
 // Map Casdoor tag display names to internal role codes
 const TAG_TO_ROLE: Record<string, Role> = {
   'area manager': 'asm',
@@ -280,7 +305,19 @@ export const fetchCasdoorUsersByStores = async (
 
     // Resolve role from Casdoor role assignments (userId format: "org/username")
     const userId = `${owner}/${user.name}`;
-    const role: Role = roleMap.get(userId) ?? 'employee';
+    let role: Role = roleMap.get(userId) ?? 'employee';
+    const roleFromMapping = role;
+
+    // FALLBACK: If role mapping doesn't have this user, try extracting from user object
+    // This ensures consistency with login flow and handles cases where role assignment is missing
+    if (role === 'employee') {
+      const extractedRole = extractRoleFromUser(user);
+      if (extractedRole !== 'employee') {
+        role = extractedRole;
+        // Log when fallback is used (helps debug role assignment issues)
+        console.log(`[Role Fallback] User ${userId}: mapping="${roleFromMapping}" -> extracted="${role}" (tag="${user.tag}", roles=${JSON.stringify(user.roles)})`);
+      }
+    }
 
     // RBAC: CHT can only see employees and other CHTs, not ASMs
     // Normalize role strings to lowercase for case-insensitive comparison

@@ -209,6 +209,12 @@ function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: string
     cl: { rgb: '#FFFFFF' },
     tb: 3, // Text wrap enabled (tb: 1=overflow, 2=clip, 3=wrap)
   };
+  const checklistHeaderCheckboxStyle = {
+    bl: 1,
+    vt: 2,
+    ht: 1, // Horizontal alignment: center
+    bg: { rgb: '#4A90D9' },
+  };
   const itemNameStyle = { vt: 2, tb: 3 }; // Text wrap for item names
 
   cells[1] = {
@@ -925,6 +931,106 @@ onMounted(async () => {
 
         // Handle Sheet1 checkbox changes (columns B=1, C=2, D=3)
         if (sheetId === 'sheet1' && row >= DATA_START_ROW && column >= 1 && column <= 3) {
+          // Check if this is a category header row
+          const categoryName = rowMapping1.checklistRows.get(row);
+
+          // If it's a category header checkbox, tick/untick all children
+          if (categoryName) {
+            const sheet = workbook.getSheetBySheetId('sheet1');
+            const headerValue = sheet?.getRange(row, column, 1, 1)?.getValue();
+            const shouldTickAll = headerValue === 1 || headerValue === '1' || headerValue === true;
+
+            // Make sure we have a valid date
+            const assessmentDate = selectedDate.value;
+            if (!assessmentDate) return;
+
+            // Role-based column validation
+            type ColumnRole = 'employee' | 'cht' | 'asm';
+            const COLUMN_CONFIG: Record<number, { role: ColumnRole; name: string }> = {
+              1: { role: 'employee', name: 'NHÂN VIÊN' },
+              2: { role: 'cht', name: 'CHT' },
+              3: { role: 'asm', name: 'ASM' },
+            };
+
+            const columnConfig = COLUMN_CONFIG[column];
+            if (!columnConfig) return;
+
+            if (!isRole(columnConfig.role)) {
+              toaster.create({
+                title: 'Không có quyền',
+                description: `You can only edit your own column (${columnConfig.name})`,
+                type: 'error',
+              });
+              isRevertingValue = true;
+              sheet?.getRange(row, column, 1, 1)?.setValue(0);
+              setTimeout(() => { isRevertingValue = false; }, 100);
+              return;
+            }
+
+            // Get child rows for this category
+            const childRange = rowMapping1.childRowRanges.get(categoryName);
+            if (childRange) {
+              isRevertingValue = true; // Prevent recursion
+
+              // Update all child checkboxes in UI
+              for (let childRow = childRange.start; childRow < childRange.start + childRange.count; childRow++) {
+                sheet?.getRange(childRow, column, 1, 1)?.setValue(shouldTickAll ? 1 : 0);
+              }
+
+              // Reset category header checkbox to 0 after action
+              sheet?.getRange(row, column, 1, 1)?.setValue(0);
+
+              setTimeout(() => { isRevertingValue = false; }, 100);
+
+              // Save all child items to database
+              const updatePromises: Promise<any>[] = [];
+              for (let childRow = childRange.start; childRow < childRange.start + childRange.count; childRow++) {
+                const itemId = rowToItemId1.get(childRow);
+                if (itemId) {
+                  const payload: {
+                    checklist_item_id: string;
+                    assessment_date: string;
+                    employee_checked?: boolean;
+                    cht_checked?: boolean;
+                    asm_checked?: boolean;
+                  } = {
+                    checklist_item_id: itemId,
+                    assessment_date: assessmentDate,
+                  };
+
+                  if (column === 1) {
+                    payload.employee_checked = shouldTickAll;
+                  } else if (column === 2) {
+                    payload.cht_checked = shouldTickAll;
+                  } else if (column === 3) {
+                    payload.asm_checked = shouldTickAll;
+                  }
+
+                  updatePromises.push(upsertChecklistRecord(payload));
+                }
+              }
+
+              // Execute all updates
+              try {
+                await Promise.all(updatePromises);
+                toaster.create({
+                  title: 'Đã cập nhật',
+                  description: `Đã ${shouldTickAll ? 'tick' : 'untick'} tất cả ${updatePromises.length} mục trong ${categoryName}`,
+                  type: 'success',
+                  duration: 3000,
+                });
+              } catch (error: any) {
+                toaster.create({
+                  title: 'Lỗi',
+                  description: `Không thể cập nhật: ${error?.message || 'Unknown error'}`,
+                  type: 'error',
+                });
+              }
+            }
+            return;
+          }
+
+          // Regular item checkbox (not category header)
           const itemId = rowToItemId1.get(row);
           if (!itemId) return;
 

@@ -532,6 +532,34 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
     expandedGroups2.set(categoryName, false);
     rowMapping2.checklistRows.set(currentRow, categoryName);
 
+    // Calculate average score and achievement percentage for this category
+    let totalScore = 0;
+    let totalAchievementPercentage = 0;
+    let itemCount = 0;
+    for (const item of categoryItems) {
+      const r = item.record;
+      const dailyChecks = r?.daily_checks ?? Array(31).fill(false);
+      const categoryType = item.category.category_type;
+      const baseline = item.baseline ?? 1;
+      const score = item.score;
+      const classificationCriteria = item.category.classification_criteria;
+
+      const summary = calculateSummaryValues(
+        dailyChecks,
+        categoryType,
+        baseline,
+        score,
+        daysInMonth,
+        classificationCriteria,
+      );
+
+      totalScore += summary.scoreAchieved;
+      totalAchievementPercentage += summary.achievementPercentage;
+      itemCount++;
+    }
+    const averageScore = itemCount > 0 ? Math.round((totalScore / itemCount) * 100) / 100 : 0;
+    const averageAchievementPercentage = itemCount > 0 ? Math.round((totalAchievementPercentage / itemCount) * 100) / 100 : 0;
+
     // Category header row
     const categoryRow: Record<number, { v: string | number; s?: object }> = {
       0: { v: '', s: categoryHeaderStyle },
@@ -540,6 +568,10 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
     for (let col = 2; col <= summaryColStart + 5; col++) {
       categoryRow[col] = { v: '', s: categoryHeaderStyle };
     }
+    // Add average achievement percentage to "TL(%)ĐẠT" column (summaryColStart)
+    categoryRow[summaryColStart] = { v: averageAchievementPercentage, s: categoryHeaderStyle };
+    // Add average score to the "Số điểm" column (summaryColStart + 3)
+    categoryRow[summaryColStart + 3] = { v: averageScore, s: categoryHeaderStyle };
     cells[currentRow] = categoryRow;
     currentRow++;
 
@@ -638,6 +670,61 @@ function getColumnLetter(index: number): string {
     n = Math.floor(n / 26) - 1;
   }
   return result;
+}
+
+// Recalculate and update category average score and achievement percentage
+function updateCategoryAverage(categoryName: string) {
+  if (!univerAPI) return;
+
+  const workbook = univerAPI.getActiveWorkbook();
+  const sheet = workbook?.getSheetBySheetId('sheet2');
+  if (!sheet) return;
+
+  // Find the category header row
+  let categoryHeaderRow = -1;
+  for (const [row, name] of rowMapping2.checklistRows) {
+    if (name === categoryName) {
+      categoryHeaderRow = row;
+      break;
+    }
+  }
+
+  if (categoryHeaderRow === -1) return;
+
+  // Get child rows for this category
+  const childRange = rowMapping2.childRowRanges.get(categoryName);
+  if (!childRange) return;
+
+  const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
+  const dayColStart2 = 9;
+  const summaryCol = dayColStart2 + currentDaysInMonth;
+
+  // Calculate average score and achievement percentage from all child items
+  let totalScore = 0;
+  let totalAchievementPercentage = 0;
+  let itemCount = 0;
+
+  for (let childRow = childRange.start; childRow < childRange.start + childRange.count; childRow++) {
+    const scoreValue = sheet.getRange(childRow, summaryCol + 3, 1, 1)?.getValue();
+    const achievementValue = sheet.getRange(childRow, summaryCol, 1, 1)?.getValue();
+
+    if (typeof scoreValue === 'number') {
+      totalScore += scoreValue;
+      itemCount++;
+    }
+
+    if (typeof achievementValue === 'number') {
+      totalAchievementPercentage += achievementValue;
+    }
+  }
+
+  const averageScore = itemCount > 0 ? Math.round((totalScore / itemCount) * 100) / 100 : 0;
+  const averageAchievementPercentage = itemCount > 0 ? Math.round((totalAchievementPercentage / itemCount) * 100) / 100 : 0;
+
+  // Update the category header row's "TL(%)ĐẠT" column (summaryCol)
+  sheet.getRange(categoryHeaderRow, summaryCol, 1, 1)?.setValue(averageAchievementPercentage);
+  // Update the category header row's "Số điểm" column (summaryCol + 3)
+  sheet.getRange(categoryHeaderRow, summaryCol + 3, 1, 1)?.setValue(averageScore);
 }
 
 // Refresh Sheet2 data to recalculate row heights
@@ -1172,6 +1259,14 @@ onMounted(async () => {
                       sheet2.getRange(sheet2Row, summaryCol + 2, 1, 1)?.setValue(summary.implementationIssuesCount);
                       sheet2.getRange(sheet2Row, summaryCol + 3, 1, 1)?.setValue(summary.scoreAchieved);
                       sheet2.getRange(sheet2Row, summaryCol + 4, 1, 1)?.setValue(summary.classification);
+
+                      // Find and update the category average for this item's category
+                      for (const [categoryName, range] of rowMapping2.childRowRanges) {
+                        if (sheet2Row >= range.start && sheet2Row < range.start + range.count) {
+                          updateCategoryAverage(categoryName);
+                          break;
+                        }
+                      }
                     }
                   }
                 }
@@ -1249,6 +1344,14 @@ onMounted(async () => {
                 sheet.getRange(row, summaryCol + 2, 1, 1)?.setValue(summary.implementationIssuesCount);
                 sheet.getRange(row, summaryCol + 3, 1, 1)?.setValue(summary.scoreAchieved);
                 sheet.getRange(row, summaryCol + 4, 1, 1)?.setValue(summary.classification);
+
+                // Find and update the category average for this item's category
+                for (const [categoryName, range] of rowMapping2.childRowRanges) {
+                  if (row >= range.start && row < range.start + range.count) {
+                    updateCategoryAverage(categoryName);
+                    break;
+                  }
+                }
               }
 
               // SYNC: When day checkbox changes in Sheet 2, also update Sheet 1 if date matches

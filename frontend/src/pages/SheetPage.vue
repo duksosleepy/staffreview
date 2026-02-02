@@ -646,7 +646,15 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
   let totalScore = 0;
   let categoryCount = 0;
 
-  // Sum all category averages
+  // Count classifications for all items
+  const classificationCounts = {
+    A: 0,
+    B: 0,
+    C: 0,
+    D: 0,
+  };
+
+  // Sum all category averages and count classifications
   for (let row = 2; row < currentRow; row++) {
     const categoryName = rowMapping2.checklistRows.get(row);
     if (categoryName) {
@@ -661,6 +669,20 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
 
       if (typeof scoreValue === 'number') {
         totalScore += scoreValue;
+      }
+    } else {
+      // This is an item row - count its classification
+      const classificationValue = cells[row]?.[summaryColStart + 4]?.v;
+      if (typeof classificationValue === 'string') {
+        if (classificationValue === 'A') {
+          classificationCounts.A++;
+        } else if (classificationValue === 'B') {
+          classificationCounts.B++;
+        } else if (classificationValue === 'C') {
+          classificationCounts.C++;
+        } else if (classificationValue === 'KHONG_DAT') {
+          classificationCounts.D++;
+        }
       }
     }
   }
@@ -677,6 +699,9 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
   } else if (totalScore > 50) {
     overallClassification = 'C';
   }
+
+  // Build classification summary for notes - using simple separator for better compatibility
+  const classificationSummary = `A:${classificationCounts.A} | B:${classificationCounts.B} | C:${classificationCounts.C} | D:${classificationCounts.D}`;
 
   // Create summary row with bold styling
   const summaryRowStyle = { bl: 1, vt: 2, bg: { rgb: '#FFF9E6' } }; // Light yellow background, bold
@@ -697,7 +722,7 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
   cells[1][summaryColStart + 2] = { v: '', s: summaryRowStyle }; // Có TH ko Đạt (empty)
   cells[1][summaryColStart + 3] = { v: Math.round(totalScore * 100) / 100, s: summaryRowStyle }; // Số điểm
   cells[1][summaryColStart + 4] = { v: overallClassification, s: summaryRowStyle }; // Xếp loại
-  cells[1][summaryColStart + 5] = { v: '', s: summaryRowStyle }; // Ghi chú (empty)
+  cells[1][summaryColStart + 5] = { v: classificationSummary, s: summaryRowStyle }; // Ghi chú with classification counts
 
   return { cells, totalRows: currentRow, daysInMonth, summaryColStart };
 }

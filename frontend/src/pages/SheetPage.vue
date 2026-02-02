@@ -529,7 +529,8 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
   itemIdToRow2 = new Map(); // Reset the reverse mapping for Sheet 2
   rowToItemMetadata2 = new Map(); // Reset the item metadata mapping
   const grouped = groupItemsByCategory(items);
-  let currentRow = 1;
+
+  let currentRow = 2; // Start data at row 2 (after header and summary row)
 
   for (const [categoryName, categoryItems] of grouped) {
     expandedGroups2.set(categoryName, false);
@@ -640,6 +641,64 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
     });
   }
 
+  // Calculate overall summary for row 1
+  let totalAchievementPercentage = 0;
+  let totalScore = 0;
+  let categoryCount = 0;
+
+  // Sum all category averages
+  for (let row = 2; row < currentRow; row++) {
+    const categoryName = rowMapping2.checklistRows.get(row);
+    if (categoryName) {
+      // This is a category header row
+      const achievementValue = cells[row]?.[summaryColStart]?.v;
+      const scoreValue = cells[row]?.[summaryColStart + 3]?.v;
+
+      if (typeof achievementValue === 'number') {
+        totalAchievementPercentage += achievementValue;
+        categoryCount++;
+      }
+
+      if (typeof scoreValue === 'number') {
+        totalScore += scoreValue;
+      }
+    }
+  }
+
+  // Calculate averages
+  const avgAchievementPercentage = categoryCount > 0 ? Math.round((totalAchievementPercentage / categoryCount) * 100) / 100 : 0;
+
+  // Determine classification based on total score
+  let overallClassification = 'D';
+  if (totalScore >= 90) {
+    overallClassification = 'A';
+  } else if (totalScore >= 70) {
+    overallClassification = 'B';
+  } else if (totalScore > 50) {
+    overallClassification = 'C';
+  }
+
+  // Create summary row with bold styling
+  const summaryRowStyle = { bl: 1, vt: 2, bg: { rgb: '#FFF9E6' } }; // Light yellow background, bold
+
+  cells[1] = {
+    0: { v: '', s: summaryRowStyle },
+    1: { v: 'TỔNG KẾT', s: summaryRowStyle },
+  };
+
+  // Fill empty cells for other columns
+  for (let col = 2; col < summaryColStart; col++) {
+    cells[1][col] = { v: '', s: summaryRowStyle };
+  }
+
+  // Add calculated values
+  cells[1][summaryColStart] = { v: avgAchievementPercentage, s: summaryRowStyle }; // TL(%)ĐẠT
+  cells[1][summaryColStart + 1] = { v: '', s: summaryRowStyle }; // Số lần Đạt (empty)
+  cells[1][summaryColStart + 2] = { v: '', s: summaryRowStyle }; // Có TH ko Đạt (empty)
+  cells[1][summaryColStart + 3] = { v: Math.round(totalScore * 100) / 100, s: summaryRowStyle }; // Số điểm
+  cells[1][summaryColStart + 4] = { v: overallClassification, s: summaryRowStyle }; // Xếp loại
+  cells[1][summaryColStart + 5] = { v: '', s: summaryRowStyle }; // Ghi chú (empty)
+
   return { cells, totalRows: currentRow, daysInMonth, summaryColStart };
 }
 
@@ -728,6 +787,59 @@ function updateCategoryAverage(categoryName: string) {
   sheet.getRange(categoryHeaderRow, summaryCol, 1, 1)?.setValue(averageAchievementPercentage);
   // Update the category header row's "Số điểm" column (summaryCol + 3)
   sheet.getRange(categoryHeaderRow, summaryCol + 3, 1, 1)?.setValue(averageScore);
+
+  // Update the overall summary row after updating category
+  updateOverallSummary();
+}
+
+// Recalculate and update overall summary in row 1
+function updateOverallSummary() {
+  if (!univerAPI) return;
+
+  const workbook = univerAPI.getActiveWorkbook();
+  const sheet = workbook?.getSheetBySheetId('sheet2');
+  if (!sheet) return;
+
+  const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
+  const dayColStart2 = 9;
+  const summaryCol = dayColStart2 + currentDaysInMonth;
+
+  let totalAchievementPercentage = 0;
+  let totalScore = 0;
+  let categoryCount = 0;
+
+  // Sum all category averages (iterate through all category header rows)
+  for (const [row, categoryName] of rowMapping2.checklistRows) {
+    const achievementValue = sheet.getRange(row, summaryCol, 1, 1)?.getValue();
+    const scoreValue = sheet.getRange(row, summaryCol + 3, 1, 1)?.getValue();
+
+    if (typeof achievementValue === 'number') {
+      totalAchievementPercentage += achievementValue;
+      categoryCount++;
+    }
+
+    if (typeof scoreValue === 'number') {
+      totalScore += scoreValue;
+    }
+  }
+
+  // Calculate averages
+  const avgAchievementPercentage = categoryCount > 0 ? Math.round((totalAchievementPercentage / categoryCount) * 100) / 100 : 0;
+
+  // Determine classification based on total score
+  let overallClassification = 'D';
+  if (totalScore >= 90) {
+    overallClassification = 'A';
+  } else if (totalScore >= 70) {
+    overallClassification = 'B';
+  } else if (totalScore > 50) {
+    overallClassification = 'C';
+  }
+
+  // Update row 1 with calculated values
+  sheet.getRange(1, summaryCol, 1, 1)?.setValue(avgAchievementPercentage); // TL(%)ĐẠT
+  sheet.getRange(1, summaryCol + 3, 1, 1)?.setValue(Math.round(totalScore * 100) / 100); // Số điểm
+  sheet.getRange(1, summaryCol + 4, 1, 1)?.setValue(overallClassification); // Xếp loại
 }
 
 // Refresh Sheet2 data to recalculate row heights
@@ -776,11 +888,11 @@ async function refreshSheet2() {
     expandedGroups2.set(categoryName, false);
   }
 
-  // Re-apply checkbox validation to day columns
+  // Re-apply checkbox validation to day columns (start from row 3, after header and empty row)
   for (let day = 0; day < daysInMonth; day++) {
     const colLetter = getColumnLetter(dayColStart + day);
     sheet
-      .getRange(`${colLetter}2:${colLetter}${totalRows}`)
+      .getRange(`${colLetter}3:${colLetter}${totalRows}`)
       ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
   }
 
@@ -954,8 +1066,8 @@ onMounted(async () => {
         name: 'Chi tiết',
         rowCount: Math.max(totalRows2 + 100, 1000),
         columnCount: summaryColStart + 10,
-        freeze: { xSplit: 2, ySplit: 1, startRow: 1, startColumn: 2 },
-        rowData: { 0: { h: 42, hd: 0 } },
+        freeze: { xSplit: 2, ySplit: 2, startRow: 2, startColumn: 2 }, // Freeze header and empty row
+        rowData: { 0: { h: 42, hd: 0 }, 1: { h: 24, hd: 0 } }, // Add height for empty row
         columnData: columnData2,
         cellData: cells2,
       },
@@ -1010,11 +1122,11 @@ onMounted(async () => {
         expandedGroups2.set(categoryName, false);
       }
 
-      // Apply checkbox validation to day columns
+      // Apply checkbox validation to day columns (start from row 3, after header and empty row)
       for (let day = 0; day < daysInMonth; day++) {
         const colLetter = getColumnLetter(dayColStart + day);
         sheet2
-          .getRange(`${colLetter}2:${colLetter}${totalRows2}`)
+          .getRange(`${colLetter}3:${colLetter}${totalRows2}`)
           ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
       }
     }
@@ -1343,9 +1455,10 @@ onMounted(async () => {
         }
 
         // Handle Sheet2 checkbox changes (day columns: 9 to 9+daysInMonth-1)
+        // Row 0: Header, Row 1: Empty, Row 2+: Categories, Row 3+: Items
         const dayColStart2 = 9;
         const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
-        if (sheetId === 'sheet2' && row >= 2 && column >= dayColStart2 && column < dayColStart2 + currentDaysInMonth) {
+        if (sheetId === 'sheet2' && row >= 3 && column >= dayColStart2 && column < dayColStart2 + currentDaysInMonth) {
           const itemId = rowToItemId2.get(row);
           if (!itemId) return;
 

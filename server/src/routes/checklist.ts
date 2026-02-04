@@ -94,6 +94,38 @@ export const checklistRoutes = new Hono<Env>()
 
     const { filterCondition, params } = buildStaffFilter(user, staff_id);
 
+    // ---------------------------------------------------------------
+    // Sheet 3 assignment filter for employees:
+    // If any TaskAssignment exists in the employee's store(s), only
+    // show items that are explicitly assigned to them.
+    // If zero assignments exist (backwards compat), show everything.
+    // ---------------------------------------------------------------
+    let itemFilter = '.is_deleted = false';
+    const queryParams: Record<string, unknown> = { ...params };
+
+    if (user.role === 'employee') {
+      const countQuery = `
+        select count(
+          TaskAssignment
+          filter .is_deleted = false
+            and .store_id in array_unpack(<array<str>>$empStoreIds)
+        )
+      `;
+      const assignmentCount = await db.queryRequiredSingle<number>(countQuery, {
+        empStoreIds: user.stores,
+      });
+
+      if (assignmentCount > 0) {
+        itemFilter = `.is_deleted = false
+          and exists (
+            select .task_assignments filter
+              .is_deleted = false
+              and .employee_id = <str>$assignedEmployeeId
+          )`;
+        queryParams.assignedEmployeeId = user.sub;
+      }
+    }
+
     // Now using DetailChecklistItem as the source of truth for both sheets
     // Sheet 1 uses checklist_records backlink for approval workflow
     const query = date
@@ -133,7 +165,7 @@ export const checklistRoutes = new Hono<Env>()
               limit 1
             ))
           }
-          filter .is_deleted = false
+          filter ${itemFilter}
           order by .category.order then .order then .item_number
         `
       : `
@@ -172,20 +204,20 @@ export const checklistRoutes = new Hono<Env>()
               limit 1
             ))
           }
-          filter .is_deleted = false
+          filter ${itemFilter}
           order by .category.order then .order then .item_number
         `;
 
     const result = date
       ? await db.query(query, {
-          ...params,
+          ...queryParams,
           date: new LocalDate(
             Number.parseInt(date.split('-')[0], 10),
             Number.parseInt(date.split('-')[1], 10),
             Number.parseInt(date.split('-')[2], 10),
           ),
         })
-      : await db.query(query, params);
+      : await db.query(query, queryParams);
 
     return c.json(result);
   })

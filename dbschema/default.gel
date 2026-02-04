@@ -235,6 +235,9 @@ module default {
         # Computed backlink to checklist records (Sheet 1 - approval workflow)
         multi checklist_records := .<checklist_item[is ChecklistRecord];
 
+        # Computed backlink to task assignments (Sheet 3)
+        multi task_assignments := .<checklist_item[is TaskAssignment];
+
         # Soft delete
         deleted_at: datetime;
         is_deleted: bool {
@@ -255,6 +258,57 @@ module default {
         # Indexes
         index on (.category);
         index on (.order);
+        index on (.is_deleted);
+    }
+
+    # ===================================================
+    # SHEET 3: Task Assignment (CHT assigns items to employees)
+    # ===================================================
+
+    # TaskAssignment: Links a checklist item to a specific employee, created by a CHT.
+    # One row per (item, employee) pair. A single item can be assigned to multiple
+    # employees (multiple TaskAssignment rows with the same checklist_item).
+    # Backwards-compat rule: if NO assignments exist for an item from any CHT in the
+    # same store, the item still shows in every employee's Sheet 1.
+    type TaskAssignment {
+        # The checklist item being assigned
+        required checklist_item: DetailChecklistItem {
+            on target delete delete source;
+        }
+
+        # The CHT who created the assignment (staff_id / sub claim)
+        required cht_id: str;
+
+        # The employee who is assigned the task (staff_id / sub claim)
+        required employee_id: str;
+
+        # Store ID for scoping
+        store_id: str {
+            default := "";
+        }
+
+        # Soft delete
+        deleted_at: datetime;
+        is_deleted: bool {
+            default := false;
+        }
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # One assignment per (item, employee, cht) triple
+        constraint exclusive on ((.checklist_item, .employee_id, .cht_id));
+
+        # Indexes
+        index on (.checklist_item);
+        index on (.cht_id);
+        index on (.employee_id);
+        index on (.store_id);
         index on (.is_deleted);
     }
 

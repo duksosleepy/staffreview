@@ -17,7 +17,10 @@ import {
   type DetailChecklistItemWithRecord,
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
+  fetchAssignmentsByCht,
+  fetchStoreEmployees,
   type StoreEmployee,
+  upsertAssignments,
   upsertChecklistRecord,
   upsertDetailMonthlyRecord,
   validateDeadlines,
@@ -97,12 +100,85 @@ const onEmployeeSelect = async (employee: StoreEmployee | null) => {
   }
   // Refresh both sheets with the selected employee's data
   await Promise.all([refreshSheet1(selectedDate.value || undefined), refreshSheet2()]);
+
+  // Sheet 3 ("Phân công") is only visible when CHT views their own data.
+  // Toggle it based on whether the selected employee is the CHT themselves.
+  if (isCht.value && univerAPI) {
+    const viewingSelf = !employee || employee.id === auth.casdoorId;
+    toggleSheet3Visibility(viewingSelf);
+  }
+
   // Ensure Sheet 1 stays active after refresh
   const wb = univerAPI?.getActiveWorkbook();
   if (wb) {
     wb.setActiveSheet('sheet1');
   }
 };
+
+/**
+ * Show or hide Sheet 3 ("Phân công") by inserting / deleting it.
+ * Univer has no sheet-tab hide API, so we delete and re-insert.
+ */
+function toggleSheet3Visibility(visible: boolean) {
+  const workbook = univerAPI?.getActiveWorkbook();
+  if (!workbook) return;
+
+  const existing = workbook.getSheetBySheetId('sheet3');
+
+  if (visible && !existing) {
+    // Re-insert sheet3 at the end (index = current sheet count)
+    const { cells, totalRows } = buildSheet3CellData(
+      // We need the base items list — fetch from sheet1Items cache stored earlier.
+      // sheet3 always shows ALL items (it's the CHT's assignment view), so we
+      // reuse the items we already fetched for the CHT's own view.
+      sheet3CachedItems,
+    );
+
+    const sheet3 = workbook.insertSheet('Phân công', {
+      index: workbook.getNumSheets(),
+      sheet: {
+        id: 'sheet3',
+        columnCount: 2,
+        freeze: { xSplit: 0, ySplit: 1, startRow: 1, startColumn: 0 },
+        rowData: { 0: { h: 42, hd: 0 } },
+        columnData: {
+          0: { w: 400 },
+          1: { w: 280 },
+        },
+        cellData: cells,
+      },
+    });
+
+    if (sheet3) {
+      // Hide collapsed groups
+      for (const [categoryName, range] of rowMapping3.childRowRanges) {
+        sheet3.hideRows(range.start, range.count);
+        expandedGroups3.set(categoryName, false);
+      }
+
+      // Re-apply list validation on Employee column
+      const employeeNames = sheet3Employees
+        .filter((e) => e.role !== 'asm')
+        .map((e) => e.displayName);
+
+      if (employeeNames.length > 0 && totalRows > 1) {
+        sheet3
+          .getRange(`B2:B${totalRows}`)
+          ?.setDataValidation(
+            univerAPI!.newDataValidation()
+              .requireValueInList(employeeNames, true, true)
+              .setAllowInvalid(true)
+              .build(),
+          );
+      }
+
+      sheet3.autoResizeRows(0, totalRows);
+    }
+  } else if (!visible && existing) {
+    // Remove sheet3 when viewing another employee
+    workbook.deleteSheet('sheet3');
+  }
+}
 
 const containerRef = ref<HTMLDivElement | null>(null);
 const loadingOverlayRef = ref<HTMLDivElement | null>(null);
@@ -925,6 +1001,119 @@ async function refreshSheet2() {
   sheet.autoResizeRows(1, totalRows);
 }
 
+// ===================================================
+// SHEET 3: Task Assignment (CHT only)
+// ===================================================
+
+// Map: checklist_item_id → employee_ids[] (from DB)
+let sheet3Assignments: Record<string, string[]> = {};
+
+// Employees managed by this CHT — fetched once, used for dropdown + id↔name mapping
+let sheet3Employees: StoreEmployee[] = [];
+
+// Map: employee display name (lowered for lookup) → StoreEmployee
+let sheet3NameToEmployee = new Map<string, StoreEmployee>();
+
+// Mapping: row number → checklist item id (sheet 3)
+let rowToItemId3 = new Map<number, string>();
+
+// Grouping metadata (reuse RowMapping type)
+const expandedGroups3 = new Map<string, boolean>();
+let rowMapping3: RowMapping = { checklistRows: new Map(), childRowRanges: new Map() };
+
+// Cached item list for the CHT's own view — used to rebuild sheet3 when re-inserting
+let sheet3CachedItems: ChecklistItemWithRecord[] = [];
+
+// Flag to suppress the command listener while we programmatically write values
+let isUpdatingSheet3 = false;
+
+/**
+ * Build Sheet 3 cell data.
+ * Structure mirrors Sheet 1: category group headers + item rows.
+ * Columns: A = TÊN CHECKLIST / ITEM, B = Employee (comma-separated names)
+ */
+function buildSheet3CellData(items: ChecklistItemWithRecord[]) {
+  const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
+
+  const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' } };
+  const headerStyleWrap = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, tb: 3 };
+  const checklistHeaderStyle = {
+    bl: 1, vt: 2,
+    bg: { rgb: '#4A90D9' },
+    cl: { rgb: '#FFFFFF' },
+    tb: 3,
+  };
+  const itemNameStyle = { vt: 2, tb: 3 };
+  const employeeCellStyle = { vt: 2, tb: 3 };
+
+  // Row 0: Column headers
+  cells[0] = {
+    0: { v: 'TÊN CHECKLIST / ITEM', s: headerStyleWrap },
+    1: { v: 'Employee', s: headerStyle },
+  };
+
+  rowMapping3 = { checklistRows: new Map(), childRowRanges: new Map() };
+  rowToItemId3 = new Map();
+
+  const grouped = groupItemsByCategory1(items);
+  let currentRow = 1; // data starts at row 1 (no date picker)
+
+  for (const [categoryName, categoryItems] of grouped) {
+    expandedGroups3.set(categoryName, false);
+    rowMapping3.checklistRows.set(currentRow, categoryName);
+
+    cells[currentRow] = {
+      0: { v: `▶ ${categoryName}`, s: checklistHeaderStyle },
+      1: { v: '', s: checklistHeaderStyle },
+    };
+    currentRow++;
+
+    const childStartRow = currentRow;
+    for (const item of categoryItems) {
+      // Resolve assigned employee ids → display names
+      const assignedIds = sheet3Assignments[item.id] ?? [];
+      const names = assignedIds
+        .map((id) => sheet3Employees.find((e) => e.id === id)?.displayName)
+        .filter(Boolean) as string[];
+
+      cells[currentRow] = {
+        0: { v: `    ${item.item_number}. ${item.name}`, s: itemNameStyle },
+        1: { v: names.join(', '), s: employeeCellStyle },
+      };
+      rowToItemId3.set(currentRow, item.id);
+      currentRow++;
+    }
+
+    rowMapping3.childRowRanges.set(categoryName, {
+      start: childStartRow,
+      count: categoryItems.length,
+    });
+  }
+
+  return { cells, totalRows: currentRow };
+}
+
+function toggleGroup3(categoryName: string, headerRowIndex: number) {
+  if (!univerAPI) return;
+  const workbook = univerAPI.getActiveWorkbook();
+  const sheet = workbook?.getSheetBySheetId('sheet3');
+  if (!sheet) return;
+
+  const isExpanded = expandedGroups3.get(categoryName) ?? false;
+  const range = rowMapping3.childRowRanges.get(categoryName);
+  if (!range) return;
+
+  if (isExpanded) {
+    sheet.hideRows(range.start, range.count);
+    expandedGroups3.set(categoryName, false);
+    sheet.getRange(headerRowIndex, 0, 1, 1)?.setValue(`▶ ${categoryName}`);
+  } else {
+    sheet.showRows(range.start, range.count);
+    expandedGroups3.set(categoryName, true);
+    sheet.getRange(headerRowIndex, 0, 1, 1)?.setValue(`▼ ${categoryName}`);
+  }
+}
+
 /**
  * Calculate valid date range for the date picker based on 3-day deadline rule
  *
@@ -1012,13 +1201,31 @@ onMounted(async () => {
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   selectedDate.value = todayStr;
 
-  // Fetch data for both sheets
+  // Fetch data for both sheets + Sheet 3 data (CHT only)
   const [sheet1Items, sheet2Items] = await Promise.all([
     fetchAllChecklistItems(selectedDate.value || undefined, selectedStaffId.value),
     fetchAllDetailChecklistItems(undefined, undefined, selectedStaffId.value).catch(
       () => [] as DetailChecklistItemWithRecord[],
     ),
   ]);
+
+  // Sheet 3: fetch employees + existing assignments (CHT only)
+  if (isCht.value) {
+    const [employees, assignments] = await Promise.all([
+      fetchStoreEmployees().catch(() => [] as StoreEmployee[]),
+      fetchAssignmentsByCht().catch(() => ({} as Record<string, string[]>)),
+    ]);
+    sheet3Employees = employees;
+    sheet3Assignments = assignments;
+    sheet3CachedItems = sheet1Items; // cache for re-inserting sheet3 later
+    // Build name→employee lookup (filter out ASM users for CHT, same as sidebar)
+    sheet3NameToEmployee = new Map();
+    for (const emp of employees) {
+      if (emp.role !== 'asm') {
+        sheet3NameToEmployee.set(emp.displayName.toLowerCase(), emp);
+      }
+    }
+  }
 
   // Build Sheet 1 data with selected date
   const { cells: cells1, totalRows: totalRows1 } = buildSheet1CellData(sheet1Items, selectedDate.value);
@@ -1070,36 +1277,73 @@ onMounted(async () => {
     3: { w: 120, hd: canCheckAsm.value ? 0 : 1 }, // ASM - hidden for employees and CHT
   };
 
-  // Create workbook with BOTH sheets (sheet1 first)
-  const workbook = api.createWorkbook({
-    sheetOrder: ['sheet1', 'sheet2'], // Explicit order: Sheet 1 first
-    sheets: {
-      sheet1: {
-        id: 'sheet1',
-        name: 'Checklist',
-        columnCount: 4,
-        freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 }, // Freeze date picker + header
-        rowData: {
-          0: { h: 36, hd: 0 }, // Date picker row
-          1: { h: 42, hd: 0 }, // Header row
-        },
-        columnData: sheet1ColumnData,
-        cellData: cells1,
+  // Sheet 3: build cell data (CHT only)
+  let cells3: Record<number, Record<number, { v: string | number; s?: object }>> = {};
+  let totalRows3 = 0;
+  if (isCht.value) {
+    const sheet3Data = buildSheet3CellData(sheet1Items);
+    cells3 = sheet3Data.cells;
+    totalRows3 = sheet3Data.totalRows;
+  }
+
+  // Create workbook — include sheet3 tab only for CHT
+  const sheetOrder = isCht.value ? ['sheet1', 'sheet2', 'sheet3'] : ['sheet1', 'sheet2'];
+  const sheetsConfig: Record<string, any> = {
+    sheet1: {
+      id: 'sheet1',
+      name: 'Checklist',
+      columnCount: 4,
+      freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 }, // Freeze date picker + header
+      rowData: {
+        0: { h: 36, hd: 0 }, // Date picker row
+        1: { h: 42, hd: 0 }, // Header row
       },
-      sheet2: {
-        id: 'sheet2',
-        name: 'Chi tiết',
-        rowCount: Math.max(totalRows2 + 100, 1000),
-        columnCount: summaryColStart + 10,
-        freeze: { xSplit: 2, ySplit: 2, startRow: 2, startColumn: 2 }, // Freeze header and empty row
-        rowData: { 0: { h: 42, hd: 0 }, 1: { h: 24, hd: 0 } }, // Add height for empty row
-        columnData: columnData2,
-        cellData: cells2,
-      },
+      columnData: sheet1ColumnData,
+      cellData: cells1,
     },
+    sheet2: {
+      id: 'sheet2',
+      name: 'Chi tiết',
+      rowCount: Math.max(totalRows2 + 100, 1000),
+      columnCount: summaryColStart + 10,
+      freeze: { xSplit: 2, ySplit: 2, startRow: 2, startColumn: 2 }, // Freeze header and empty row
+      rowData: { 0: { h: 42, hd: 0 }, 1: { h: 24, hd: 0 } }, // Add height for empty row
+      columnData: columnData2,
+      cellData: cells2,
+    },
+  };
+
+  if (isCht.value) {
+    sheetsConfig.sheet3 = {
+      id: 'sheet3',
+      name: 'Phân công',
+      columnCount: 2,
+      freeze: { xSplit: 0, ySplit: 1, startRow: 1, startColumn: 0 }, // Freeze header row
+      rowData: { 0: { h: 42, hd: 0 } },
+      columnData: {
+        0: { w: 400 }, // Item name
+        1: { w: 280 }, // Employee (dropdown)
+      },
+      cellData: cells3,
+    };
+  }
+
+  const workbook = api.createWorkbook({
+    sheetOrder,
+    sheets: sheetsConfig,
   });
 
   if (workbook) {
+    // Remove any sheets that don't belong to this role.
+    // sheet3 ("Phân công") is CHT-only — delete it if present for other roles.
+    if (!isCht.value) {
+      for (const sheet of workbook.getSheets()) {
+        if (sheet.getSheetId() === 'sheet3') {
+          workbook.deleteSheet(sheet);
+        }
+      }
+    }
+
     // Set Sheet 1 as the active/default sheet using sheet ID string
     workbook.setActiveSheet('sheet1');
 
@@ -1156,7 +1400,41 @@ onMounted(async () => {
       }
     }
 
-    // Add click event listener for expand/collapse on both sheets
+    // Setup Sheet 3 (CHT only)
+    if (isCht.value) {
+      const sheet3 = workbook.getSheetBySheetId('sheet3');
+      if (sheet3) {
+        // Hide child rows (collapsed by default)
+        for (const [categoryName, range] of rowMapping3.childRowRanges) {
+          sheet3.hideRows(range.start, range.count);
+          expandedGroups3.set(categoryName, false);
+        }
+
+        // Apply list validation on Employee column (B) for all item rows.
+        // List contains only non-ASM employee names (same filter as sidebar).
+        const employeeNames = sheet3Employees
+          .filter((e) => e.role !== 'asm')
+          .map((e) => e.displayName);
+
+        if (employeeNames.length > 0 && totalRows3 > 1) {
+          // Row 1 onwards are data rows (row 0 = header, row 1+ = groups/items)
+          // multiple=true enables multi-select; showDropdown=true renders the arrow
+          sheet3
+            .getRange(`B2:B${totalRows3}`)
+            ?.setDataValidation(
+              api.newDataValidation()
+                .requireValueInList(employeeNames, true, true)
+                .setAllowInvalid(true)
+                .build(),
+            );
+        }
+
+        // Auto-resize rows for text wrap
+        sheet3.autoResizeRows(0, totalRows3);
+      }
+    }
+
+    // Add click event listener for expand/collapse on all sheets
     api.addEvent(api.Event.CellClicked, (params) => {
       const { row } = params;
       const activeSheet = workbook.getActiveSheet();
@@ -1171,6 +1449,11 @@ onMounted(async () => {
         const categoryName = rowMapping2.checklistRows.get(row);
         if (categoryName) {
           toggleGroup2(categoryName, row);
+        }
+      } else if (sheetId === 'sheet3') {
+        const categoryName = rowMapping3.checklistRows.get(row);
+        if (categoryName) {
+          toggleGroup3(categoryName, row);
         }
       }
     });
@@ -1188,6 +1471,13 @@ onMounted(async () => {
         if (column === 3 && !canCheckAsm.value) {
           return false; // Cancel edit
         }
+      }
+
+      // Sheet 3: column A (item names) is read-only; category header rows are read-only
+      if (sheetId === 'sheet3') {
+        if (column === 0) return false;
+        const isCategoryHeader = rowMapping3.checklistRows.has(row);
+        if (isCategoryHeader) return false;
       }
 
       return true; // Allow edit
@@ -1577,6 +1867,62 @@ onMounted(async () => {
             }
           } catch (error) {
             sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
+          }
+        }
+
+        // Handle Sheet 3 Employee column changes (column B = 1)
+        if (sheetId === 'sheet3' && column === 1 && !isUpdatingSheet3) {
+          // Skip category header rows
+          const categoryName3 = rowMapping3.checklistRows.get(row);
+          if (categoryName3) return;
+
+          const itemId = rowToItemId3.get(row);
+          if (!itemId) return;
+
+          const sheet = workbook.getSheetBySheetId('sheet3');
+          const cellValue = sheet?.getRange(row, 1, 1, 1)?.getValue();
+          const rawText = typeof cellValue === 'string' ? cellValue.trim() : '';
+
+          // Parse comma-separated names → employee ids
+          const names = rawText ? rawText.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
+          const employeeIds: string[] = [];
+          const validNames: string[] = [];
+
+          for (const name of names) {
+            const emp = sheet3NameToEmployee.get(name.toLowerCase());
+            if (emp) {
+              employeeIds.push(emp.id);
+              validNames.push(emp.displayName); // normalise casing
+            }
+          }
+
+          // Normalise cell value to canonical names (fixes casing from dropdown)
+          const normalised = validNames.join(', ');
+          if (normalised !== rawText) {
+            isUpdatingSheet3 = true;
+            sheet?.getRange(row, 1, 1, 1)?.setValue(normalised);
+            setTimeout(() => { isUpdatingSheet3 = false; }, 100);
+          }
+
+          // Persist to DB
+          try {
+            await upsertAssignments({ checklist_item_id: itemId, employee_ids: employeeIds });
+            sheet3Assignments[itemId] = employeeIds;
+          } catch (error: any) {
+            toaster.create({
+              title: 'Lỗi',
+              description: `Không thể lưu phân công: ${error?.message || 'Unknown error'}`,
+              type: 'error',
+            });
+            // Revert to previous value
+            const prevIds = sheet3Assignments[itemId] ?? [];
+            const prevNames = prevIds
+              .map((id) => sheet3Employees.find((e) => e.id === id)?.displayName)
+              .filter(Boolean)
+              .join(', ');
+            isUpdatingSheet3 = true;
+            sheet?.getRange(row, 1, 1, 1)?.setValue(prevNames);
+            setTimeout(() => { isUpdatingSheet3 = false; }, 100);
           }
         }
       }

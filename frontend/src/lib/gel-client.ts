@@ -302,6 +302,52 @@ export async function fetchStoreEmployees(): Promise<StoreEmployee[]> {
 }
 
 // ===================================================
+// Task Assignments (Sheet 3 — CHT only)
+// ===================================================
+
+/**
+ * Fetch all task assignments created by the current CHT.
+ * Returns a map: checklist_item_id → employee_ids[]
+ */
+export async function fetchAssignmentsByCht(): Promise<Record<string, string[]>> {
+  const response = await fetch('/api/assignments/by-cht', {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  return handleResponse<Record<string, string[]>>(response);
+}
+
+export type UpsertAssignmentsPayload = {
+  checklist_item_id: string;
+  employee_ids: string[]; // empty array clears all assignments for that item
+};
+
+/**
+ * Replace the full set of employee assignments for a single checklist item.
+ * Only CHT role is allowed.
+ */
+export async function upsertAssignments(payload: UpsertAssignmentsPayload): Promise<{ success: boolean }> {
+  const response = await fetch('/api/assignments/upsert', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      window.location.href = '/login';
+      throw new ApiError(401, 'Unauthorized');
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new ApiError(response.status, (errorData as any).error || `API error: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// ===================================================
 // Upsert Functions (Create or Update)
 // ===================================================
 

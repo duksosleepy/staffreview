@@ -104,7 +104,7 @@ const onEmployeeSelect = async (employee: StoreEmployee | null) => {
   // Sheet 3 ("Phân công") is only visible when CHT views their own data.
   // Toggle it based on whether the selected employee is the CHT themselves.
   if (isCht.value && univerAPI) {
-    const viewingSelf = !employee || employee.id === auth.casdoorId;
+    const viewingSelf = !employee || employee.casdoor_id === auth.casdoorId;
     toggleSheet3Visibility(viewingSelf);
   }
 

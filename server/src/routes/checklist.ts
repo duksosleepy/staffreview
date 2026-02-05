@@ -103,7 +103,18 @@ export const checklistRoutes = new Hono<Env>()
     let itemFilter = '.is_deleted = false';
     const queryParams: Record<string, unknown> = { ...params };
 
-    if (user.role === 'employee') {
+    // Determine the target employee ID for assignment filtering:
+    // - Employee viewing own data            → user.sub
+    // - CHT/ASM viewing a specific employee  → staff_id
+    // - CHT/ASM viewing self or no target    → null (show all items)
+    const assignmentTargetId =
+      user.role === 'employee'
+        ? user.sub
+        : staff_id && staff_id !== user.sub
+          ? staff_id
+          : null;
+
+    if (assignmentTargetId) {
       const countQuery = `
         select count(
           TaskAssignment
@@ -122,7 +133,7 @@ export const checklistRoutes = new Hono<Env>()
               .is_deleted = false
               and .employee_id = <str>$assignedEmployeeId
           )`;
-        queryParams.assignedEmployeeId = user.sub;
+        queryParams.assignedEmployeeId = assignmentTargetId;
       }
     }
 

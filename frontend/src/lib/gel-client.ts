@@ -348,6 +348,57 @@ export async function upsertAssignments(payload: UpsertAssignmentsPayload): Prom
 }
 
 // ===================================================
+// Employee Schedules (Sheet 3 - Phân công)
+// ===================================================
+
+export type EmployeeSchedule = {
+  employee_id: string;
+  daily_schedule: string[]; // Array of 31 strings (N1-N31)
+};
+
+/**
+ * Fetch all employee schedules for the CHT's store.
+ * Only CHT role is allowed.
+ */
+export async function fetchEmployeeSchedules(): Promise<EmployeeSchedule[]> {
+  const response = await fetch('/api/schedules/by-store', {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  return handleResponse<EmployeeSchedule[]>(response);
+}
+
+export type UpsertSchedulePayload = {
+  employee_id: string;
+  daily_schedule: string[]; // Array of 31 strings (N1-N31)
+};
+
+/**
+ * Upsert an employee's schedule (create or update).
+ * Only CHT role is allowed.
+ */
+export async function upsertEmployeeSchedule(payload: UpsertSchedulePayload): Promise<{ success: boolean }> {
+  const response = await fetch('/api/schedules/upsert', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      window.location.href = '/login';
+      throw new ApiError(401, 'Unauthorized');
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new ApiError(response.status, (errorData as any).error || `API error: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// ===================================================
 // Upsert Functions (Create or Update)
 // ===================================================
 

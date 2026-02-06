@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   logout: [];
+  importExcel: [];
 }>();
 
 const { getRoleDisplay } = useRoleDisplay();
@@ -66,6 +67,10 @@ const roleBadgeClasses = computed(() => {
 
 const handleLogout = () => {
   emit('logout');
+};
+
+const handleImportExcel = () => {
+  emit('importExcel');
 };
 </script>
 
@@ -206,6 +211,27 @@ const handleLogout = () => {
               </svg>
             </div>
             <span class="text-sm font-medium text-paper-medium hover:text-paper-white transition-colors font-body flex-1">Cài đặt</span>
+          </Menu.Item>
+
+          <!-- Import Excel (CHT only) -->
+          <Menu.Item v-if="role.toLowerCase() === 'cht'" value="import-excel" :class="`px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 hover:bg-ink-lighter transition-[background-color,color] duration-200 rounded-lg cursor-pointer ${FOCUS_RING_CLASSES} focus-visible:ring-inset`" @click="handleImportExcel">
+            <div class="p-1.5 rounded-lg bg-sky-500/10 text-sky-400">
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                />
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-paper-medium hover:text-paper-white transition-colors font-body flex-1">Import Excel</span>
           </Menu.Item>
 
           <Menu.Separator class="my-1 h-px" style="background-color: var(--border-subtle);" />

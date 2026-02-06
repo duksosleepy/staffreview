@@ -8,6 +8,7 @@ import type { FUniver, Univer } from '@univerjs/presets';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { useDebounceFn } from '@vueuse/core';
 import { computed, defineAsyncComponent, nextTick, onErrorCaptured, onMounted, onUnmounted, ref } from 'vue';
+import ImportExcelModal from '@/components/ImportExcelModal.vue';
 import UserMenu from '@/components/UserMenu.vue';
 import { FOCUS_RING_CLASSES } from '@/constants/ui';
 import { usePermission } from '@/composables/usePermission';
@@ -138,12 +139,16 @@ function toggleSheet3Visibility(visible: boolean) {
       index: workbook.getNumSheets(),
       sheet: {
         id: 'sheet3',
-        columnCount: 2,
-        freeze: { xSplit: 0, ySplit: 1, startRow: 1, startColumn: 0 },
+        columnCount: 35, // 4 info columns + 31 day columns
+        freeze: { xSplit: 4, ySplit: 1, startRow: 1, startColumn: 4 }, // Freeze first 4 columns and header row
         rowData: { 0: { h: 42, hd: 0 } },
         columnData: {
-          0: { w: 400 },
-          1: { w: 280 },
+          0: { w: 200 }, // Employee name
+          1: { w: 80 },  // Region
+          2: { w: 120 }, // Department
+          3: { w: 100 }, // Position
+          // Day columns (N1-N31) - columns 4-34
+          ...Object.fromEntries(Array.from({ length: 31 }, (_, i) => [i + 4, { w: 60 }])),
         },
         cellData: cells,
       },
@@ -156,22 +161,7 @@ function toggleSheet3Visibility(visible: boolean) {
         expandedGroups3.set(categoryName, false);
       }
 
-      // Re-apply list validation on Employee column
-      const employeeNames = sheet3Employees
-        .filter((e) => e.role !== 'asm')
-        .map((e) => e.displayName);
-
-      if (employeeNames.length > 0 && totalRows > 1) {
-        sheet3
-          .getRange(`B2:B${totalRows}`)
-          ?.setDataValidation(
-            univerAPI!.newDataValidation()
-              .requireValueInList(employeeNames, false, true)
-              .setAllowInvalid(true)
-              .build(),
-          );
-      }
-
+      // Auto-resize rows for the new structure
       sheet3.autoResizeRows(0, totalRows);
     }
   } else if (!visible && existing) {
@@ -190,6 +180,57 @@ const selectedDate = ref<string>('');
 const isLoadingSheet1 = ref(false);
 let isInitialLoad = true; // Flag to prevent event firing during initial load
 let isRevertingValue = false; // Flag to prevent recursion when reverting unauthorized changes
+
+// Import Excel modal state
+const showImportModal = ref(false);
+const importFile = ref<File | null>(null);
+const isImporting = ref(false);
+
+// Import Excel handlers
+function handleImportExcel() {
+  showImportModal.value = true;
+}
+
+function handleFileSelect(event: Event) {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    importFile.value = target.files[0];
+  }
+}
+
+async function handleImportSubmit() {
+  if (!importFile.value) {
+    toaster.create({
+      title: 'Lỗi',
+      description: 'Vui lòng chọn file Excel để import',
+      type: 'error',
+    });
+    return;
+  }
+
+  isImporting.value = true;
+
+  try {
+    // TODO: Parse Excel file and save to database
+    // Will be implemented next
+    toaster.create({
+      title: 'Thành công',
+      description: 'Import Excel thành công',
+      type: 'success',
+    });
+
+    showImportModal.value = false;
+    importFile.value = null;
+  } catch (error: any) {
+    toaster.create({
+      title: 'Lỗi',
+      description: `Import thất bại: ${error?.message || 'Unknown error'}`,
+      type: 'error',
+    });
+  } finally {
+    isImporting.value = false;
+  }
+}
 
 // Constants for date picker cell location in Sheet1
 const DATE_PICKER_ROW = 0;
@@ -1025,68 +1066,94 @@ let rowMapping3: RowMapping = { checklistRows: new Map(), childRowRanges: new Ma
 let sheet3CachedItems: ChecklistItemWithRecord[] = [];
 
 // Flag to suppress the command listener while we programmatically write values
-let isUpdatingSheet3 = false;
+const isUpdatingSheet3 = false;
 
 /**
  * Build Sheet 3 cell data.
- * Structure mirrors Sheet 1: category group headers + item rows.
- * Columns: A = TÊN CHECKLIST / ITEM, B = Employee (comma-separated names)
+ * New structure based on assignment.xlsx:
+ * Columns: A = Employee Name, B = Region, C = Department, D = Position, E-AJ = N1-N31 (daily assignments)
+ * Grouped by Department with expand/collapse
  */
 function buildSheet3CellData(items: ChecklistItemWithRecord[]) {
   const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
 
-  const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' } };
-  const headerStyleWrap = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, tb: 3 };
-  const checklistHeaderStyle = {
+  const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, ht: 2 };
+  const departmentHeaderStyle = {
     bl: 1, vt: 2,
     bg: { rgb: '#4A90D9' },
     cl: { rgb: '#FFFFFF' },
     tb: 3,
   };
-  const itemNameStyle = { vt: 2, tb: 3 };
   const employeeCellStyle = { vt: 2, tb: 3 };
+  const dayCellStyle = { vt: 2, ht: 2 };
 
   // Row 0: Column headers
   cells[0] = {
-    0: { v: 'TÊN CHECKLIST / ITEM', s: headerStyleWrap },
-    1: { v: 'Employee', s: headerStyle },
+    0: { v: 'HỌ VÀ TÊN', s: headerStyle },
+    1: { v: 'Miền', s: headerStyle },
+    2: { v: 'Mã bộ phận', s: headerStyle },
+    3: { v: 'Mã chức vụ', s: headerStyle },
   };
+
+  // Add N1-N31 column headers (columns 4-34)
+  for (let day = 1; day <= 31; day++) {
+    cells[0][day + 3] = { v: `N${day}`, s: headerStyle };
+  }
 
   rowMapping3 = { checklistRows: new Map(), childRowRanges: new Map() };
   rowToItemId3 = new Map();
 
-  const grouped = groupItemsByCategory1(items);
-  let currentRow = 1; // data starts at row 1 (no date picker)
+  // Group employees by department
+  const departmentGroups = new Map<string, typeof sheet3Employees>();
+  for (const emp of sheet3Employees) {
+    const dept = emp.department || 'Chưa phân bộ phận';
+    if (!departmentGroups.has(dept)) {
+      departmentGroups.set(dept, []);
+    }
+    departmentGroups.get(dept)?.push(emp);
+  }
 
-  for (const [categoryName, categoryItems] of grouped) {
-    expandedGroups3.set(categoryName, false);
-    rowMapping3.checklistRows.set(currentRow, categoryName);
+  let currentRow = 1;
 
+  for (const [deptName, employees] of departmentGroups) {
+    expandedGroups3.set(deptName, false);
+    rowMapping3.checklistRows.set(currentRow, deptName);
+
+    // Department header row (spans all columns)
     cells[currentRow] = {
-      0: { v: `▶ ${categoryName}`, s: checklistHeaderStyle },
-      1: { v: '', s: checklistHeaderStyle },
+      0: { v: `▶ ${deptName}`, s: departmentHeaderStyle },
+      1: { v: '', s: departmentHeaderStyle },
+      2: { v: '', s: departmentHeaderStyle },
+      3: { v: '', s: departmentHeaderStyle },
     };
+    // Add empty cells for all 31 day columns in header
+    for (let col = 4; col <= 34; col++) {
+      cells[currentRow][col] = { v: '', s: departmentHeaderStyle };
+    }
     currentRow++;
 
     const childStartRow = currentRow;
-    for (const item of categoryItems) {
-      // Resolve assigned employee ids → display names
-      const assignedIds = sheet3Assignments[item.id] ?? [];
-      const names = assignedIds
-        .map((id) => sheet3Employees.find((e) => e.id === id)?.displayName)
-        .filter(Boolean) as string[];
-
+    for (const emp of employees) {
       cells[currentRow] = {
-        0: { v: `    ${item.item_number}. ${item.name}`, s: itemNameStyle },
-        1: { v: names.join(', '), s: employeeCellStyle },
+        0: { v: emp.displayName, s: employeeCellStyle },
+        1: { v: emp.region || '', s: employeeCellStyle },
+        2: { v: emp.department || '', s: employeeCellStyle },
+        3: { v: emp.position || '', s: employeeCellStyle },
       };
-      rowToItemId3.set(currentRow, item.id);
+
+      // Add empty cells for N1-N31 columns (columns 4-34)
+      for (let col = 4; col <= 34; col++) {
+        cells[currentRow][col] = { v: '', s: dayCellStyle };
+      }
+
+      // Store employee id for this row (for future use when saving assignments)
+      rowToItemId3.set(currentRow, emp.id);
       currentRow++;
     }
 
-    rowMapping3.childRowRanges.set(categoryName, {
+    rowMapping3.childRowRanges.set(deptName, {
       start: childStartRow,
-      count: categoryItems.length,
+      count: employees.length,
     });
   }
 
@@ -1317,12 +1384,16 @@ onMounted(async () => {
     sheetsConfig.sheet3 = {
       id: 'sheet3',
       name: 'Phân công',
-      columnCount: 2,
-      freeze: { xSplit: 0, ySplit: 1, startRow: 1, startColumn: 0 }, // Freeze header row
+      columnCount: 35, // 4 info columns + 31 day columns
+      freeze: { xSplit: 4, ySplit: 1, startRow: 1, startColumn: 4 }, // Freeze first 4 columns and header row
       rowData: { 0: { h: 42, hd: 0 } },
       columnData: {
-        0: { w: 400 }, // Item name
-        1: { w: 280 }, // Employee (dropdown)
+        0: { w: 200 }, // Employee name
+        1: { w: 80 },  // Region
+        2: { w: 120 }, // Department
+        3: { w: 100 }, // Position
+        // Day columns (N1-N31) - columns 4-34
+        ...Object.fromEntries(Array.from({ length: 31 }, (_, i) => [i + 4, { w: 60 }])),
       },
       cellData: cells3,
     };
@@ -1410,26 +1481,7 @@ onMounted(async () => {
           expandedGroups3.set(categoryName, false);
         }
 
-        // Apply list validation on Employee column (B) for all item rows.
-        // List contains only non-ASM employee names (same filter as sidebar).
-        const employeeNames = sheet3Employees
-          .filter((e) => e.role !== 'asm')
-          .map((e) => e.displayName);
-
-        if (employeeNames.length > 0 && totalRows3 > 1) {
-          // Row 1 onwards are data rows (row 0 = header, row 1+ = groups/items)
-          // single-select dropdown: multiple=false, showDropdown=true
-          sheet3
-            .getRange(`B2:B${totalRows3}`)
-            ?.setDataValidation(
-              api.newDataValidation()
-                .requireValueInList(employeeNames, false, true)
-                .setAllowInvalid(true)
-                .build(),
-            );
-        }
-
-        // Auto-resize rows for text wrap
+        // Auto-resize rows for the new structure
         sheet3.autoResizeRows(0, totalRows3);
       }
     }
@@ -1473,11 +1525,12 @@ onMounted(async () => {
         }
       }
 
-      // Sheet 3: column A (item names) is read-only; category header rows are read-only
+      // Sheet 3: columns A-D (0-3) are read-only (employee info); department header rows are read-only
+      // Only day columns E-AJ (4-34) are editable
       if (sheetId === 'sheet3') {
-        if (column === 0) return false;
-        const isCategoryHeader = rowMapping3.checklistRows.has(row);
-        if (isCategoryHeader) return false;
+        if (column <= 3) return false; // Protect employee info columns
+        const isDepartmentHeader = rowMapping3.checklistRows.has(row);
+        if (isDepartmentHeader) return false; // Protect department header rows
       }
 
       return true; // Allow edit
@@ -1870,60 +1923,15 @@ onMounted(async () => {
           }
         }
 
-        // Handle Sheet 3 Employee column changes (column B = 1)
-        if (sheetId === 'sheet3' && column === 1 && !isUpdatingSheet3) {
-          // Skip category header rows
-          const categoryName3 = rowMapping3.checklistRows.get(row);
-          if (categoryName3) return;
+        // Handle Sheet 3 day column changes (columns 4-34 = N1-N31)
+        // User requested to leave empty for now, so no persistence logic yet
+        if (sheetId === 'sheet3' && column >= 4 && column <= 34 && !isUpdatingSheet3) {
+          // Skip department header rows
+          const isDepartmentHeader = rowMapping3.checklistRows.has(row);
+          if (isDepartmentHeader) return;
 
-          const itemId = rowToItemId3.get(row);
-          if (!itemId) return;
-
-          const sheet = workbook.getSheetBySheetId('sheet3');
-          const cellValue = sheet?.getRange(row, 1, 1, 1)?.getValue();
-          const rawText = typeof cellValue === 'string' ? cellValue.trim() : '';
-
-          // Parse comma-separated names → employee ids
-          const names = rawText ? rawText.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
-          const employeeIds: string[] = [];
-          const validNames: string[] = [];
-
-          for (const name of names) {
-            const emp = sheet3NameToEmployee.get(name.toLowerCase());
-            if (emp) {
-              employeeIds.push(emp.id);
-              validNames.push(emp.displayName); // normalise casing
-            }
-          }
-
-          // Normalise cell value to canonical names (fixes casing from dropdown)
-          const normalised = validNames.join(', ');
-          if (normalised !== rawText) {
-            isUpdatingSheet3 = true;
-            sheet?.getRange(row, 1, 1, 1)?.setValue(normalised);
-            setTimeout(() => { isUpdatingSheet3 = false; }, 100);
-          }
-
-          // Persist to DB
-          try {
-            await upsertAssignments({ checklist_item_id: itemId, employee_ids: employeeIds });
-            sheet3Assignments[itemId] = employeeIds;
-          } catch (error: any) {
-            toaster.create({
-              title: 'Lỗi',
-              description: `Không thể lưu phân công: ${error?.message || 'Unknown error'}`,
-              type: 'error',
-            });
-            // Revert to previous value
-            const prevIds = sheet3Assignments[itemId] ?? [];
-            const prevNames = prevIds
-              .map((id) => sheet3Employees.find((e) => e.id === id)?.displayName)
-              .filter(Boolean)
-              .join(', ');
-            isUpdatingSheet3 = true;
-            sheet?.getRange(row, 1, 1, 1)?.setValue(prevNames);
-            setTimeout(() => { isUpdatingSheet3 = false; }, 100);
-          }
+          // For now, just allow free text entry in day columns
+          // Future: Add validation or persistence logic here
         }
       }
     });
@@ -2274,6 +2282,7 @@ onUnmounted(() => {
         :notification-count="notificationStore.notificationCount"
         :notification-message="notificationStore.notificationMessage"
         @logout="auth.logout"
+        @import-excel="handleImportExcel"
       />
     </header>
 
@@ -2302,5 +2311,13 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Import Excel Modal -->
+    <ImportExcelModal
+      v-model:open="showImportModal"
+      :is-importing="isImporting"
+      @file-select="handleFileSelect"
+      @submit="handleImportSubmit"
+    />
   </div>
 </template>

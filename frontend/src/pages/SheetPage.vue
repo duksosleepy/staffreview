@@ -166,7 +166,7 @@ function toggleSheet3Visibility(visible: boolean) {
           .getRange(`B2:B${totalRows}`)
           ?.setDataValidation(
             univerAPI!.newDataValidation()
-              .requireValueInList(employeeNames, true, true)
+              .requireValueInList(employeeNames, false, true)
               .setAllowInvalid(true)
               .build(),
           );
@@ -1418,12 +1418,12 @@ onMounted(async () => {
 
         if (employeeNames.length > 0 && totalRows3 > 1) {
           // Row 1 onwards are data rows (row 0 = header, row 1+ = groups/items)
-          // multiple=true enables multi-select; showDropdown=true renders the arrow
+          // single-select dropdown: multiple=false, showDropdown=true
           sheet3
             .getRange(`B2:B${totalRows3}`)
             ?.setDataValidation(
               api.newDataValidation()
-                .requireValueInList(employeeNames, true, true)
+                .requireValueInList(employeeNames, false, true)
                 .setAllowInvalid(true)
                 .build(),
             );

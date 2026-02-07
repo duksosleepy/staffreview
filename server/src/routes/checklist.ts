@@ -90,7 +90,7 @@ export const checklistRoutes = new Hono<Env>()
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    log?.debug({ userId: user.sub, role: user.role, date, staff_id }, 'Fetching checklist items');
+    log?.info({ userId: user.sub, role: user.role, date, staff_id, casdoor_id: user.casdoor_id }, 'Fetching checklist items');
 
     const { filterCondition, params } = buildStaffFilter(user, staff_id);
 
@@ -100,8 +100,95 @@ export const checklistRoutes = new Hono<Env>()
     // (DetailChecklistItem.task_type matched with EmployeeSchedule.daily_schedule)
     // No explicit TaskAssignment type needed
     // ---------------------------------------------------------------
-    const itemFilter = '.is_deleted = false';
+    let itemFilter = '.is_deleted = false';
     const queryParams: Record<string, unknown> = { ...params };
+
+    // For employees: Filter tasks based on their shift for the selected date
+    // This applies both when:
+    // 1. Employee user views their own tasks (user.role === 'employee')
+    // 2. CHT/ASM views a specific employee's tasks (staff_id is provided)
+    const shouldFilterByShift = (user.role === 'employee' || staff_id) && date;
+
+    log?.info({ shouldFilterByShift, staff_id, date, role: user.role }, 'Shift filter decision');
+
+    if (shouldFilterByShift) {
+      // Determine which employee's schedule to check
+      // If staff_id is provided (CHT viewing employee), use that
+      // Otherwise use current user's casdoor_id (employee viewing own)
+      let targetHrId: string | null = null;
+
+      if (staff_id) {
+        // CHT/ASM viewing an employee - need to get employee's hr_id (casdoor_id)
+        // staff_id is the Casdoor user UUID
+        // We need to fetch the user from Casdoor to get their properties.ID (hr_id)
+        try {
+          const { fetchCasdoorUserById } = await import('../lib/oidc.js');
+          const userInfo = await fetchCasdoorUserById(staff_id);
+          targetHrId = userInfo?.casdoor_id || null;
+          log?.info({ staff_id, targetHrId }, 'Resolved staff_id to hr_id');
+        } catch (error) {
+          log?.warn({ error, staff_id }, 'Failed to resolve staff_id to hr_id');
+        }
+      } else {
+        targetHrId = user.casdoor_id;
+      }
+
+      // If we couldn't determine hr_id but have staff_id, try finding by store match
+      // This is a fallback - we'll need better mapping later
+      if (!targetHrId && staff_id) {
+        // For now, skip filtering if we can't determine hr_id for CHT viewing employee
+        // This will be improved when we add better user mapping
+        log?.debug({ staff_id }, 'Skipping shift filter - cannot map staff_id to hr_id yet');
+      }
+
+      if (targetHrId && date) {
+        // Parse the selected date to get the day of month
+        const dateParts = date.split('-');
+        const dayOfMonth = Number.parseInt(dateParts[2], 10); // Get day (1-31)
+
+        // Query to get employee's shift for this date
+        const employeeShiftQuery = `
+          select EmployeeSchedule {
+            daily_schedule
+          }
+          filter .hr_id = <str>$hrId
+            and .store_id in array_unpack(<array<str>>$storeIds)
+            and .is_deleted = false
+          limit 1
+        `;
+
+        try {
+          const employeeSchedule = await db.querySingle<{ daily_schedule: string[] }>(
+            employeeShiftQuery,
+            {
+              hrId: targetHrId,
+              storeIds: user.stores,
+            }
+          );
+
+          if (employeeSchedule?.daily_schedule) {
+            const dayIndex = dayOfMonth - 1; // Array is 0-indexed
+            const shift = employeeSchedule.daily_schedule[dayIndex]?.trim().toUpperCase();
+
+            if (shift) {
+              // Extract first character (S, C, F) from shift codes like S1, C2, F7
+              const shiftType = shift.charAt(0);
+
+              // Filter items: show all tasks OR tasks matching this shift type
+              if (shiftType === 'S' || shiftType === 'C' || shiftType === 'F') {
+                itemFilter = `.is_deleted = false and (.task_type = <optional default::ShiftType>$taskType or not exists .task_type)`;
+                queryParams.taskType = shiftType;
+                log?.info({ shiftType, date, hrId: targetHrId, isStaffView: !!staff_id, itemFilter, queryParams }, 'Filtering tasks by shift type');
+              }
+            }
+          } else {
+            log?.debug({ hrId: targetHrId }, 'No schedule found for employee');
+          }
+        } catch (error) {
+          log?.warn({ error, hrId: targetHrId }, 'Failed to get employee schedule, showing all tasks');
+        }
+      }
+    }
 
     // Now using DetailChecklistItem as the source of truth for both sheets
     // Sheet 1 uses checklist_records backlink for approval workflow

@@ -20,6 +20,7 @@ import {
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
   fetchAssignmentsByCht,
+  fetchDetailCategories,
   fetchEmployeeSchedules,
   fetchStoreEmployees,
   type StoreEmployee,
@@ -429,19 +430,39 @@ let rowToItemId1 = new Map<number, string>();
 let itemIdToRow1 = new Map<string, number>();
 
 // Group items by category (unified with Sheet 2)
-function groupItemsByCategory1(items: ChecklistItemWithRecord[]) {
+// Ensures all categories are present even if no items match after filtering
+async function groupItemsByCategory1(items: ChecklistItemWithRecord[]) {
   const grouped = new Map<string, ChecklistItemWithRecord[]>();
+
+  // Fetch all categories from database
+  const allCategories = await fetchDetailCategories();
+
+  console.log('[Sheet1] All categories from DB:', allCategories.map(c => c.name));
+  console.log('[Sheet1] Items received:', items.length);
+
+  // Initialize all categories with empty arrays
+  for (const category of allCategories) {
+    grouped.set(category.name, []);
+  }
+
+  // Populate with actual items
   for (const item of items) {
     const categoryName = item.category.name;
-    if (!grouped.has(categoryName)) {
-      grouped.set(categoryName, []);
+    if (grouped.has(categoryName)) {
+      grouped.get(categoryName)?.push(item);
     }
-    grouped.get(categoryName)?.push(item);
   }
+
+  // Log final grouping
+  console.log('[Sheet1] Grouped categories:', Array.from(grouped.entries()).map(([name, items]) => ({
+    name,
+    itemCount: items.length
+  })));
+
   return grouped;
 }
 
-function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: string) {
+async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: string) {
   const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
 
   // Row 0: Date picker row with label and dropdown cell
@@ -507,10 +528,12 @@ function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: string
   rowToItemId1 = new Map(); // Reset the item ID mapping
   itemIdToRow1 = new Map(); // Reset the reverse mapping for Sheet 1
   // Use category grouping (unified with Sheet 2)
-  const grouped = groupItemsByCategory1(items);
+  const grouped = await groupItemsByCategory1(items);
   let currentRow = DATA_START_ROW;
 
   for (const [categoryName, categoryItems] of grouped) {
+    console.log(`[Sheet1] BEFORE - Category: ${categoryName}, items: ${categoryItems.length}, currentRow: ${currentRow}`);
+
     expandedGroups1.set(categoryName, false);
     rowMapping1.checklistRows.set(currentRow, categoryName);
 
@@ -520,9 +543,11 @@ function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: string
       2: { v: '', s: checklistHeaderStyle },
       3: { v: '', s: checklistHeaderStyle },
     };
+    console.log(`[Sheet1] Header created at row ${currentRow}`);
     currentRow++;
 
     const childStartRow = currentRow;
+    console.log(`[Sheet1] childStartRow: ${childStartRow}`);
     for (const item of categoryItems) {
       const r = item.record;
       // Show item_number and name for consistency with Sheet 2
@@ -543,7 +568,11 @@ function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: string
       start: childStartRow,
       count: categoryItems.length,
     });
+    console.log(`[Sheet1] AFTER - Category: ${categoryName}, currentRow: ${currentRow}, childRange: {start: ${childStartRow}, count: ${categoryItems.length}}\n`);
   }
+
+  console.log(`[Sheet1] Total rows rendered: ${currentRow}, Total cells created: ${Object.keys(cells).length}`);
+  console.log('[Sheet1] Cell rows:', Object.keys(cells).map(Number).sort((a, b) => a - b));
 
   return { cells, totalRows: currentRow };
 }
@@ -558,6 +587,12 @@ function toggleGroup1(categoryName: string, headerRowIndex: number) {
   const isExpanded = expandedGroups1.get(categoryName) ?? false;
   const range = rowMapping1.childRowRanges.get(categoryName);
   if (!range) return;
+
+  // Don't toggle if there are no child rows (empty category)
+  if (range.count === 0) {
+    console.log(`[toggleGroup1] Ignoring toggle for empty category: ${categoryName}, range:`, range);
+    return;
+  }
 
   if (isExpanded) {
     sheet.hideRows(range.start, range.count);
@@ -595,36 +630,53 @@ async function refreshSheet1(date?: string) {
   showLoadingOverlay();
   try {
     const items = await fetchAllChecklistItems(date, selectedStaffId.value);
-    const { cells, totalRows } = buildSheet1CellData(items, date || '');
+    const { cells, totalRows } = await buildSheet1CellData(items, date || '');
+
+    console.log('[refreshSheet1] After buildSheet1CellData, rowMapping1.checklistRows:',
+      Array.from(rowMapping1.checklistRows.entries()));
 
     const workbook = univerAPI.getActiveWorkbook();
+
+    // Instead of updating cells, recreate the entire sheet with new data
+    // This ensures proper row structure and styling
+    const sheetConfig = {
+      id: 'sheet1',
+      name: 'Checklist',
+      columnCount: 4,
+      freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 },
+      rowData: {
+        0: { h: 36, hd: 0 },
+        1: { h: 42, hd: 0 },
+      },
+      columnData: {
+        0: { w: 400 },
+        1: { w: 100 },
+        2: { w: 100, hd: canCheckCht.value ? 0 : 1 },
+        3: { w: 120, hd: canCheckAsm.value ? 0 : 1 },
+      },
+      cellData: cells,
+    };
+
+    // Delete old sheet and create new one
+    const oldSheet = workbook?.getSheetBySheetId('sheet1');
+    if (oldSheet) {
+      workbook?.deleteSheet(oldSheet);
+    }
+    workbook?.insertSheet('Checklist', {
+      index: 0, // Insert at the beginning
+      sheet: sheetConfig,
+    });
+    workbook?.setActiveSheet('sheet1');
+
     const sheet = workbook?.getSheetBySheetId('sheet1');
     if (!sheet) return;
 
-    // OPTIMIZED: Clear existing data rows in ONE batch operation
-    const maxRowsToClear = 500;
-    const rowsToClear = maxRowsToClear - DATA_START_ROW;
-    sheet.getRange(DATA_START_ROW, 0, rowsToClear, 4)?.clearContent();
-
-    // OPTIMIZED: Build 2D array for batch setValues
-    const dataRowCount = totalRows - DATA_START_ROW + 1;
-    if (dataRowCount > 0) {
-      const dataArray: (string | number)[][] = [];
-      for (let r = DATA_START_ROW; r <= totalRows; r++) {
-        const rowData = cells[r];
-        if (rowData) {
-          dataArray.push([rowData[0]?.v ?? '', rowData[1]?.v ?? '', rowData[2]?.v ?? '', rowData[3]?.v ?? '']);
-        } else {
-          dataArray.push(['', '', '', '']);
-        }
-      }
-      // Set all data in ONE batch operation
-      sheet.getRange(DATA_START_ROW, 0, dataArray.length, 4)?.setValues(dataArray);
-    }
-
     // Hide child rows and reset expand state
     for (const [categoryName, range] of rowMapping1.childRowRanges) {
-      sheet.hideRows(range.start, range.count);
+      // Only hide rows if there are actually rows to hide (count > 0)
+      if (range.count > 0) {
+        sheet.hideRows(range.start, range.count);
+      }
       expandedGroups1.set(categoryName, false);
     }
 
@@ -731,15 +783,27 @@ function calculateSummaryValues(
   };
 }
 
-function groupItemsByCategory(items: DetailChecklistItemWithRecord[]) {
+// Group items by category for Sheet 2
+// Ensures all categories are present even if no items match after filtering
+async function groupItemsByCategory(items: DetailChecklistItemWithRecord[]) {
   const grouped = new Map<string, DetailChecklistItemWithRecord[]>();
+
+  // Fetch all categories from database
+  const allCategories = await fetchDetailCategories();
+
+  // Initialize all categories with empty arrays
+  for (const category of allCategories) {
+    grouped.set(category.name, []);
+  }
+
+  // Populate with actual items
   for (const item of items) {
     const categoryName = item.category.name;
-    if (!grouped.has(categoryName)) {
-      grouped.set(categoryName, []);
+    if (grouped.has(categoryName)) {
+      grouped.get(categoryName)?.push(item);
     }
-    grouped.get(categoryName)?.push(item);
   }
+
   return grouped;
 }
 
@@ -747,7 +811,7 @@ function getDaysInMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: number, year: number) {
+async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: number, year: number) {
   const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
   const daysInMonth = getDaysInMonth(month, year);
 
@@ -804,7 +868,7 @@ function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month: numb
   rowToItemId2 = new Map(); // Reset the item ID mapping for Sheet 2
   itemIdToRow2 = new Map(); // Reset the reverse mapping for Sheet 2
   rowToItemMetadata2 = new Map(); // Reset the item metadata mapping
-  const grouped = groupItemsByCategory(items);
+  const grouped = await groupItemsByCategory(items);
 
   let currentRow = 2; // Start data at row 2 (after header and summary row)
 
@@ -1014,6 +1078,11 @@ function toggleGroup2(categoryName: string, headerRowIndex: number) {
   const range = rowMapping2.childRowRanges.get(categoryName);
   if (!range) return;
 
+  // Don't toggle if there are no child rows (empty category)
+  if (range.count === 0) {
+    return;
+  }
+
   if (isExpanded) {
     sheet.hideRows(range.start, range.count);
     expandedGroups2.set(categoryName, false);
@@ -1151,7 +1220,7 @@ async function refreshSheet2() {
     () => [] as DetailChecklistItemWithRecord[],
   );
 
-  const { cells, totalRows, daysInMonth, summaryColStart } = buildSheet2CellData(items, sheet2Month, sheet2Year);
+  const { cells, totalRows, daysInMonth, summaryColStart } = await buildSheet2CellData(items, sheet2Month, sheet2Year);
 
   const workbook = univerAPI.getActiveWorkbook();
   const sheet = workbook?.getSheetBySheetId('sheet2');
@@ -1501,7 +1570,7 @@ onMounted(async () => {
   }
 
   // Build Sheet 1 data with selected date
-  const { cells: cells1, totalRows: totalRows1 } = buildSheet1CellData(sheet1Items, selectedDate.value);
+  const { cells: cells1, totalRows: totalRows1 } = await buildSheet1CellData(sheet1Items, selectedDate.value);
 
   // Build Sheet 2 data
   const currentDate = new Date();
@@ -1515,7 +1584,7 @@ onMounted(async () => {
     totalRows: totalRows2,
     daysInMonth,
     summaryColStart,
-  } = buildSheet2CellData(sheet2Items, month, year);
+  } = await buildSheet2CellData(sheet2Items, month, year);
 
   const dayColStart = 9;
 
@@ -1629,7 +1698,10 @@ onMounted(async () => {
     if (sheet1) {
       // Hide child rows for collapsed groups
       for (const [categoryName, range] of rowMapping1.childRowRanges) {
-        sheet1.hideRows(range.start, range.count);
+        // Only hide rows if there are actually rows to hide (count > 0)
+        if (range.count > 0) {
+          sheet1.hideRows(range.start, range.count);
+        }
         expandedGroups1.set(categoryName, false);
       }
 
@@ -1664,7 +1736,10 @@ onMounted(async () => {
     const sheet2 = workbook.getSheetBySheetId('sheet2');
     if (sheet2) {
       for (const [categoryName, range] of rowMapping2.childRowRanges) {
-        sheet2.hideRows(range.start, range.count);
+        // Only hide rows if there are actually rows to hide (count > 0)
+        if (range.count > 0) {
+          sheet2.hideRows(range.start, range.count);
+        }
         expandedGroups2.set(categoryName, false);
       }
 
@@ -1699,7 +1774,9 @@ onMounted(async () => {
       const sheetId = activeSheet?.getSheetId();
 
       if (sheetId === 'sheet1') {
+        console.log(`[CellClicked] Sheet1 row ${row} clicked`);
         const checklistName = rowMapping1.checklistRows.get(row);
+        console.log(`[CellClicked] Category name:`, checklistName);
         if (checklistName) {
           toggleGroup1(checklistName, row);
         }

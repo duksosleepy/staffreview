@@ -353,6 +353,48 @@ export const fetchCasdoorUsersByStores = async (
   return employees;
 };
 
+// Fetch a single Casdoor user by their Casdoor user ID to get their hr_id (properties.ID)
+export const fetchCasdoorUserById = async (
+  userId: string
+): Promise<{ casdoor_id: string } | null> => {
+  const owner = process.env.CASDOOR_ORG || 'lug.vn';
+  const params = new URLSearchParams({
+    owner,
+    clientId: oidcConfig.clientId,
+    clientSecret: oidcConfig.clientSecret,
+  });
+
+  try {
+    // Get all users and find by ID (Casdoor doesn't have a direct get-by-id endpoint)
+    const response = await fetch(`${oidcConfig.endpoint}/api/get-users?${params.toString()}`);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const rawBody = await response.json();
+    const users = Array.isArray(rawBody) ? rawBody : (rawBody?.data ?? rawBody);
+
+    if (!Array.isArray(users)) {
+      return null;
+    }
+
+    // Find user by ID
+    const user = users.find((u: any) => u.id === userId);
+    if (!user) {
+      return null;
+    }
+
+    const properties = user.properties ?? {};
+    const casdoorId = properties.ID ?? '';
+
+    return { casdoor_id: casdoorId };
+  } catch (error) {
+    console.error('Failed to fetch Casdoor user by ID:', error);
+    return null;
+  }
+};
+
 // Decode OIDC ID token (without verification - IDP already verified)
 export const decodeIdToken = (idToken: string): OIDCUserInfo => {
   const payload = jose.decodeJwt(idToken);

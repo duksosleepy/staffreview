@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Dialog } from '@ark-ui/vue';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { FOCUS_RING_CLASSES } from '@/constants/ui';
 
 defineOptions({
@@ -25,6 +25,16 @@ const emit = defineEmits<{
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const selectedFileName = ref<string>('');
 const isDragging = ref(false);
+
+// Clear file selection when modal is closed
+watch(() => props.open, (newOpen) => {
+  if (!newOpen) {
+    selectedFileName.value = '';
+    if (fileInputRef.value) {
+      fileInputRef.value.value = '';
+    }
+  }
+});
 
 const fileSize = computed(() => {
   if (!fileInputRef.value?.files?.[0]) return null;

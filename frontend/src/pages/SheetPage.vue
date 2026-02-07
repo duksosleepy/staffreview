@@ -16,9 +16,11 @@ import {
   type ChecklistItemWithRecord,
   type ClassificationCriteria,
   type DetailChecklistItemWithRecord,
+  type EmployeeSchedule,
   fetchAllChecklistItems,
   fetchAllDetailChecklistItems,
   fetchAssignmentsByCht,
+  fetchEmployeeSchedules,
   fetchStoreEmployees,
   type StoreEmployee,
   upsertAssignments,
@@ -251,7 +253,15 @@ async function handleImportSubmit() {
       const row = dataRows[i];
 
       // Skip empty rows
-      if (!row || row.length === 0 || !row[3]) {
+      if (!row || row.length === 0) {
+        continue;
+      }
+
+      // Extract ID HRM (column 2) first
+      const hrId = String(row[2] || '').trim(); // ID HRM
+
+      // Skip rows without ID HRM
+      if (!hrId) {
         continue;
       }
 
@@ -260,7 +270,6 @@ async function handleImportSubmit() {
       const region = String(row[0] || '').trim(); // Miền
       const department = String(row[1] || '').trim(); // Mã bộ phận
       const position = String(row[4] || '').trim(); // Mã chức vụ
-      const hrId = String(row[2] || '').trim(); // ID HRM
       const status = String(row[5] || '').trim(); // TRẠNG THÁI NHÂN VIÊN
 
       // Extract N1-N31 (columns 6-36)
@@ -342,9 +351,33 @@ async function handleImportSubmit() {
     showImportModal.value = false;
     importFile.value = null;
 
-    // Reload data to reflect changes
-    if (successCount > 0) {
-      await loadSheet3Data();
+    // Reload Sheet 3 data to reflect changes
+    if (successCount > 0 && isCht.value && univerAPI) {
+      const schedules = await fetchEmployeeSchedules().catch(() => [] as EmployeeSchedule[]);
+      sheet3Employees = schedules.map(schedule => ({
+        id: schedule.hr_id,
+        name: schedule.hr_id,
+        displayName: schedule.employee_name,
+        email: '',
+        stores: [],
+        casdoor_id: schedule.hr_id,
+        role: 'employee',
+        department: schedule.store_id,
+        region: schedule.region,
+        hr_id: schedule.hr_id,
+        position: schedule.position,
+        daily_schedule: schedule.daily_schedule,
+      }));
+
+      // Rebuild and refresh Sheet 3
+      const { cells: cells3, totalRows: totalRows3 } = buildSheet3CellData(sheet3CachedItems);
+      const sheet3 = univerAPI.getActiveWorkbook()?.getSheetByName('Phân công');
+      if (sheet3) {
+        await univerAPI.executeCommand('sheet.mutation.set-range-values', {
+          range: { startRow: 0, startColumn: 0, endRow: totalRows3, endColumn: 40 },
+          value: cells3,
+        });
+      }
     }
   } catch (error: any) {
     console.error('Import Excel error:', error);
@@ -1210,8 +1243,18 @@ function buildSheet3CellData(items: ChecklistItemWithRecord[]) {
     cl: { rgb: '#FFFFFF' },
     tb: 3,
   };
-  const employeeCellStyle = { vt: 2, tb: 3 };
-  const dayCellStyle = { vt: 2, ht: 2 };
+  const employeeCellStyle = { bl: 1, vt: 2, tb: 3 };
+  const dayCellStyle = { bl: 1, vt: 2, ht: 2 };
+
+  // Shift type color styles (using Bartlett-inspired color palette)
+  // S = Sáng (Morning) - Light blue
+  // C = Chiều (Afternoon) - Light orange
+  // F = Full day - Light green
+  const shiftColorStyles = {
+    S: { bl: 1, vt: 2, ht: 2, bg: { rgb: '#B3D9FF' } }, // Light blue for morning shift
+    C: { bl: 1, vt: 2, ht: 2, bg: { rgb: '#FFD9B3' } }, // Light orange for afternoon shift
+    F: { bl: 1, vt: 2, ht: 2, bg: { rgb: '#B3FFB3' } }, // Light green for full day
+  };
 
   // Row 0: Column headers
   cells[0] = {
@@ -1229,10 +1272,14 @@ function buildSheet3CellData(items: ChecklistItemWithRecord[]) {
   rowMapping3 = { checklistRows: new Map(), childRowRanges: new Map() };
   rowToItemId3 = new Map();
 
-  // Group employees by department
+  // Group employees by department (skip employees without department)
   const departmentGroups = new Map<string, typeof sheet3Employees>();
   for (const emp of sheet3Employees) {
-    const dept = emp.department || 'Chưa phân bộ phận';
+    // Skip employees without a department assigned
+    if (!emp.department) {
+      continue;
+    }
+    const dept = emp.department;
     if (!departmentGroups.has(dept)) {
       departmentGroups.set(dept, []);
     }
@@ -1267,9 +1314,27 @@ function buildSheet3CellData(items: ChecklistItemWithRecord[]) {
         3: { v: emp.position || '', s: employeeCellStyle },
       };
 
-      // Add empty cells for N1-N31 columns (columns 4-34)
+      // Add N1-N31 daily schedule cells (columns 4-34)
+      const schedule = emp.daily_schedule || [];
       for (let col = 4; col <= 34; col++) {
-        cells[currentRow][col] = { v: '', s: dayCellStyle };
+        const dayIndex = col - 4; // N1 = index 0, N2 = index 1, etc.
+        const shiftValue = schedule[dayIndex] || '';
+        const trimmedShift = shiftValue.trim().toUpperCase(); // Convert to uppercase for comparison
+
+        // Apply color based on shift type (check first character)
+        // S1, S2... = Sáng (Morning) - Light blue
+        // C1, C2... = Chiều (Afternoon) - Light orange
+        // F7, F8... = Full day - Light green
+        let cellStyle = dayCellStyle;
+        if (trimmedShift.startsWith('S')) {
+          cellStyle = shiftColorStyles.S;
+        } else if (trimmedShift.startsWith('C')) {
+          cellStyle = shiftColorStyles.C;
+        } else if (trimmedShift.startsWith('F')) {
+          cellStyle = shiftColorStyles.F;
+        }
+
+        cells[currentRow][col] = { v: trimmedShift, s: cellStyle };
       }
 
       // Store employee id for this row (for future use when saving assignments)
@@ -1402,21 +1467,36 @@ onMounted(async () => {
     ),
   ]);
 
-  // Sheet 3: fetch employees + existing assignments (CHT only)
+  // Sheet 3: fetch employee schedules from EmployeeSchedule table (CHT only)
   if (isCht.value) {
-    const [employees, assignments] = await Promise.all([
-      fetchStoreEmployees().catch(() => [] as StoreEmployee[]),
+    const [schedules, assignments] = await Promise.all([
+      fetchEmployeeSchedules().catch(() => [] as EmployeeSchedule[]),
       fetchAssignmentsByCht().catch(() => ({} as Record<string, string[]>)),
     ]);
-    sheet3Employees = employees;
+
+    // Convert EmployeeSchedule to StoreEmployee format for compatibility
+    sheet3Employees = schedules.map(schedule => ({
+      id: schedule.hr_id,
+      name: schedule.hr_id,
+      displayName: schedule.employee_name,
+      email: '',
+      stores: [], // Not used in Sheet 3
+      casdoor_id: schedule.hr_id,
+      role: 'employee',
+      department: schedule.store_id, // Mã bộ phận (store_id from EmployeeSchedule)
+      region: schedule.region,
+      hr_id: schedule.hr_id,
+      position: schedule.position,
+      daily_schedule: schedule.daily_schedule, // N1-N31 schedule data
+    }));
+
     sheet3Assignments = assignments;
     sheet3CachedItems = sheet1Items; // cache for re-inserting sheet3 later
-    // Build name→employee lookup (filter out ASM users for CHT, same as sidebar)
+
+    // Build name→employee lookup
     sheet3NameToEmployee = new Map();
-    for (const emp of employees) {
-      if (emp.role !== 'asm') {
-        sheet3NameToEmployee.set(emp.displayName.toLowerCase(), emp);
-      }
+    for (const emp of sheet3Employees) {
+      sheet3NameToEmployee.set(emp.displayName.toLowerCase(), emp);
     }
   }
 
@@ -1511,7 +1591,7 @@ onMounted(async () => {
       id: 'sheet3',
       name: 'Phân công',
       columnCount: 35, // 4 info columns + 31 day columns
-      freeze: { xSplit: 4, ySplit: 1, startRow: 1, startColumn: 4 }, // Freeze first 4 columns and header row
+      freeze: { xSplit: 1, ySplit: 1, startRow: 1, startColumn: 1 }, // Freeze only first column (HỌ VÀ TÊN) and header row
       rowData: { 0: { h: 42, hd: 0 } },
       columnData: {
         0: { w: 200 }, // Employee name

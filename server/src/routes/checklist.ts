@@ -95,47 +95,13 @@ export const checklistRoutes = new Hono<Env>()
     const { filterCondition, params } = buildStaffFilter(user, staff_id);
 
     // ---------------------------------------------------------------
-    // Sheet 3 assignment filter for employees:
-    // If any TaskAssignment exists in the employee's store(s), only
-    // show items that are explicitly assigned to them.
-    // If zero assignments exist (backwards compat), show everything.
+    // Task filtering for DetailChecklistItems
+    // Tasks are now automatically assigned based on shift matching
+    // (DetailChecklistItem.task_type matched with EmployeeSchedule.daily_schedule)
+    // No explicit TaskAssignment type needed
     // ---------------------------------------------------------------
-    let itemFilter = '.is_deleted = false';
+    const itemFilter = '.is_deleted = false';
     const queryParams: Record<string, unknown> = { ...params };
-
-    // Determine the target employee ID for assignment filtering:
-    // - Employee viewing own data            → user.sub
-    // - CHT/ASM viewing a specific employee  → staff_id
-    // - CHT/ASM viewing self or no target    → null (show all items)
-    const assignmentTargetId =
-      user.role === 'employee'
-        ? user.sub
-        : staff_id && staff_id !== user.sub
-          ? staff_id
-          : null;
-
-    if (assignmentTargetId) {
-      const countQuery = `
-        select count(
-          TaskAssignment
-          filter .is_deleted = false
-            and .store_id in array_unpack(<array<str>>$empStoreIds)
-        )
-      `;
-      const assignmentCount = await db.queryRequiredSingle<number>(countQuery, {
-        empStoreIds: user.stores,
-      });
-
-      if (assignmentCount > 0) {
-        itemFilter = `.is_deleted = false
-          and exists (
-            select .task_assignments filter
-              .is_deleted = false
-              and .employee_id = <str>$assignedEmployeeId
-          )`;
-        queryParams.assignedEmployeeId = assignmentTargetId;
-      }
-    }
 
     // Now using DetailChecklistItem as the source of truth for both sheets
     // Sheet 1 uses checklist_records backlink for approval workflow

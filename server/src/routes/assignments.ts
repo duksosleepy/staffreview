@@ -25,9 +25,12 @@ export const assignmentRoutes = new Hono<Env>()
    * GET /api/assignments/by-cht
    * Returns assignments created by the current CHT user.
    * Shape: { [item_id: string]: string[] }  — item_id → list of employee_ids
+   *
+   * NOTE: TaskAssignment type has been removed. Tasks are now automatically assigned
+   * based on shift matching (DetailChecklistItem.task_type vs EmployeeSchedule.daily_schedule).
+   * This endpoint returns empty object for backwards compatibility.
    */
   .get('/by-cht', async (c) => {
-    const db = c.get('db');
     const user = c.get('user');
 
     if (!user) {
@@ -38,42 +41,19 @@ export const assignmentRoutes = new Hono<Env>()
       return c.json({ error: 'Forbidden' }, 403);
     }
 
-    const query = `
-      select TaskAssignment {
-        checklist_item: { id },
-        employee_id
-      }
-      filter .cht_id = <str>$chtId
-        and .is_deleted = false
-    `;
-
-    const rows = await db.query<{ checklist_item: { id: string }; employee_id: string }>(query, {
-      chtId: user.sub,
-    });
-
-    // Group by item id
-    const grouped: Record<string, string[]> = {};
-    for (const row of rows) {
-      const itemId = row.checklist_item.id;
-      if (!grouped[itemId]) {
-        grouped[itemId] = [];
-      }
-      grouped[itemId].push(row.employee_id);
-    }
-
-    return c.json(grouped);
+    // Return empty object since TaskAssignment no longer exists
+    // Tasks are now automatically assigned based on shift matching
+    return c.json({});
   })
 
   /**
    * POST /api/assignments/upsert
-   * Replaces the full employee list for a single checklist item.
-   * - Soft-deletes any existing assignments for this (item, cht) that are NOT in the new list.
-   * - Inserts new assignments for employees that don't have one yet.
-   * Only CHT role is allowed.
+   * NOTE: This endpoint is deprecated. TaskAssignment type has been removed.
+   * Tasks are now automatically assigned based on shift matching
+   * (DetailChecklistItem.task_type vs EmployeeSchedule.daily_schedule).
+   * Returns success for backwards compatibility.
    */
   .post('/upsert', zValidator('json', UpsertAssignmentsSchema), async (c) => {
-    const { checklist_item_id, employee_ids } = c.req.valid('json');
-    const db = c.get('db');
     const user = c.get('user');
     const log = c.get('log');
 
@@ -85,55 +65,6 @@ export const assignmentRoutes = new Hono<Env>()
       return c.json({ error: 'Forbidden' }, 403);
     }
 
-    const storeId = user.stores[0] ?? '';
-
-    try {
-      // 1. Soft-delete ALL current assignments for this (item, cht)
-      const deleteQuery = `
-        update TaskAssignment
-        filter .checklist_item.id = <uuid>$itemId
-          and .cht_id = <str>$chtId
-          and .is_deleted = false
-        set {
-          is_deleted := true,
-          deleted_at := datetime_current(),
-          updated_at := datetime_current()
-        }
-      `;
-      await db.query(deleteQuery, {
-        itemId: checklist_item_id,
-        chtId: user.sub,
-      });
-
-      // 2. Insert new assignments for each employee_id
-      if (employee_ids.length > 0) {
-        const insertQuery = `
-          with
-            item := (select DetailChecklistItem filter .id = <uuid>$itemId),
-          for empId in array_unpack(<array<str>>$employeeIds)
-          union (
-            insert TaskAssignment {
-              checklist_item := item,
-              cht_id := <str>$chtId,
-              employee_id := empId,
-              store_id := <str>$storeId,
-              created_at := datetime_current(),
-              updated_at := datetime_current()
-            }
-          )
-        `;
-        await db.query(insertQuery, {
-          itemId: checklist_item_id,
-          chtId: user.sub,
-          employeeIds: employee_ids,
-          storeId,
-        });
-      }
-
-      log?.info({ itemId: checklist_item_id, employeeCount: employee_ids.length }, 'Assignments upserted');
-      return c.json({ success: true });
-    } catch (error) {
-      log?.error({ error }, 'Failed to upsert assignments');
-      return c.json({ error: 'Failed to save assignments' }, 500);
-    }
+    log?.info('Assignment upsert called but is deprecated - automatic shift matching is used');
+    return c.json({ success: true });
   });

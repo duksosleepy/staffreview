@@ -291,6 +291,7 @@ export type StoreEmployee = {
   region?: string; // Miền
   hr_id?: string; // ID HRM
   position?: string; // Mã chức vụ
+  daily_schedule?: string[]; // N1-N31 daily assignments
 };
 
 /**
@@ -359,6 +360,7 @@ export async function upsertAssignments(payload: UpsertAssignmentsPayload): Prom
 export type EmployeeSchedule = {
   hr_id: string; // ID HRM - Primary identifier
   employee_name: string; // HỌ VÀ TÊN (dấu)
+  store_id: string; // Mã bộ phận - Department/Store code
   daily_schedule: string[]; // Array of 31 strings (N1-N31)
   region?: string; // Miền
   position?: string; // Mã chức vụ

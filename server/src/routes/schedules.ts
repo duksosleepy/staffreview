@@ -51,6 +51,7 @@ export const scheduleRoutes = new Hono<Env>()
         select EmployeeSchedule {
           hr_id,
           employee_name,
+          store_id,
           daily_schedule,
           region,
           position,
@@ -63,6 +64,7 @@ export const scheduleRoutes = new Hono<Env>()
       const schedules = await db.query<{
         hr_id: string;
         employee_name: string;
+        store_id: string;
         daily_schedule: string[];
         region?: string;
         position?: string;

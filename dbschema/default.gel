@@ -229,14 +229,18 @@ module default {
         # Notes/Ghi chú
         notes: str;
 
+        # TASK TYPE - Matches shift type in EmployeeSchedule (S, C, F)
+        # S = Sáng (Morning shift)
+        # C = Chiều (Afternoon shift)
+        # F = Full day
+        # Tasks are shown to employees based on matching their daily_schedule with this task_type
+        task_type: ShiftType;
+
         # Computed backlink to monthly records (Sheet 2)
         multi monthly_records := .<detail_item[is DetailMonthlyRecord];
 
         # Computed backlink to checklist records (Sheet 1 - approval workflow)
         multi checklist_records := .<checklist_item[is ChecklistRecord];
-
-        # Computed backlink to task assignments (Sheet 3)
-        multi task_assignments := .<checklist_item[is TaskAssignment];
 
         # Soft delete
         deleted_at: datetime;
@@ -262,58 +266,12 @@ module default {
     }
 
     # ===================================================
-    # SHEET 3: Task Assignment (CHT assigns items to employees)
-    # ===================================================
-
-    # TaskAssignment: Links a checklist item to a specific employee, created by a CHT.
-    # One row per (item, employee) pair. A single item can be assigned to multiple
-    # employees (multiple TaskAssignment rows with the same checklist_item).
-    # Backwards-compat rule: if NO assignments exist for an item from any CHT in the
-    # same store, the item still shows in every employee's Sheet 1.
-    type TaskAssignment {
-        # The checklist item being assigned
-        required checklist_item: DetailChecklistItem {
-            on target delete delete source;
-        }
-
-        # The CHT who created the assignment (staff_id / sub claim)
-        required cht_id: str;
-
-        # The employee who is assigned the task (staff_id / sub claim)
-        required employee_id: str;
-
-        # Store ID for scoping
-        store_id: str {
-            default := "";
-        }
-
-        # Soft delete
-        deleted_at: datetime;
-        is_deleted: bool {
-            default := false;
-        }
-
-        # Timestamps
-        created_at: datetime {
-            default := datetime_current();
-        }
-        updated_at: datetime {
-            default := datetime_current();
-        }
-
-        # One assignment per (item, employee, cht) triple
-        constraint exclusive on ((.checklist_item, .employee_id, .cht_id));
-
-        # Indexes
-        index on (.checklist_item);
-        index on (.cht_id);
-        index on (.employee_id);
-        index on (.store_id);
-        index on (.is_deleted);
-    }
-
-    # ===================================================
     # SHEET 3: Employee Schedule Calendar (Phân công)
+    # ===================================================
+    # Task assignment is now AUTOMATIC based on matching:
+    # - DetailChecklistItem.task_type (S, C, F)
+    # - EmployeeSchedule.daily_schedule[day_index] (S, C, F)
+    # - assessment_date.day to determine which array index to use
     # ===================================================
 
     # Shift types for employee schedules
@@ -322,32 +280,39 @@ module default {
     # F = Full day - for daily tasks
     scalar type ShiftType extending enum<S, C, F>;
 
-    # EmployeeSchedule: Stores the constant schedule calendar for employees (N1-N31 columns)
-    # One record per employee - remains constant over time
-    # This represents the employee's regular schedule pattern
+    # EmployeeSchedule: Stores employee data and schedule from Excel import
+    # Employee data is sourced directly from Excel file (assignment-real.xlsx)
+    # No Casdoor user matching required
     type EmployeeSchedule {
-        # Employee staff ID from Casdoor JWT (sub claim)
-        # This is the unique identifier - one schedule per employee
-        required employee_id: str {
-            constraint exclusive;
+        # PRIMARY IDENTIFIER - HR ID from Excel (ID HRM column)
+        # Changed from employee_id (Casdoor) to hr_id (Excel)
+        required hr_id: str {
+            default := '';
         }
 
-        # Store ID from Casdoor user properties (CUAHANG)
-        store_id: str {
-            default := "";
+        # Employee name from Excel (HỌ VÀ TÊN column)
+        required employee_name: str {
+            default := '';
         }
 
-        # Daily schedule - array of 31 strings (N1-N31)
-        # Each element contains the shift code or schedule for that day of month
+        # Store ID / Department Code from Excel (Mã bộ phận column)
+        # This matches CHT's CUAHANG property for filtering
+        required store_id: str {
+            default := '';
+        }
+
+        # Daily schedule - array of 31 strings (N1-N31 columns from Excel)
         # Index 0 = N1 (day 1), Index 30 = N31 (day 31)
-        # Empty string = no schedule for that day
-        # Valid values: "S" (morning shift), "C" (afternoon shift), "F" (full day)
-        #
-        # Validation rules:
-        # - S, C, F: Only for daily category items
-        # - When an employee has a shift assigned (S/C/F), they should only see
-        #   daily checklist items that match their shift type for that day.
-        daily_schedule: array<str>;
+        # Values: "S" (Sáng), "C" (Chiều), "F" (Full day), or custom shift codes
+        # Temporarily optional to avoid migration issues, will be enforced in application
+        daily_schedule: array<str> {
+            default := <array<str>>[];
+        }
+
+        # Additional employee metadata from Excel
+        region: str;        # Miền column
+        position: str;      # Mã chức vụ column
+        status: str;        # TRẠNG THÁI NHÂN VIÊN column
 
         # Soft delete
         deleted_at: datetime;
@@ -363,8 +328,11 @@ module default {
             default := datetime_current();
         }
 
-        # Indexes
-        index on (.employee_id);
+        # Unique constraint: one record per (hr_id, store_id)
+        constraint exclusive on ((.hr_id, .store_id));
+
+        # Indexes for performance
+        index on (.hr_id);
         index on (.store_id);
         index on (.is_deleted);
     }

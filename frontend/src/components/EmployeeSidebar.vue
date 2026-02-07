@@ -254,7 +254,7 @@ const totalStores = computed(() => employeesByStore.value.size);
 <style scoped>
 .sidebar-search-input {
   width: 100%;
-  background-color: rgba(39, 39, 37, 0.5);
+  background-color: var(--ink-medium);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0.5rem;
   padding-left: 2.75rem;
@@ -262,19 +262,19 @@ const totalStores = computed(() => employeesByStore.value.size);
   padding-top: 0.625rem;
   padding-bottom: 0.625rem;
   font-size: 0.875rem;
-  color: #F2ECE2;
+  color: var(--paper-white);
   transition: all 0.15s ease;
 }
 
 .sidebar-search-input::placeholder {
-  color: rgba(138, 127, 114, 0.7);
-  opacity: 1;
+  color: var(--paper-muted);
+  opacity: 0.7;
 }
 
 .sidebar-search-input:focus {
   outline: none;
-  border-color: rgba(216, 74, 58, 0.5);
-  background-color: rgba(39, 39, 37, 0.5);
+  border-color: var(--border-accent);
+  background-color: var(--ink-medium);
 }
 
 /* Indicator dot without animations for instant feedback */
@@ -286,8 +286,8 @@ const totalStores = computed(() => employeesByStore.value.size);
 
 .indicator-dot.active {
   height: 20px;
-  background-color: rgb(216, 74, 58);
-  box-shadow: 0 4px 12px rgba(216, 74, 58, 0.3);
+  background-color: var(--vermillion-500);
+  box-shadow: var(--shadow-vermillion);
 }
 
 /* Sidebar toggle button */
@@ -299,7 +299,7 @@ const totalStores = computed(() => employeesByStore.value.size);
   justify-content: center;
   border-radius: 6px;
   background-color: transparent;
-  color: #8A7F72;
+  color: var(--paper-muted);
   cursor: pointer;
   transition: all 0.15s ease;
   border: none;
@@ -309,7 +309,7 @@ const totalStores = computed(() => employeesByStore.value.size);
 
 .sidebar-toggle-btn:hover {
   background-color: rgba(255, 255, 255, 0.05);
-  color: #F2ECE2;
+  color: var(--paper-white);
 }
 
 .sidebar-toggle-btn:active {

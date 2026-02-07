@@ -286,6 +286,11 @@ export type StoreEmployee = {
   stores: string[];
   casdoor_id: string;
   role: string;
+  // Extended fields from EmployeeSchedule
+  department?: string; // Mã bộ phận (store_id)
+  region?: string; // Miền
+  hr_id?: string; // ID HRM
+  position?: string; // Mã chức vụ
 };
 
 /**
@@ -352,8 +357,12 @@ export async function upsertAssignments(payload: UpsertAssignmentsPayload): Prom
 // ===================================================
 
 export type EmployeeSchedule = {
-  employee_id: string;
+  hr_id: string; // ID HRM - Primary identifier
+  employee_name: string; // HỌ VÀ TÊN (dấu)
   daily_schedule: string[]; // Array of 31 strings (N1-N31)
+  region?: string; // Miền
+  position?: string; // Mã chức vụ
+  status?: string; // TRẠNG THÁI NHÂN VIÊN
 };
 
 /**
@@ -370,8 +379,13 @@ export async function fetchEmployeeSchedules(): Promise<EmployeeSchedule[]> {
 }
 
 export type UpsertSchedulePayload = {
-  employee_id: string;
+  hr_id: string; // ID HRM - Primary identifier
+  employee_name: string; // HỌ VÀ TÊN (dấu)
+  store_id: string; // Mã bộ phận - Department/Store code from Excel
   daily_schedule: string[]; // Array of 31 strings (N1-N31)
+  region?: string; // Miền
+  position?: string; // Mã chức vụ
+  status?: string; // TRẠNG THÁI NHÂN VIÊN
 };
 
 /**

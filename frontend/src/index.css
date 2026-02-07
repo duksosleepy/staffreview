@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&display=swap");
+@import "tailwindcss";
 
 @theme {
   /* Tailwind v4 color definitions */
@@ -147,18 +147,12 @@
   --gradient-dark: linear-gradient(135deg, var(--ink-deep), var(--ink-medium));
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
+/* Note: * selector removed - Tailwind v4 handles CSS reset */
 html {
   scrollbar-color: var(--ink-lighter) var(--ink-deepest);
 }
 
 body {
-  margin: 0;
   font-family: var(--font-body);
   background: var(--ink-deepest);
   color: var(--paper-light);

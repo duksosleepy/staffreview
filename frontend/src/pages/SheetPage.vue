@@ -24,6 +24,7 @@ import {
   upsertAssignments,
   upsertChecklistRecord,
   upsertDetailMonthlyRecord,
+  upsertEmployeeSchedule,
   validateDeadlines,
 } from '@/lib/gel-client';
 import { useAuthStore } from '@/stores/auth';
@@ -40,6 +41,7 @@ const EmployeeSidebar = defineAsyncComponent(() =>
 
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
+import readXlsxFile from 'read-excel-file';
 
 // Auth
 const auth = useAuthStore();
@@ -198,6 +200,19 @@ function handleFileSelect(event: Event) {
   }
 }
 
+/**
+ * Parse Excel file structure from assignment-real.xlsx
+ * Columns:
+ * 0: Miền (Region)
+ * 1: Mã bộ phận (Department Code)
+ * 2: ID HRM (HR ID)
+ * 3: HỌ VÀ TÊN (dấu) (Employee Name)
+ * 4: Mã chức vụ (Position Code)
+ * 5: TRẠNG THÁI NHÂN VIÊN (Employee Status)
+ * 6-36: N1-N31 (Daily assignments)
+ * 37: Ngày vào làm (Start Date)
+ * 38: Ngày nghỉ việc (End Date)
+ */
 async function handleImportSubmit() {
   if (!importFile.value) {
     toaster.create({
@@ -211,20 +226,131 @@ async function handleImportSubmit() {
   isImporting.value = true;
 
   try {
-    // TODO: Parse Excel file and save to database
-    // Will be implemented next
-    toaster.create({
-      title: 'Thành công',
-      description: 'Import Excel thành công',
-      type: 'success',
-    });
+    // Parse Excel file
+    const rows = await readXlsxFile(importFile.value);
+
+    if (!rows || rows.length < 2) {
+      throw new Error('File Excel trống hoặc không có dữ liệu');
+    }
+
+    // Skip header row (row 0)
+    const dataRows = rows.slice(1);
+
+    // Parse and validate data
+    const assignments: Array<{
+      employeeName: string;
+      region: string;
+      department: string;
+      position: string;
+      hrId: string;
+      status: string;
+      dailySchedule: string[]; // N1-N31
+    }> = [];
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+
+      // Skip empty rows
+      if (!row || row.length === 0 || !row[3]) {
+        continue;
+      }
+
+      // Extract employee info
+      const employeeName = String(row[3] || '').trim(); // HỌ VÀ TÊN (dấu)
+      const region = String(row[0] || '').trim(); // Miền
+      const department = String(row[1] || '').trim(); // Mã bộ phận
+      const position = String(row[4] || '').trim(); // Mã chức vụ
+      const hrId = String(row[2] || '').trim(); // ID HRM
+      const status = String(row[5] || '').trim(); // TRẠNG THÁI NHÂN VIÊN
+
+      // Extract N1-N31 (columns 6-36)
+      const dailySchedule: string[] = [];
+      for (let day = 0; day < 31; day++) {
+        const cellValue = row[6 + day];
+        dailySchedule.push(cellValue ? String(cellValue).trim() : '');
+      }
+
+      assignments.push({
+        employeeName,
+        region,
+        department,
+        position,
+        hrId,
+        status,
+        dailySchedule,
+      });
+    }
+
+    if (assignments.length === 0) {
+      throw new Error('Không tìm thấy dữ liệu hợp lệ trong file Excel');
+    }
+
+    console.log(`Parsed ${assignments.length} employee assignments from Excel`);
+
+    // Prepare schedules to upsert (no Casdoor matching needed)
+    const schedulesToUpsert = assignments.map((assignment) => ({
+      hr_id: assignment.hrId,
+      employee_name: assignment.employeeName,
+      store_id: assignment.department, // Mã bộ phận from Excel
+      daily_schedule: assignment.dailySchedule,
+      region: assignment.region,
+      position: assignment.position,
+      status: assignment.status,
+    }));
+
+    // Save schedules to database
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+
+    for (const schedule of schedulesToUpsert) {
+      try {
+        await upsertEmployeeSchedule({
+          hr_id: schedule.hr_id,
+          employee_name: schedule.employee_name,
+          store_id: schedule.store_id,
+          daily_schedule: schedule.daily_schedule,
+          region: schedule.region,
+          position: schedule.position,
+          status: schedule.status,
+        });
+        successCount++;
+      } catch (error: any) {
+        errorCount++;
+        errors.push(`${schedule.employee_name}: ${error.message}`);
+        console.error(`Failed to save schedule for ${schedule.employee_name}:`, error);
+      }
+    }
+
+    // Show results
+    if (errorCount > 0) {
+      toaster.create({
+        title: 'Import hoàn tất với lỗi',
+        description: `Thành công: ${successCount}, Lỗi: ${errorCount}`,
+        type: 'warning',
+        duration: 8000,
+      });
+    } else {
+      toaster.create({
+        title: 'Thành công',
+        description: `Đã import ${successCount} nhân viên thành công`,
+        type: 'success',
+        duration: 5000,
+      });
+    }
 
     showImportModal.value = false;
     importFile.value = null;
+
+    // Reload data to reflect changes
+    if (successCount > 0) {
+      await loadSheet3Data();
+    }
   } catch (error: any) {
+    console.error('Import Excel error:', error);
     toaster.create({
       title: 'Lỗi',
-      description: `Import thất bại: ${error?.message || 'Unknown error'}`,
+      description: `Import thất bại: ${error?.message || 'Lỗi không xác định'}`,
       type: 'error',
     });
   } finally {

@@ -38,7 +38,7 @@ const centralSubLabel = 'Tổng số';
 
 <template>
   <div class="classification-pie-chart">
-    <div class="chart-header">
+    <div class="mb-4">
       <h3 class="text-lg font-semibold text-paper-white mb-2">Phân bổ xếp loại</h3>
       <p class="text-sm text-paper-muted">Thống kê theo loại đánh giá</p>
     </div>
@@ -46,7 +46,7 @@ const centralSubLabel = 'Tổng số';
     <VisSingleContainer
       :data="data"
       :height="300"
-      class="chart-container"
+      class="my-4"
     >
       <VisDonut
         :value="value"
@@ -61,7 +61,7 @@ const centralSubLabel = 'Tổng số';
     </VisSingleContainer>
 
     <!-- Legend -->
-    <div class="chart-legend">
+    <div class="flex flex-col gap-2 mt-4 pt-4 border-t border-white/10">
       <div
         v-for="item in data"
         :key="item.type"
@@ -84,42 +84,25 @@ const centralSubLabel = 'Tổng số';
 <style scoped>
 .classification-pie-chart {
   padding: 1rem;
-  background: linear-gradient(135deg, rgba(26, 27, 38, 0.95) 0%, rgba(38, 40, 51, 0.95) 100%);
+  background: var(--gradient-dark);
   border-radius: 1rem;
-  border: 1px solid rgba(242, 236, 226, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-lg);
   backdrop-filter: blur(10px);
-}
-
-.chart-header {
-  margin-bottom: 1rem;
-}
-
-.chart-container {
-  margin: 1rem 0;
 }
 
 /* Override Unovis styles for central label */
 :deep(.unovis-donut-central-label) {
-  fill: #F2ECE2;
+  fill: var(--paper-white);
   font-size: 32px;
   font-weight: 700;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
 }
 
 :deep(.unovis-donut-central-sub-label) {
-  fill: #A8A29E;
+  fill: var(--paper-muted);
   font-size: 14px;
-  font-family: 'Inter', sans-serif;
-}
-
-.chart-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(242, 236, 226, 0.1);
+  font-family: var(--font-body);
 }
 
 .legend-item {
@@ -127,7 +110,7 @@ const centralSubLabel = 'Tổng số';
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  color: #F2ECE2;
+  color: var(--paper-white);
 }
 
 .legend-color {
@@ -143,12 +126,12 @@ const centralSubLabel = 'Tổng số';
 }
 
 .legend-value {
-  color: #A8A29E;
+  color: var(--paper-muted);
   margin-left: auto;
 }
 
 .legend-percentage {
-  color: #78716C;
+  color: var(--paper-dim);
   font-size: 0.75rem;
 }
 </style>

@@ -97,14 +97,13 @@ const handleDrop = (e: DragEvent) => {
     />
 
     <!-- POSITIONER -->
-    <Dialog.Positioner class="fixed inset-0 z-[80] flex items-center justify-center" style="padding: 24px;">
+    <Dialog.Positioner class="fixed inset-0 z-[80] flex items-center justify-center p-6">
       <Dialog.Content
-        class="relative w-full max-w-[480px] bg-white rounded-lg shadow-lg"
-        style="animation: modalSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);"
+        class="relative w-full max-w-[480px] bg-white rounded-lg shadow-lg animate-modal-slide-up"
       >
         <!-- MODAL HEADER -->
-        <div class="flex items-center justify-between" style="padding: 24px 24px 20px 24px;">
-          <Dialog.Title class="text-[17px] font-semibold text-gray-900">
+        <div class="flex items-center justify-between px-6 pt-6 pb-5">
+          <Dialog.Title class="text-[17px] font-semibold" style="color: #1f2937;">
             Import Excel File
           </Dialog.Title>
 
@@ -116,7 +115,7 @@ const handleDrop = (e: DragEvent) => {
               'transition-colors duration-150',
               FOCUS_RING_CLASSES
             ]"
-            style="margin-right: -4px;"
+            class="-mr-1"
             :disabled="isImporting"
             @click="handleClose"
           >
@@ -127,7 +126,7 @@ const handleDrop = (e: DragEvent) => {
         </div>
 
         <!-- CONTENT AREA -->
-        <div style="padding: 0 24px 24px 24px;">
+        <div class="px-6 pb-6">
           <!-- File Input (Hidden) -->
           <input
             ref="fileInputRef"
@@ -155,9 +154,9 @@ const handleDrop = (e: DragEvent) => {
                     : 'border-gray-300 hover:border-gray-400'
               ]"
             >
-              <div style="padding: 32px 24px;">
+              <div class="py-8 px-6">
                 <!-- Icon -->
-                <div class="flex justify-center" style="margin-bottom: 16px;">
+                <div class="flex justify-center mb-4">
                   <div
                     :class="[
                       'w-11 h-11 rounded-[10px] flex items-center justify-center border',
@@ -199,13 +198,12 @@ const handleDrop = (e: DragEvent) => {
                     <p class="text-[14px] font-medium text-emerald-700 break-all">
                       {{ selectedFileName }}
                     </p>
-                    <p v-if="fileSize" class="text-[13px] text-gray-500" style="margin-top: 4px;">
+                    <p v-if="fileSize" class="text-[13px] text-gray-500 mt-1">
                       {{ fileSize }}
                     </p>
                     <button
                       type="button"
-                      class="text-[13px] text-blue-600 hover:text-blue-700 font-medium transition-colors duration-150"
-                      style="margin-top: 12px;"
+                      class="text-[13px] text-blue-600 hover:text-blue-700 font-medium transition-colors duration-150 mt-3"
                       @click.stop="handleBrowseClick"
                     >
                       Choose Different File
@@ -217,7 +215,7 @@ const handleDrop = (e: DragEvent) => {
                       <span v-if="isDragging">Drop your file here</span>
                       <span v-else>Drop your file here or browse</span>
                     </p>
-                    <p class="text-[13px] text-gray-500" style="margin-top: 6px;">
+                    <p class="text-[13px] text-gray-500 mt-1.5">
                       Supports .xlsx and .xls files
                     </p>
                   </div>
@@ -227,17 +225,17 @@ const handleDrop = (e: DragEvent) => {
           </div>
 
           <!-- CONTENT ROW 2: Info Alert -->
-          <div class="rounded-[10px] border-[1.5px] border-gray-300" style="margin-top: 24px; padding: 16px;">
+          <div class="rounded-[10px] border-[1.5px] border-gray-300 mt-6 p-4">
             <div class="flex items-start gap-3">
-              <div class="shrink-0" style="margin-top: 2px;">
+              <div class="shrink-0 mt-0.5">
                 <svg class="w-[18px] h-[18px] text-amber-500" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
                 </svg>
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-[14px] font-medium text-gray-800">File Format Requirements</p>
-                <p class="text-[13px] text-gray-500 leading-relaxed" style="margin-top: 4px;">
-                  Excel file must include columns: HỌ VÀ TÊN, Miền, Mã bộ phận, Mã chức vụ, and N1-N31.
+                <p class="text-[13px] text-gray-500 leading-relaxed mt-1">
+                  Excel file must include columns: Miền, Mã bộ phận, ID HRM, HỌ VÀ TÊN (dấu), Mã chức vụ, TRẠNG THÁI NHÂN VIÊN, and N1-N31 (daily assignments).
                 </p>
               </div>
             </div>
@@ -245,7 +243,7 @@ const handleDrop = (e: DragEvent) => {
         </div>
 
         <!-- MODAL FOOTER -->
-        <div class="flex items-center justify-end border-t border-gray-200" style="padding: 20px 24px; gap: 12px;">
+        <div class="flex items-center justify-end px-6 py-5 gap-3">
           <!-- BUTTON TRAY -->
           <button
             type="button"
@@ -314,5 +312,9 @@ const handleDrop = (e: DragEvent) => {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+.animate-modal-slide-up {
+  animation: modalSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 </style>

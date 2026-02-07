@@ -18,6 +18,7 @@
     "@univerjs/presets": "^0.15.1",
     "@vueuse/core": "^14.1.0",
     "pinia": "^3.0.4",
+    "read-excel-file": "^6.0.3",
     "vue": "^3.5.26",
     "vue-router": "^4.5.0"
   },

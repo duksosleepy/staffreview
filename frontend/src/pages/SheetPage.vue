@@ -1301,25 +1301,34 @@ async function refreshSheet2() {
   const maxRowsToClear = 500;
   sheet.getRange(1, 0, maxRowsToClear, summaryColStart + 6)?.clearContent();
 
-  // Build 2D array for batch setValues
-  const dataRowCount = totalRows;
-  if (dataRowCount > 0) {
+  // Build 2D array for batch setValues — every row index must be present (no skipping)
+  // so that row positions stay aligned with cells[] absolute indices.
+  if (totalRows > 1) {
     const dataArray: (string | number)[][] = [];
     for (let r = 1; r < totalRows; r++) {
       const rowData = cells[r];
-      if (rowData) {
-        const row: (string | number)[] = [];
-        for (let c = 0; c <= summaryColStart + 5; c++) {
-          row.push(rowData[c]?.v ?? '');
-        }
-        dataArray.push(row);
+      const row: (string | number)[] = [];
+      for (let c = 0; c <= summaryColStart + 5; c++) {
+        row.push(rowData?.[c]?.v ?? '');
       }
+      dataArray.push(row);
     }
-    // Set all data in ONE batch operation
-    if (dataArray.length > 0) {
-      sheet.getRange(1, 0, dataArray.length, summaryColStart + 6)?.setValues(dataArray);
-    }
+    sheet.getRange(1, 0, dataArray.length, summaryColStart + 6)?.setValues(dataArray);
   }
+
+  // Re-apply styles to category header rows (setValues only sets values, not styles)
+  // Apply per-row range to avoid slow cell-by-cell loops
+  for (const [rowIndex] of rowMapping2.checklistRows) {
+    const range = sheet.getRange(rowIndex, 0, 1, summaryColStart + 6);
+    range?.setBackgroundColor('#4A90D9');
+    range?.setFontColor('#FFFFFF');
+    range?.setFontWeight('bold');
+  }
+
+  // Re-apply style to TỔNG KẾT row (row 1)
+  const summaryRange = sheet.getRange(1, 0, 1, summaryColStart + 6);
+  summaryRange?.setBackgroundColor('#FFF9E6');
+  summaryRange?.setFontWeight('bold');
 
   // Hide child rows and reset expand state
   for (const [categoryName, range] of rowMapping2.childRowRanges) {

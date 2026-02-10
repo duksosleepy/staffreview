@@ -236,6 +236,13 @@ module default {
         # Tasks are shown to employees based on matching their daily_schedule with this task_type
         task_type: ShiftType;
 
+        # OWNER - The role responsible for performing this task
+        # When a user logs in with a specific role, they only see tasks where owner == their role
+        # Values: 'asm' | 'cht' | 'employee'
+        owner: str {
+            constraint one_of('asm', 'cht', 'employee');
+        }
+
         # Computed backlink to monthly records (Sheet 2)
         multi monthly_records := .<detail_item[is DetailMonthlyRecord];
 

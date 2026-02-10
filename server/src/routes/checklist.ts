@@ -103,11 +103,27 @@ export const checklistRoutes = new Hono<Env>()
     let itemFilter = '.is_deleted = false';
     const queryParams: Record<string, unknown> = { ...params };
 
-    // For employees: Filter tasks based on their shift for the selected date
-    // This applies both when:
-    // 1. Employee user views their own tasks (user.role === 'employee')
-    // 2. CHT/ASM views a specific employee's tasks (staff_id is provided)
-    const shouldFilterByShift = (user.role === 'employee' || staff_id) && date;
+    // Owner filter: each role only sees tasks assigned to them.
+    // When CHT views a specific employee (staff_id provided), show employee-owned tasks.
+    if (user.role === 'employee') {
+      itemFilter += " and .owner = 'employee'";
+    } else if (user.role === 'cht') {
+      if (staff_id) {
+        // CHT viewing an employee's sheet — show tasks owned by employee
+        itemFilter += " and .owner = 'employee'";
+      } else {
+        // CHT viewing their own task list
+        itemFilter += " and .owner = 'cht'";
+      }
+    }
+    // ASM: no owner filter — sees all tasks
+
+    // Shift filter: auto-assign tasks based on the user's/employee's shift for the date.
+    // Applies when:
+    // 1. Employee views their own tasks
+    // 2. CHT/ASM views a specific employee's tasks (staff_id provided)
+    // 3. CHT views their own tasks (no staff_id) — filter by CHT's own shift
+    const shouldFilterByShift = (user.role === 'employee' || user.role === 'cht' || staff_id) && date;
 
     log?.info({ shouldFilterByShift, staff_id, date, role: user.role }, 'Shift filter decision');
 
@@ -174,9 +190,9 @@ export const checklistRoutes = new Hono<Env>()
               // Extract first character (S, C, F) from shift codes like S1, C2, F7
               const shiftType = shift.charAt(0);
 
-              // Filter items: show all tasks OR tasks matching this shift type
+              // Filter items: show tasks matching this shift type (keep existing owner filter)
               if (shiftType === 'S' || shiftType === 'C' || shiftType === 'F') {
-                itemFilter = `.is_deleted = false and (.task_type = <optional default::ShiftType>$taskType or not exists .task_type)`;
+                itemFilter += ` and (.task_type = <optional default::ShiftType>$taskType or not exists .task_type)`;
                 queryParams.taskType = shiftType;
                 log?.info({ shiftType, date, hrId: targetHrId, isStaffView: !!staff_id, itemFilter, queryParams }, 'Filtering tasks by shift type');
               }
@@ -208,6 +224,7 @@ export const checklistRoutes = new Hono<Env>()
             order,
             notes,
             baseline,
+            owner,
             category: { id, name, category_type, classification_criteria },
             record := assert_single((
               select .checklist_records {
@@ -247,6 +264,7 @@ export const checklistRoutes = new Hono<Env>()
             order,
             notes,
             baseline,
+            owner,
             category: { id, name, category_type, classification_criteria },
             record := assert_single((
               select .checklist_records {
@@ -347,6 +365,19 @@ export const checklistRoutes = new Hono<Env>()
 
     const { filterCondition, params: staffParams } = buildStaffFilter(user, staff_id);
 
+    // Owner filter for items: same logic as Sheet 1
+    let itemOwnerFilter = '.is_deleted = false';
+    if (user.role === 'employee') {
+      itemOwnerFilter += " and .owner = 'employee'";
+    } else if (user.role === 'cht') {
+      if (staff_id) {
+        itemOwnerFilter += " and .owner = 'employee'";
+      } else {
+        itemOwnerFilter += " and .owner = 'cht'";
+      }
+    }
+    // ASM: no owner filter
+
     // Sheet 2 uses monthly_records backlink for monthly tracking
     const query = `
       select DetailChecklistItem {
@@ -363,6 +394,7 @@ export const checklistRoutes = new Hono<Env>()
         order,
         notes,
         baseline,
+        owner,
         category: { id, name, category_type, classification_criteria },
         record := assert_single((
           select .monthly_records {
@@ -385,7 +417,7 @@ export const checklistRoutes = new Hono<Env>()
           limit 1
         ))
       }
-      filter .is_deleted = false
+      filter ${itemOwnerFilter}
       order by .category.order then .order then .item_number
     `;
 
@@ -439,11 +471,12 @@ export const checklistRoutes = new Hono<Env>()
     const todayLocal = new LocalDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
 
     if (user.role === 'employee') {
-      // Employee: count total items and items with employee_checked = true for today
-      const totalQuery = `select count(DetailChecklistItem filter .is_deleted = false)`;
+      // Employee: count only employee-owned items and those checked today
+      const totalQuery = `select count(DetailChecklistItem filter .is_deleted = false and .owner = 'employee')`;
       const checkedQuery = `
         select count(
           DetailChecklistItem filter .is_deleted = false
+            and .owner = 'employee'
             and exists (
               select .checklist_records filter
                 .is_deleted = false
@@ -481,8 +514,10 @@ export const checklistRoutes = new Hono<Env>()
       });
     }
 
-    const totalItemsQuery = `select count(DetailChecklistItem filter .is_deleted = false)`;
-    const totalItems = await db.queryRequiredSingle<number>(totalItemsQuery);
+    // CHT sees cht-owned tasks; ASM oversees employee tasks
+    const ownerForRole = user.role === 'cht' ? 'cht' : 'employee';
+    const totalItemsQuery = `select count(DetailChecklistItem filter .is_deleted = false and .owner = <str>$owner)`;
+    const totalItems = await db.queryRequiredSingle<number>(totalItemsQuery, { owner: ownerForRole });
 
     // Get all employees from Casdoor for these stores
     const { fetchCasdoorUsersByStores } = await import('../lib/oidc.js');

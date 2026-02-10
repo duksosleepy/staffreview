@@ -98,6 +98,7 @@ export type ChecklistItemWithRecord = {
   order: number;
   notes: string | null;
   baseline: number | null; // Baseline for weekly/monthly items
+  owner: 'asm' | 'cht' | 'employee' | null; // Role responsible for this task
   category: {
     id: string;
     name: string;
@@ -126,6 +127,7 @@ export type DetailChecklistItemWithRecord = {
   order: number;
   notes: string | null;
   baseline: number | null; // Baseline for weekly/monthly items
+  owner: 'asm' | 'cht' | 'employee' | null; // Role responsible for this task
   category: {
     id: string;
     name: string;

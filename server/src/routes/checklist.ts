@@ -6,6 +6,133 @@ import type { Env } from '../lib/env.js';
 import { authMiddleware } from '../middleware/auth.js';
 import type { AuthUser } from '../types/auth.js';
 import { validateColumnAccess, getAllowedColumns, type ChecklistColumn } from '../lib/rbac.js';
+import type { Client } from 'gel';
+
+/**
+ * After any daily_checks change on a DetailMonthlyRecord, recompute:
+ *   - achievement_percentage, successful_completions, score_achieved, classification
+ *     on the affected DetailMonthlyRecord row
+ *   - total_score, final_classification on EmployeeMonthlyScore (upsert)
+ *
+ * Called from both /detail-records/upsert and /records/validate-deadlines.
+ */
+async function recomputeMonthlyScore(
+  db: Client,
+  detailItemId: string,
+  staffId: string,
+  storeId: string,
+  month: number,
+  year: number,
+): Promise<void> {
+  // Fetch item metadata + current daily_checks
+  const [meta] = await db.query<{
+    score: number;
+    baseline: number;
+    category_type: string;
+    classification_criteria: { thresholds: { A: number; B: number; C: number }; baseline?: number } | null;
+    daily_checks: boolean[];
+  }>(`
+    with
+      item := (select DetailChecklistItem filter .id = <uuid>$detailItemId),
+      rec := assert_single((
+        select DetailMonthlyRecord
+        filter .detail_item = item
+          and .staff_id = <str>$staffId
+          and .month = <int32>$month
+          and .year = <int32>$year
+      ))
+    select {
+      score := item.score,
+      baseline := item.baseline,
+      category_type := item.category.category_type,
+      classification_criteria := item.category.classification_criteria,
+      daily_checks := rec.daily_checks
+    }
+  `, { detailItemId, staffId, month, year });
+
+  if (!meta) return;
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const effectiveBaseline =
+    meta.category_type === 'daily'
+      ? (meta.classification_criteria?.baseline ?? 26)
+      : meta.baseline;
+
+  const successfulCompletions = (meta.daily_checks ?? []).slice(0, daysInMonth).filter(Boolean).length;
+  const achievementPct = effectiveBaseline > 0 ? (successfulCompletions / effectiveBaseline) * 100 : 0;
+  const scoreAchieved = effectiveBaseline > 0 ? (successfulCompletions / effectiveBaseline) * meta.score : 0;
+
+  const thresholds = meta.classification_criteria?.thresholds ?? { A: 8, B: 5, C: 3 };
+  let itemClassification = 'KHONG_DAT';
+  if (scoreAchieved >= thresholds.A) itemClassification = 'A';
+  else if (scoreAchieved >= thresholds.B) itemClassification = 'B';
+  else if (scoreAchieved >= thresholds.C) itemClassification = 'C';
+
+  // Write computed values back to DetailMonthlyRecord
+  await db.query(`
+    update DetailMonthlyRecord
+    filter .detail_item.id = <uuid>$detailItemId
+      and .staff_id = <str>$staffId
+      and .month = <int32>$month
+      and .year = <int32>$year
+    set {
+      achievement_percentage := <float32>$achievementPct,
+      successful_completions := <int32>$successfulCompletions,
+      score_achieved := <float32>$scoreAchieved,
+      classification := <str>$itemClassification,
+      updated_at := datetime_current()
+    }
+  `, {
+    detailItemId,
+    staffId,
+    month,
+    year,
+    achievementPct: Math.round(achievementPct * 100) / 100,
+    successfulCompletions,
+    scoreAchieved: Math.round(scoreAchieved * 100) / 100,
+    itemClassification,
+  });
+
+  // Re-aggregate total_score for this staff/month/year
+  const [agg] = await db.query<{ total: number }>(`
+    select { total := sum((
+      select DetailMonthlyRecord.score_achieved
+      filter DetailMonthlyRecord.staff_id = <str>$staffId
+        and DetailMonthlyRecord.month = <int32>$month
+        and DetailMonthlyRecord.year = <int32>$year
+        and not DetailMonthlyRecord.is_deleted
+    )) }
+  `, { staffId, month, year });
+
+  const totalScore = agg?.total ?? 0;
+  let finalClassification = 'D';
+  if (totalScore >= 90) finalClassification = 'A';
+  else if (totalScore >= 70) finalClassification = 'B';
+  else if (totalScore > 50) finalClassification = 'C';
+
+  // Upsert EmployeeMonthlyScore summary
+  await db.query(`
+    insert EmployeeMonthlyScore {
+      staff_id := <str>$staffId,
+      store_id := <str>$storeId,
+      month := <int32>$month,
+      year := <int32>$year,
+      total_score := <float32>$totalScore,
+      final_classification := <str>$finalClassification,
+      created_at := datetime_current(),
+      updated_at := datetime_current()
+    }
+    unless conflict on ((.staff_id, .month, .year))
+    else (
+      update EmployeeMonthlyScore
+      set {
+        total_score := <float32>$totalScore,
+        final_classification := <str>$finalClassification,
+        updated_at := datetime_current()
+      }
+    )
+  `, { staffId, storeId, month, year, totalScore: Math.round(totalScore * 100) / 100, finalClassification });
+}
 
 // Query params validation
 const DateQuerySchema = z.object({
@@ -802,8 +929,12 @@ export const checklistRoutes = new Hono<Env>()
     `;
 
     try {
-      const result = await db.query(query, params);
-      return c.json({ success: true, data: result });
+      await db.query(query, params);
+
+      // Recompute score fields on the record and update EmployeeMonthlyScore summary
+      await recomputeMonthlyScore(db, body.detail_item_id, user.sub, storeId, body.month, body.year);
+
+      return c.json({ success: true });
     } catch (error) {
       log?.error({ error, params }, 'Failed to upsert detail monthly record');
       return c.json({ error: 'Failed to save record' }, 500);
@@ -863,6 +994,7 @@ export const checklistRoutes = new Hono<Env>()
           id,
           checklist_item: { id },
           staff_id,
+          store_id,
           assessment_date
         }
         filter
@@ -922,6 +1054,9 @@ export const checklistRoutes = new Hono<Env>()
           year,
           day
         });
+
+        // Recompute score fields and update EmployeeMonthlyScore summary
+        await recomputeMonthlyScore(db, record.checklist_item.id, record.staff_id, record.store_id ?? '', month, year);
       }
 
       log?.info({ count: result.length, invalidatedCount: invalidatedRecords.length }, 'Validated deadlines and invalidated expired tasks');
@@ -934,5 +1069,114 @@ export const checklistRoutes = new Hono<Env>()
     } catch (error) {
       log?.error({ error }, 'Failed to validate deadlines');
       return c.json({ error: 'Failed to validate deadlines' }, 500);
+    }
+  })
+
+  /**
+   * GET /api/checklist/report?month=&year=
+   * Returns per-employee achievement summary for ASM export report.
+   * Only ASM role is allowed.
+   */
+  .get('/report', async (c) => {
+    const db = c.get('db');
+    const user = c.get('user');
+    const log = c.get('log');
+
+    if (!user) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    if (user.role !== 'asm') {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+
+    const now = new Date();
+    const targetMonth = c.req.query('month') ? Number.parseInt(c.req.query('month')!, 10) : now.getMonth() + 1;
+    const targetYear = c.req.query('year') ? Number.parseInt(c.req.query('year')!, 10) : now.getFullYear();
+
+    try {
+      const { fetchCasdoorUsersByStores } = await import('../lib/oidc.js');
+      const casdoorEmployees = await fetchCasdoorUsersByStores(user.stores, user.role);
+
+      if (casdoorEmployees.length === 0) {
+        return c.json([]);
+      }
+
+      // staffId (Casdoor user.id / OIDC sub) → casdoor_id (= hr_id in EmployeeSchedule)
+      const staffIdToHrId = new Map<string, string>();
+      for (const emp of casdoorEmployees) {
+        if (emp.casdoor_id) {
+          staffIdToHrId.set(emp.id, emp.casdoor_id);
+        }
+      }
+
+      const hrIds = [...staffIdToHrId.values()];
+      const staffIds = [...staffIdToHrId.keys()];
+
+      // Query EmployeeSchedule for employee info keyed by hr_id
+      const schedules = hrIds.length > 0
+        ? await db.query<{ hr_id: string; employee_name: string; store_id: string; position: string | null }>(
+            `select EmployeeSchedule { hr_id, employee_name, store_id, position }
+             filter .hr_id in array_unpack(<array<str>>$hrIds) and .is_deleted = false`,
+            { hrIds }
+          )
+        : [];
+
+      const scheduleByHrId = new Map(schedules.map(s => [s.hr_id, s]));
+
+      // Collect all store_ids to look up regions from Area table
+      const storeIds = [...new Set(schedules.map(s => s.store_id).filter(Boolean))];
+      const areas = storeIds.length > 0
+        ? await db.query<{ store_id: string; region: string }>(
+            `select Area { store_id, region } filter .store_id in array_unpack(<array<str>>$storeIds)`,
+            { storeIds }
+          )
+        : [];
+
+      const regionByStoreId = new Map(areas.map(a => [a.store_id, a.region]));
+
+      // Query pre-aggregated EmployeeMonthlyScore for the target month/year
+      const monthlyScores = staffIds.length > 0
+        ? await db.query<{ staff_id: string; total_score: number; final_classification: string }>(
+            `select EmployeeMonthlyScore { staff_id, total_score, final_classification }
+             filter .staff_id in array_unpack(<array<str>>$staffIds)
+               and .month = <int32>$month
+               and .year = <int32>$year`,
+            { staffIds, month: targetMonth, year: targetYear }
+          )
+        : [];
+
+      const scoreByStaffId = new Map(monthlyScores.map(s => [s.staff_id, s]));
+
+      // Build report rows (only employees, skip CHT/ASM)
+      const rows = [];
+      let stt = 1;
+      for (const emp of casdoorEmployees) {
+        if (emp.role !== 'employee') continue;
+        if (!emp.casdoor_id) continue;
+
+        const hrId = emp.casdoor_id;
+        const schedule = scheduleByHrId.get(hrId);
+        const storeId = schedule?.store_id ?? emp.stores[0] ?? '';
+        const score = scoreByStaffId.get(emp.id);
+
+        rows.push({
+          stt: stt++,
+          region: regionByStoreId.get(storeId) ?? '',
+          store_id: storeId,
+          asm_name: user.displayName,
+          hr_id: hrId,
+          employee_name: schedule?.employee_name ?? emp.displayName,
+          position: schedule?.position ?? '',
+          total_score: score?.total_score ?? null,
+          final_classification: score?.final_classification ?? null,
+        });
+      }
+
+      log?.info({ month: targetMonth, year: targetYear, rowCount: rows.length }, 'Report generated');
+      return c.json(rows);
+    } catch (error) {
+      log?.error({ error }, 'Failed to generate report');
+      return c.json({ error: 'Failed to generate report' }, 500);
     }
   });

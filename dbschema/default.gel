@@ -431,4 +431,50 @@ module default {
         index on (.is_deleted);
         index on (.classification);
     }
+
+    # EmployeeMonthlyScore: Pre-aggregated summary per employee per month
+    # Updated on every DetailMonthlyRecord upsert for fast report queries
+    type EmployeeMonthlyScore {
+        # Staff ID from Casdoor JWT (sub claim)
+        required staff_id: str;
+
+        # Store ID
+        required store_id: str;
+
+        # Month and Year
+        required month: int32 {
+            constraint min_value(1);
+            constraint max_value(12);
+        }
+        required year: int32 {
+            constraint min_value(2020);
+        }
+
+        # Sum of score_achieved across all DetailMonthlyRecord rows for this staff/month/year
+        total_score: float32 {
+            default := 0.0;
+            constraint min_value(0);
+        }
+
+        # Final classification derived from total_score (A/B/C/D)
+        final_classification: str {
+            default := 'D';
+        }
+
+        # Timestamps
+        created_at: datetime {
+            default := datetime_current();
+        }
+        updated_at: datetime {
+            default := datetime_current();
+        }
+
+        # One summary record per employee per month/year
+        constraint exclusive on ((.staff_id, .month, .year));
+
+        # Indexes
+        index on (.staff_id);
+        index on (.store_id);
+        index on ((.month, .year));
+    }
 }

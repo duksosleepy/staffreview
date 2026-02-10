@@ -417,6 +417,35 @@ export async function upsertEmployeeSchedule(payload: UpsertSchedulePayload): Pr
 }
 
 // ===================================================
+// Report (ASM only)
+// ===================================================
+
+export type ReportRow = {
+  stt: number;
+  region: string;
+  store_id: string;
+  asm_name: string;
+  hr_id: string;
+  employee_name: string;
+  position: string;
+  total_score: number | null;
+  final_classification: string | null;
+};
+
+/**
+ * Fetch per-employee achievement report for a given month/year.
+ * Only ASM role is allowed.
+ */
+export async function fetchReport(month: number, year: number): Promise<ReportRow[]> {
+  const response = await fetch(`/api/checklist/report?month=${month}&year=${year}`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  return handleResponse<ReportRow[]>(response);
+}
+
+// ===================================================
 // Upsert Functions (Create or Update)
 // ===================================================
 

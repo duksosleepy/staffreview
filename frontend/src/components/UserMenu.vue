@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   logout: [];
   importExcel: [];
+  exportReport: [];
 }>();
 
 const { getRoleDisplay } = useRoleDisplay();
@@ -71,6 +72,10 @@ const handleLogout = () => {
 
 const handleImportExcel = () => {
   emit('importExcel');
+};
+
+const handleExportReport = () => {
+  emit('exportReport');
 };
 </script>
 
@@ -232,6 +237,27 @@ const handleImportExcel = () => {
               </svg>
             </div>
             <span class="text-sm font-medium text-paper-medium hover:text-paper-white transition-colors font-body flex-1">Import Excel</span>
+          </Menu.Item>
+
+          <!-- Export Report (ASM only) -->
+          <Menu.Item v-if="role.toLowerCase() === 'asm'" value="export-report" :class="`px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 hover:bg-ink-lighter transition-[background-color,color] duration-200 rounded-lg cursor-pointer ${FOCUS_RING_CLASSES} focus-visible:ring-inset`" @click="handleExportReport">
+            <div class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"
+                />
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-paper-medium hover:text-paper-white transition-colors font-body flex-1">Xuất báo cáo</span>
           </Menu.Item>
 
           <Menu.Separator class="my-1 h-px" style="background-color: var(--border-subtle);" />

@@ -29,7 +29,9 @@ import {
   upsertDetailMonthlyRecord,
   upsertEmployeeSchedule,
   validateDeadlines,
+  fetchReport,
 } from '@/lib/gel-client';
+import writeXlsxFile from 'write-excel-file';
 import { useAuthStore } from '@/stores/auth';
 import { useNotificationStore } from '@/stores/notifications';
 
@@ -194,6 +196,73 @@ const isImporting = ref(false);
 // Import Excel handlers
 function handleImportExcel() {
   showImportModal.value = true;
+}
+
+async function handleExportReport() {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  try {
+    const rows = await fetchReport(month, year);
+
+    if (rows.length === 0) {
+      toaster.create({
+        title: 'Không có dữ liệu',
+        description: 'Chưa có dữ liệu báo cáo cho tháng này',
+        type: 'info',
+      });
+      return;
+    }
+
+    type CellValue = string | number | null;
+    type Schema = Parameters<typeof writeXlsxFile>[1]['schema'];
+
+    const schema: Schema = [
+      { column: 'STT',            type: Number, value: (r: CellValue[]) => r[0] as number },
+      { column: 'MIỀN',           type: String, value: (r: CellValue[]) => r[1] as string },
+      { column: 'CỬA HÀNG',       type: String, value: (r: CellValue[]) => r[2] as string },
+      { column: 'ASM PHỤ TRÁCH',  type: String, value: (r: CellValue[]) => r[3] as string },
+      { column: 'ID HRM',         type: String, value: (r: CellValue[]) => r[4] as string },
+      { column: 'TÊN NHÂN VIÊN',  type: String, value: (r: CellValue[]) => r[5] as string },
+      { column: 'VỊ TRÍ',         type: String, value: (r: CellValue[]) => r[6] as string },
+      { column: 'TỶ LỆ ĐẠT (%)',  type: Number, value: (r: CellValue[]) => r[7] as number | null },
+      { column: 'XẾP LOẠI',       type: String, value: (r: CellValue[]) => r[8] as string | null },
+    ];
+
+    const data = rows.map(r => [
+      r.stt,
+      r.region,
+      r.store_id,
+      r.asm_name,
+      r.hr_id,
+      r.employee_name,
+      r.position,
+      r.total_score,
+      r.final_classification,
+    ] as CellValue[]);
+
+    await writeXlsxFile(data as any, {
+      schema,
+      fileName: `bao-cao-${month.toString().padStart(2, '0')}-${year}.xlsx`,
+      headerStyle: {
+        fontWeight: 'bold',
+        align: 'center',
+      },
+    });
+
+    toaster.create({
+      title: 'Thành công',
+      description: `Đã xuất báo cáo tháng ${month}/${year}`,
+      type: 'success',
+    });
+  } catch (error: any) {
+    toaster.create({
+      title: 'Lỗi',
+      description: `Xuất báo cáo thất bại: ${error?.message || 'Lỗi không xác định'}`,
+      type: 'error',
+    });
+  }
 }
 
 function handleFileSelect(event: Event) {
@@ -2566,6 +2635,7 @@ onUnmounted(() => {
         :notification-message="notificationStore.notificationMessage"
         @logout="auth.logout"
         @import-excel="handleImportExcel"
+        @export-report="handleExportReport"
       />
     </header>
 

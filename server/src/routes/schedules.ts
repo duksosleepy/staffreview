@@ -101,31 +101,30 @@ export const scheduleRoutes = new Hono<Env>()
     const storeId = store_id; // Use store_id from Excel file
 
     try {
-      // Check if schedule exists for this employee (by hr_id and store_id)
+      // Check if schedule exists for this employee by hr_id only
+      // This allows updating even when store_id or other fields have changed
       const existingQuery = `
         select EmployeeSchedule {
           id
         }
         filter .hr_id = <str>$hrId
-          and .store_id = <str>$storeId
           and .is_deleted = false
         limit 1
       `;
 
       const existing = await db.query<{ id: string }>(existingQuery, {
         hrId: hr_id,
-        storeId,
       });
 
       if (existing.length > 0) {
-        // Update existing schedule
+        // Record exists: update all fields including employee info and daily_schedule (N1-N31)
         const updateQuery = `
           update EmployeeSchedule
           filter .hr_id = <str>$hrId
-            and .store_id = <str>$storeId
             and .is_deleted = false
           set {
             employee_name := <str>$employeeName,
+            store_id := <str>$storeId,
             daily_schedule := <array<str>>$dailySchedule,
             region := <optional str>$region,
             position := <optional str>$position,
@@ -146,7 +145,7 @@ export const scheduleRoutes = new Hono<Env>()
 
         log?.info({ hrId: hr_id, name: employee_name }, 'Employee schedule updated');
       } else {
-        // Insert new schedule
+        // No existing record: insert new schedule with all fields
         const insertQuery = `
           insert EmployeeSchedule {
             hr_id := <str>$hrId,

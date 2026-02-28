@@ -765,6 +765,15 @@ async function refreshSheet1(date?: string) {
 
     // Instead of updating cells, recreate the entire sheet with new data
     // This ensures proper row structure and styling
+    const columnVisibility = sheet1ColumnVisibility.value;
+    console.log('[refreshSheet1] Column visibility:', {
+      viewer: auth.role,
+      viewedUserRole: selectedStaffRole.value,
+      selectedStaffCasdoorId: selectedStaffCasdoorId.value,
+      authCasdoorId: auth.casdoorId,
+      isViewingOwnData: !selectedStaffCasdoorId.value || selectedStaffCasdoorId.value === auth.casdoorId,
+      columnVisibility,
+    });
     const sheetConfig = {
       id: 'sheet1',
       name: 'Checklist',
@@ -775,10 +784,10 @@ async function refreshSheet1(date?: string) {
         1: { h: 42, hd: 0 },
       },
       columnData: {
-        0: { w: 400 },
-        1: { w: 100 },
-        2: { w: 100, hd: canCheckCht.value ? 0 : 1 },
-        3: { w: 120, hd: canCheckAsm.value ? 0 : 1 },
+        0: { w: 400 }, // Checklist/Item name
+        1: { w: 100, hd: columnVisibility.employee ? 0 : 1 }, // Employee - show based on visibility logic
+        2: { w: 100, hd: columnVisibility.cht ? 0 : 1 }, // CHT - show based on visibility logic
+        3: { w: 120, hd: columnVisibility.asm ? 0 : 1 }, // ASM - show based on visibility logic
       },
       cellData: cells,
     };

@@ -93,18 +93,72 @@ const showSidebar = computed(() => {
   return show;
 });
 
+/**
+ * Computed property to determine which columns should be visible in Sheet 1.
+ * Logic:
+ * - When viewing own data: show only the user's own role column
+ * - When viewing others' data (CHT/ASM): show both the viewed user's role column and the viewer's role column
+ */
+const sheet1ColumnVisibility = computed(() => {
+  const isViewingOwnData = !selectedStaffId.value || selectedStaffId.value === auth.casdoorId;
+
+  // Default: hide all columns except Employee
+  const visibility = {
+    employee: false, // Column 1 - "NHÂN VIÊN"
+    cht: false,      // Column 2 - "CHT"
+    asm: false,      // Column 3 - "ASM"
+  };
+
+  if (isViewingOwnData) {
+    // Case 1: User viewing their own spreadsheet
+    // Show only their own role column
+    if (isEmployee.value) {
+      visibility.employee = true;
+    } else if (isCht.value) {
+      visibility.cht = true;
+    } else if (isAsm.value) {
+      visibility.asm = true;
+    }
+  } else {
+    // Case 2: CHT/ASM viewing another user's spreadsheet
+    // Show both the viewed employee's role column AND the viewer's role column
+    const viewedUserRole = selectedStaffRole.value;
+
+    // Show the viewed employee's column
+    if (viewedUserRole === 'employee') {
+      visibility.employee = true;
+    } else if (viewedUserRole === 'cht') {
+      visibility.cht = true;
+    } else if (viewedUserRole === 'asm') {
+      visibility.asm = true;
+    }
+
+    // Also show the viewer's column (current user)
+    if (isCht.value) {
+      visibility.cht = true;
+    } else if (isAsm.value) {
+      visibility.asm = true;
+    }
+  }
+
+  return visibility;
+});
+
 // Selected employee from sidebar (CHT/ASM viewing specific employee's data)
 const selectedStaffId = ref<string | undefined>(undefined);
 const selectedStaffName = ref<string>('');
+const selectedStaffRole = ref<string | undefined>(undefined);
 
 // Handle employee selection from sidebar
 const onEmployeeSelect = async (employee: StoreEmployee | null) => {
   if (employee) {
     selectedStaffId.value = employee.id;
     selectedStaffName.value = employee.displayName;
+    selectedStaffRole.value = employee.role;
   } else {
     selectedStaffId.value = undefined;
     selectedStaffName.value = '';
+    selectedStaffRole.value = undefined;
   }
   // Refresh both sheets with the selected employee's data
   await Promise.all([refreshSheet1(selectedDate.value || undefined), refreshSheet2()]);
@@ -1690,11 +1744,18 @@ onMounted(async () => {
 
   // Build column data for Sheet 1 with role-based visibility
   // hd: 1 = hidden, hd: 0 = visible
+  const columnVisibility = sheet1ColumnVisibility.value;
+  console.log('[Sheet1] Column visibility:', {
+    viewer: auth.role,
+    viewedUserRole: selectedStaffRole.value,
+    isViewingOwnData: !selectedStaffId.value || selectedStaffId.value === auth.casdoorId,
+    columnVisibility,
+  });
   const sheet1ColumnData: Record<number, { w: number; hd?: number }> = {
     0: { w: 400 }, // Checklist/Item name
-    1: { w: 100 }, // Employee checked
-    2: { w: 100, hd: canCheckCht.value ? 0 : 1 }, // CHT - hidden for employees
-    3: { w: 120, hd: canCheckAsm.value ? 0 : 1 }, // ASM - hidden for employees and CHT
+    1: { w: 100, hd: columnVisibility.employee ? 0 : 1 }, // Employee - show based on visibility logic
+    2: { w: 100, hd: columnVisibility.cht ? 0 : 1 }, // CHT - show based on visibility logic
+    3: { w: 120, hd: columnVisibility.asm ? 0 : 1 }, // ASM - show based on visibility logic
   };
 
   // Sheet 3: build cell data (CHT only)

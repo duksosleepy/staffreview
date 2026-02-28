@@ -1451,6 +1451,9 @@ async function refreshSheet2() {
     sheet: sheetConfig,
   });
 
+  const sheet = workbook?.getSheetBySheetId('sheet2');
+  if (!sheet) return;
+
   // Hide child rows and reset expand state
   for (const [categoryName, range] of rowMapping2.childRowRanges) {
     if (range.count > 0) {
@@ -1468,7 +1471,10 @@ async function refreshSheet2() {
   }
 
   // Auto-resize rows to fit text-wrapped content
-  sheet.autoResizeRows(1, totalRows);
+  // Use setTimeout to ensure the sheet is fully rendered before resizing
+  setTimeout(() => {
+    sheet.autoResizeRows(1, totalRows);
+  }, 100);
 }
 
 // ===================================================

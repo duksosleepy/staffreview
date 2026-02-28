@@ -1402,51 +1402,64 @@ async function refreshSheet2() {
   const { cells, totalRows, daysInMonth, summaryColStart } = await buildSheet2CellData(items, sheet2Month, sheet2Year);
 
   const workbook = univerAPI.getActiveWorkbook();
-  const sheet = workbook?.getSheetBySheetId('sheet2');
-  if (!sheet) return;
+
+  // SOLUTION: Completely recreate Sheet 2 to avoid style bleeding issues
+  // Delete old sheet
+  const oldSheet = workbook?.getSheetBySheetId('sheet2');
+  if (oldSheet) {
+    workbook?.deleteSheet(oldSheet);
+  }
 
   const dayColStart = 9;
 
-  // Clear existing data rows
-  const maxRowsToClear = 500;
-  sheet.getRange(1, 0, maxRowsToClear, summaryColStart + 6)?.clearContent();
-
-  // Build 2D array for batch setValues — every row index must be present (no skipping)
-  // so that row positions stay aligned with cells[] absolute indices.
-  if (totalRows > 1) {
-    const dataArray: (string | number)[][] = [];
-    for (let r = 1; r < totalRows; r++) {
-      const rowData = cells[r];
-      const row: (string | number)[] = [];
-      for (let c = 0; c <= summaryColStart + 5; c++) {
-        row.push(rowData?.[c]?.v ?? '');
-      }
-      dataArray.push(row);
-    }
-    sheet.getRange(1, 0, dataArray.length, summaryColStart + 6)?.setValues(dataArray);
+  // Build column data for Sheet 2
+  const columnData2: Record<number, { w: number }> = {
+    0: { w: 50 },
+    1: { w: 300 },
+    2: { w: 100 },
+    3: { w: 120 },
+    4: { w: 120 },
+    5: { w: 70 },
+    6: { w: 70 },
+    7: { w: 70 },
+    8: { w: 50 },
+  };
+  for (let day = 0; day < daysInMonth; day++) {
+    columnData2[dayColStart + day] = { w: 30 };
   }
+  columnData2[summaryColStart] = { w: 70 };
+  columnData2[summaryColStart + 1] = { w: 80 };
+  columnData2[summaryColStart + 2] = { w: 90 };
+  columnData2[summaryColStart + 3] = { w: 70 };
+  columnData2[summaryColStart + 4] = { w: 70 };
+  columnData2[summaryColStart + 5] = { w: 150 };
 
-  // Re-apply styles to category header rows (setValues only sets values, not styles)
-  // Apply per-row range to avoid slow cell-by-cell loops
-  for (const [rowIndex] of rowMapping2.checklistRows) {
-    const range = sheet.getRange(rowIndex, 0, 1, summaryColStart + 6);
-    range?.setBackgroundColor('#4A90D9');
-    range?.setFontColor('#FFFFFF');
-    range?.setFontWeight('bold');
-  }
+  // Create new sheet
+  const sheetConfig = {
+    id: 'sheet2',
+    name: 'Chi tiết',
+    rowCount: Math.max(totalRows + 100, 1000),
+    columnCount: summaryColStart + 10,
+    freeze: { xSplit: 2, ySplit: 2, startRow: 2, startColumn: 2 },
+    rowData: { 0: { h: 42, hd: 0 }, 1: { h: 24, hd: 0 } },
+    columnData: columnData2,
+    cellData: cells,
+  };
 
-  // Re-apply style to TỔNG KẾT row (row 1)
-  const summaryRange = sheet.getRange(1, 0, 1, summaryColStart + 6);
-  summaryRange?.setBackgroundColor('#FFF9E6');
-  summaryRange?.setFontWeight('bold');
+  workbook?.insertSheet('Chi tiết', {
+    index: 1,
+    sheet: sheetConfig,
+  });
 
   // Hide child rows and reset expand state
   for (const [categoryName, range] of rowMapping2.childRowRanges) {
-    sheet.hideRows(range.start, range.count);
+    if (range.count > 0) {
+      sheet.hideRows(range.start, range.count);
+    }
     expandedGroups2.set(categoryName, false);
   }
 
-  // Re-apply checkbox validation to day columns (start from row 3, after header and empty row)
+  // Re-apply checkbox validation to day columns (start from row 3, after header and summary row)
   for (let day = 0; day < daysInMonth; day++) {
     const colLetter = getColumnLetter(dayColStart + day);
     sheet

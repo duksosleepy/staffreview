@@ -1037,6 +1037,8 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
   let currentRow = 2; // Start data at row 2 (after header and summary row)
 
   for (const [categoryName, categoryItems] of grouped) {
+    console.log(`[Sheet2] BEFORE - Category: ${categoryName}, items: ${categoryItems.length}, currentRow: ${currentRow}`);
+
     expandedGroups2.set(categoryName, false);
     rowMapping2.checklistRows.set(currentRow, categoryName);
 
@@ -1081,9 +1083,11 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
     // Add average score to the "Số điểm" column (summaryColStart + 3)
     categoryRow[summaryColStart + 3] = { v: averageScore, s: categoryHeaderStyle };
     cells[currentRow] = categoryRow;
+    console.log(`[Sheet2] Created category header row at ${currentRow} for "${categoryName}"`);
     currentRow++;
 
     const childStartRow = currentRow;
+    console.log(`[Sheet2] Child rows will start at ${childStartRow}`);
 
     for (const item of categoryItems) {
       const r = item.record;
@@ -1130,6 +1134,7 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
       row[summaryColStart + 5] = { v: r?.notes ?? item.notes ?? '' };
 
       cells[currentRow] = row;
+      console.log(`[Sheet2] Created item row at ${currentRow} for item #${item.item_number}: ${item.name.substring(0, 30)}...`);
       // Map this row to the DetailChecklistItem ID for Sheet 2
       rowToItemId2.set(currentRow, item.id);
       // Reverse mapping: item ID to row (for syncing from Sheet 1)
@@ -1143,6 +1148,8 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
       start: childStartRow,
       count: categoryItems.length,
     });
+    console.log(`[Sheet2] AFTER - Category: ${categoryName}, currentRow: ${currentRow}, childRange: {start: ${childStartRow}, count: ${categoryItems.length}}`);
+    console.log(`[Sheet2] rowMapping2.checklistRows for category at row ${currentRow - categoryItems.length - 1}:`, rowMapping2.checklistRows.get(currentRow - categoryItems.length - 1));
   }
 
   // Calculate overall summary for row 1

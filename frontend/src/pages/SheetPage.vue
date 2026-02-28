@@ -50,7 +50,7 @@ import readXlsxFile from 'read-excel-file';
 
 // Auth
 const auth = useAuthStore();
-const { canCheckCht, canCheckAsm, isCht, isAsm, isRole } = usePermission();
+const { canCheckCht, canCheckAsm, isCht, isAsm, isEmployee, isRole } = usePermission();
 
 // Notifications
 const notificationStore = useNotificationStore();

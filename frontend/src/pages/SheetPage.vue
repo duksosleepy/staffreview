@@ -1249,16 +1249,21 @@ function toggleGroup2(categoryName: string, headerRowIndex: number) {
   const range = rowMapping2.childRowRanges.get(categoryName);
   if (!range) return;
 
+  console.log(`[toggleGroup2] Category: "${categoryName}", headerRow: ${headerRowIndex}, isExpanded: ${isExpanded}, range:`, range);
+
   // Don't toggle if there are no child rows (empty category)
   if (range.count === 0) {
+    console.log(`[toggleGroup2] Empty category, skipping`);
     return;
   }
 
   if (isExpanded) {
+    console.log(`[toggleGroup2] HIDING rows ${range.start} to ${range.start + range.count - 1} (count: ${range.count})`);
     sheet.hideRows(range.start, range.count);
     expandedGroups2.set(categoryName, false);
     sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▶ ${categoryName}`);
   } else {
+    console.log(`[toggleGroup2] SHOWING rows ${range.start} to ${range.start + range.count - 1} (count: ${range.count})`);
     sheet.showRows(range.start, range.count);
     expandedGroups2.set(categoryName, true);
     sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▼ ${categoryName}`);

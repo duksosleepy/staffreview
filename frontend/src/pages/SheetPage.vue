@@ -100,7 +100,7 @@ const showSidebar = computed(() => {
  * - When viewing others' data (CHT/ASM): show both the viewed user's role column and the viewer's role column
  */
 const sheet1ColumnVisibility = computed(() => {
-  const isViewingOwnData = !selectedStaffId.value || selectedStaffId.value === auth.casdoorId;
+  const isViewingOwnData = !selectedStaffCasdoorId.value || selectedStaffCasdoorId.value === auth.casdoorId;
 
   // Default: hide all columns except Employee
   const visibility = {
@@ -146,17 +146,20 @@ const sheet1ColumnVisibility = computed(() => {
 
 // Selected employee from sidebar (CHT/ASM viewing specific employee's data)
 const selectedStaffId = ref<string | undefined>(undefined);
+const selectedStaffCasdoorId = ref<string | undefined>(undefined);
 const selectedStaffName = ref<string>('');
 const selectedStaffRole = ref<string | undefined>(undefined);
 
 // Handle employee selection from sidebar
 const onEmployeeSelect = async (employee: StoreEmployee | null) => {
   if (employee) {
-    selectedStaffId.value = employee.id;
+    selectedStaffId.value = employee.id; // For API calls
+    selectedStaffCasdoorId.value = employee.casdoor_id; // For identity comparison
     selectedStaffName.value = employee.displayName;
     selectedStaffRole.value = employee.role;
   } else {
     selectedStaffId.value = undefined;
+    selectedStaffCasdoorId.value = undefined;
     selectedStaffName.value = '';
     selectedStaffRole.value = undefined;
   }
@@ -166,7 +169,7 @@ const onEmployeeSelect = async (employee: StoreEmployee | null) => {
   // Sheet 3 ("Phân công") is only visible when CHT views their own data.
   // Toggle it based on whether the selected employee is the CHT themselves.
   if (isCht.value && univerAPI) {
-    const viewingSelf = !employee || employee.casdoor_id === auth.casdoorId;
+    const viewingSelf = !selectedStaffCasdoorId.value || selectedStaffCasdoorId.value === auth.casdoorId;
     toggleSheet3Visibility(viewingSelf);
   }
 
@@ -1748,7 +1751,9 @@ onMounted(async () => {
   console.log('[Sheet1] Column visibility:', {
     viewer: auth.role,
     viewedUserRole: selectedStaffRole.value,
-    isViewingOwnData: !selectedStaffId.value || selectedStaffId.value === auth.casdoorId,
+    selectedStaffCasdoorId: selectedStaffCasdoorId.value,
+    authCasdoorId: auth.casdoorId,
+    isViewingOwnData: !selectedStaffCasdoorId.value || selectedStaffCasdoorId.value === auth.casdoorId,
     columnVisibility,
   });
   const sheet1ColumnData: Record<number, { w: number; hd?: number }> = {
@@ -2149,10 +2154,10 @@ onMounted(async () => {
               } else if (column === 2) {
                 // CHT column only syncs if:
                 // 1. Employee column is empty
-                // 2. CHT is viewing an employee's spreadsheet (selectedStaffId is set and not viewing own data)
+                // 2. CHT is viewing an employee's spreadsheet (selectedStaffCasdoorId is set and not viewing own data)
                 const employeeValue = sheet?.getRange(row, 1, 1, 1)?.getValue();
                 const employeeChecked = employeeValue === 1 || employeeValue === '1' || employeeValue === true;
-                const isViewingEmployeeData = selectedStaffId.value !== undefined && selectedStaffId.value !== auth.casdoorId;
+                const isViewingEmployeeData = selectedStaffCasdoorId.value !== undefined && selectedStaffCasdoorId.value !== auth.casdoorId;
                 shouldSync = !employeeChecked && isViewingEmployeeData;
               }
 

@@ -1109,29 +1109,32 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
         classificationCriteria,
       );
 
+      // Default style for item rows (no background, normal text)
+      const itemCellStyle = { vt: 2 }; // Vertical align middle, no background
+
       const row: Record<number, { v: string | number; s?: object }> = {
-        0: { v: item.item_number },
+        0: { v: item.item_number, s: itemCellStyle },
         1: { v: `    ${item.name}`, s: itemContentStyle },
-        2: { v: item.evaluator ?? '' },
-        3: { v: item.scope ?? '' },
-        4: { v: item.time_frame ?? '' },
-        5: { v: item.penalty_level_1 ?? '' },
-        6: { v: item.penalty_level_2 ?? '' },
-        7: { v: item.penalty_level_3 ?? '' },
-        8: { v: item.score },
+        2: { v: item.evaluator ?? '', s: itemCellStyle },
+        3: { v: item.scope ?? '', s: itemCellStyle },
+        4: { v: item.time_frame ?? '', s: itemCellStyle },
+        5: { v: item.penalty_level_1 ?? '', s: itemCellStyle },
+        6: { v: item.penalty_level_2 ?? '', s: itemCellStyle },
+        7: { v: item.penalty_level_3 ?? '', s: itemCellStyle },
+        8: { v: item.score, s: itemCellStyle },
       };
 
       for (let day = 0; day < daysInMonth; day++) {
-        row[dayColStart + day] = { v: dailyChecks[day] ? 1 : 0 };
+        row[dayColStart + day] = { v: dailyChecks[day] ? 1 : 0, s: itemCellStyle };
       }
 
-      // Use calculated summary values
-      row[summaryColStart] = { v: summary.achievementPercentage };
-      row[summaryColStart + 1] = { v: summary.successfulCompletions };
-      row[summaryColStart + 2] = { v: summary.implementationIssuesCount };
-      row[summaryColStart + 3] = { v: summary.scoreAchieved };
-      row[summaryColStart + 4] = { v: summary.classification };
-      row[summaryColStart + 5] = { v: r?.notes ?? item.notes ?? '' };
+      // Use calculated summary values with explicit styling
+      row[summaryColStart] = { v: summary.achievementPercentage, s: itemCellStyle };
+      row[summaryColStart + 1] = { v: summary.successfulCompletions, s: itemCellStyle };
+      row[summaryColStart + 2] = { v: summary.implementationIssuesCount, s: itemCellStyle };
+      row[summaryColStart + 3] = { v: summary.scoreAchieved, s: itemCellStyle };
+      row[summaryColStart + 4] = { v: summary.classification, s: itemCellStyle };
+      row[summaryColStart + 5] = { v: r?.notes ?? item.notes ?? '', s: itemCellStyle };
 
       cells[currentRow] = row;
       console.log(`[Sheet2] Created item row at ${currentRow} for item #${item.item_number}: ${item.name.substring(0, 30)}...`);

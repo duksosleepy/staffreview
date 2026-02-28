@@ -591,6 +591,26 @@ async function groupItemsByCategory1(items: ChecklistItemWithRecord[]) {
 async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: string) {
   const cells: Record<number, Record<number, { v: string | number; s?: object }>> = {};
 
+  // Get column visibility
+  const columnVisibility = sheet1ColumnVisibility.value;
+
+  // Build dynamic column mapping: which physical columns to show
+  // Column 0 is always the item name
+  const columnMap: { index: number; type: 'employee' | 'cht' | 'asm' }[] = [];
+  let nextColIndex = 1; // Start after item name column
+
+  if (columnVisibility.employee) {
+    columnMap.push({ index: nextColIndex++, type: 'employee' });
+  }
+  if (columnVisibility.cht) {
+    columnMap.push({ index: nextColIndex++, type: 'cht' });
+  }
+  if (columnVisibility.asm) {
+    columnMap.push({ index: nextColIndex++, type: 'asm' });
+  }
+
+  const totalColumns = nextColIndex; // Total number of columns
+
   // Row 0: Date picker row with label and dropdown cell
   const datePickerLabelStyle = {
     bl: 1, // Bold
@@ -625,7 +645,7 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
     1: { v: formattedDate, s: datePickerCellStyle },
   };
 
-  // Row 1: Column headers (removed ID Nhân viên column)
+  // Row 1: Column headers - dynamically build based on visible columns
   const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' } };
   const headerStyleWrap = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, tb: 3 }; // tb: 3 = text wrap
   const checklistHeaderStyle = {
@@ -645,10 +665,13 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
 
   cells[1] = {
     0: { v: 'TÊN CHECKLIST / ITEM', s: headerStyleWrap },
-    1: { v: 'NHÂN VIÊN', s: headerStyle },
-    2: { v: 'CHT', s: headerStyle },
-    3: { v: 'ASM', s: headerStyle },
   };
+
+  // Add headers for visible columns
+  for (const col of columnMap) {
+    const label = col.type === 'employee' ? 'NHÂN VIÊN' : col.type === 'cht' ? 'CHT' : 'ASM';
+    cells[1][col.index] = { v: label, s: headerStyle };
+  }
 
   rowMapping1 = { checklistRows: new Map(), childRowRanges: new Map() };
   rowToItemId1 = new Map(); // Reset the item ID mapping
@@ -663,12 +686,13 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
     expandedGroups1.set(categoryName, false);
     rowMapping1.checklistRows.set(currentRow, categoryName);
 
+    // Category header row - fill all visible columns
     cells[currentRow] = {
       0: { v: `▶ ${categoryName}`, s: checklistHeaderStyle },
-      1: { v: '', s: checklistHeaderStyle },
-      2: { v: '', s: checklistHeaderStyle },
-      3: { v: '', s: checklistHeaderStyle },
     };
+    for (const col of columnMap) {
+      cells[currentRow][col.index] = { v: '', s: checklistHeaderStyle };
+    }
     console.log(`[Sheet1] Header created at row ${currentRow}`);
     currentRow++;
 
@@ -679,10 +703,21 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
       // Show item_number and name for consistency with Sheet 2
       cells[currentRow] = {
         0: { v: `    ${item.item_number}. ${item.name}`, s: itemNameStyle },
-        1: { v: r?.employee_checked ? 1 : 0 },
-        2: { v: r?.cht_checked ? 1 : 0 },
-        3: { v: r?.asm_checked ? 1 : 0 },
       };
+
+      // Add checkbox values for visible columns only
+      for (const col of columnMap) {
+        let value = 0;
+        if (col.type === 'employee') {
+          value = r?.employee_checked ? 1 : 0;
+        } else if (col.type === 'cht') {
+          value = r?.cht_checked ? 1 : 0;
+        } else if (col.type === 'asm') {
+          value = r?.asm_checked ? 1 : 0;
+        }
+        cells[currentRow][col.index] = { v: value };
+      }
+
       // Map this row to the ChecklistItem ID
       rowToItemId1.set(currentRow, item.id);
       // Reverse mapping: item ID to row (for syncing from Sheet 2)
@@ -700,7 +735,7 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
   console.log(`[Sheet1] Total rows rendered: ${currentRow}, Total cells created: ${Object.keys(cells).length}`);
   console.log('[Sheet1] Cell rows:', Object.keys(cells).map(Number).sort((a, b) => a - b));
 
-  return { cells, totalRows: currentRow };
+  return { cells, totalRows: currentRow, columnMap, totalColumns };
 }
 
 function toggleGroup1(categoryName: string, headerRowIndex: number) {
@@ -756,39 +791,35 @@ async function refreshSheet1(date?: string) {
   showLoadingOverlay();
   try {
     const items = await fetchAllChecklistItems(date, selectedStaffId.value);
-    const { cells, totalRows } = await buildSheet1CellData(items, date || '');
+    const { cells, totalRows, columnMap, totalColumns } = await buildSheet1CellData(items, date || '');
 
     console.log('[refreshSheet1] After buildSheet1CellData, rowMapping1.checklistRows:',
       Array.from(rowMapping1.checklistRows.entries()));
+    console.log('[refreshSheet1] Column map:', columnMap);
+    console.log('[refreshSheet1] Total columns:', totalColumns);
 
     const workbook = univerAPI.getActiveWorkbook();
 
     // Instead of updating cells, recreate the entire sheet with new data
     // This ensures proper row structure and styling
-    const columnVisibility = sheet1ColumnVisibility.value;
-    console.log('[refreshSheet1] Column visibility:', {
-      viewer: auth.role,
-      viewedUserRole: selectedStaffRole.value,
-      selectedStaffCasdoorId: selectedStaffCasdoorId.value,
-      authCasdoorId: auth.casdoorId,
-      isViewingOwnData: !selectedStaffCasdoorId.value || selectedStaffCasdoorId.value === auth.casdoorId,
-      columnVisibility,
-    });
+    // Build column data dynamically based on visible columns
+    const columnData: Record<number, { w: number }> = {
+      0: { w: 400 }, // Checklist/Item name (always visible)
+    };
+    for (const col of columnMap) {
+      columnData[col.index] = { w: 100 }; // Standard width for checkbox columns
+    }
+
     const sheetConfig = {
       id: 'sheet1',
       name: 'Checklist',
-      columnCount: 4,
+      columnCount: totalColumns,
       freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 },
       rowData: {
         0: { h: 36, hd: 0 },
         1: { h: 42, hd: 0 },
       },
-      columnData: {
-        0: { w: 400 }, // Checklist/Item name
-        1: { w: 100, hd: columnVisibility.employee ? 0 : 1 }, // Employee - show based on visibility logic
-        2: { w: 100, hd: columnVisibility.cht ? 0 : 1 }, // CHT - show based on visibility logic
-        3: { w: 120, hd: columnVisibility.asm ? 0 : 1 }, // ASM - show based on visibility logic
-      },
+      columnData,
       cellData: cells,
     };
 
@@ -815,17 +846,15 @@ async function refreshSheet1(date?: string) {
       expandedGroups1.set(categoryName, false);
     }
 
-    // Re-apply checkbox validation (columns B, C, D for checkboxes)
+    // Re-apply checkbox validation for visible columns
     const checkboxStartRow = DATA_START_ROW + 1;
-    sheet
-      .getRange(`B${checkboxStartRow}:B${totalRows}`)
-      ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
-    sheet
-      .getRange(`C${checkboxStartRow}:C${totalRows}`)
-      ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
-    sheet
-      .getRange(`D${checkboxStartRow}:D${totalRows}`)
-      ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
+    const columnLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    for (const col of columnMap) {
+      const colLetter = columnLetters[col.index];
+      sheet
+        .getRange(`${colLetter}${checkboxStartRow}:${colLetter}${totalRows}`)
+        ?.setDataValidation(univerAPI.newDataValidation().requireCheckbox('1', '0').build());
+    }
 
     // Auto-resize rows to fit text-wrapped content
     sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
@@ -1714,7 +1743,7 @@ onMounted(async () => {
   }
 
   // Build Sheet 1 data with selected date
-  const { cells: cells1, totalRows: totalRows1 } = await buildSheet1CellData(sheet1Items, selectedDate.value);
+  const { cells: cells1, totalRows: totalRows1, columnMap: columnMap1, totalColumns: totalColumns1 } = await buildSheet1CellData(sheet1Items, selectedDate.value);
 
   // Build Sheet 2 data
   const currentDate = new Date();
@@ -1754,23 +1783,13 @@ onMounted(async () => {
   columnData2[summaryColStart + 4] = { w: 70 };
   columnData2[summaryColStart + 5] = { w: 150 };
 
-  // Build column data for Sheet 1 with role-based visibility
-  // hd: 1 = hidden, hd: 0 = visible
-  const columnVisibility = sheet1ColumnVisibility.value;
-  console.log('[Sheet1] Column visibility:', {
-    viewer: auth.role,
-    viewedUserRole: selectedStaffRole.value,
-    selectedStaffCasdoorId: selectedStaffCasdoorId.value,
-    authCasdoorId: auth.casdoorId,
-    isViewingOwnData: !selectedStaffCasdoorId.value || selectedStaffCasdoorId.value === auth.casdoorId,
-    columnVisibility,
-  });
-  const sheet1ColumnData: Record<number, { w: number; hd?: number }> = {
-    0: { w: 400 }, // Checklist/Item name
-    1: { w: 100, hd: columnVisibility.employee ? 0 : 1 }, // Employee - show based on visibility logic
-    2: { w: 100, hd: columnVisibility.cht ? 0 : 1 }, // CHT - show based on visibility logic
-    3: { w: 120, hd: columnVisibility.asm ? 0 : 1 }, // ASM - show based on visibility logic
+  // Build column data for Sheet 1 dynamically based on visible columns
+  const sheet1ColumnData: Record<number, { w: number }> = {
+    0: { w: 400 }, // Checklist/Item name (always visible)
   };
+  for (const col of columnMap1) {
+    sheet1ColumnData[col.index] = { w: 100 }; // Standard width for checkbox columns
+  }
 
   // Sheet 3: build cell data (CHT only)
   let cells3: Record<number, Record<number, { v: string | number; s?: object }>> = {};
@@ -1787,7 +1806,7 @@ onMounted(async () => {
     sheet1: {
       id: 'sheet1',
       name: 'Checklist',
-      columnCount: 4,
+      columnCount: totalColumns1,
       freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 }, // Freeze date picker + header
       rowData: {
         0: { h: 36, hd: 0 }, // Date picker row
@@ -1872,17 +1891,14 @@ onMounted(async () => {
       // Apply checkbox validation (columns B, C, D for checkboxes)
       const checkboxStartRow = DATA_START_ROW + 1;
       const endRow1 = totalRows1;
-      sheet1
-        .getRange(`B${checkboxStartRow}:B${endRow1}`)
-        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
-      sheet1
-        .getRange(`C${checkboxStartRow}:C${endRow1}`)
-        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
-      sheet1
-        .getRange(`D${checkboxStartRow}:D${endRow1}`)
-        ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
-
-      // Note: CHT/ASM column visibility is set in sheet1ColumnData configuration above
+      // Apply checkbox validation for visible columns only
+      const columnLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+      for (const col of columnMap1) {
+        const colLetter = columnLetters[col.index];
+        sheet1
+          .getRange(`${colLetter}${checkboxStartRow}:${colLetter}${endRow1}`)
+          ?.setDataValidation(api.newDataValidation().requireCheckbox('1', '0').build());
+      }
     }
 
     // Setup Sheet 2

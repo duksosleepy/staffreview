@@ -435,9 +435,19 @@ export type ReportRow = {
 /**
  * Fetch per-employee achievement report for a given month/year.
  * Only ASM role is allowed.
+ * Optionally filter by store_id.
  */
-export async function fetchReport(month: number, year: number): Promise<ReportRow[]> {
-  const response = await fetch(`/api/checklist/report?month=${month}&year=${year}`, {
+export async function fetchReport(month: number, year: number, storeId?: string): Promise<ReportRow[]> {
+  const queryParams = new URLSearchParams({
+    month: month.toString(),
+    year: year.toString(),
+  });
+
+  if (storeId) {
+    queryParams.set('store_id', storeId);
+  }
+
+  const response = await fetch(`/api/checklist/report?${queryParams.toString()}`, {
     method: 'GET',
     credentials: 'include',
   });

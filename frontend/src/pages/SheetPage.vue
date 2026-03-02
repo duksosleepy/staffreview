@@ -9,6 +9,7 @@ import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { useDebounceFn } from '@vueuse/core';
 import { computed, defineAsyncComponent, nextTick, onErrorCaptured, onMounted, onUnmounted, ref } from 'vue';
 import ImportExcelModal from '@/components/ImportExcelModal.vue';
+import ExportReportModal from '@/components/ExportReportModal.vue';
 import UserMenu from '@/components/UserMenu.vue';
 import { FOCUS_RING_CLASSES } from '@/constants/ui';
 import { usePermission } from '@/composables/usePermission';
@@ -50,7 +51,7 @@ import readXlsxFile from 'read-excel-file';
 
 // Auth
 const auth = useAuthStore();
-const { canCheckCht, canCheckAsm, isCht, isAsm, isEmployee, isRole } = usePermission();
+const { canCheckCht, canCheckAsm, isCht, isAsm, isEmployee, isAdmin, isRole } = usePermission();
 
 // Notifications
 const notificationStore = useNotificationStore();
@@ -86,10 +87,10 @@ onErrorCaptured((err, instance, info) => {
   return false;
 });
 
-// Show sidebar only for CHT/ASM
+// Show sidebar for Admin/CHT/ASM (Admin can view all users but has no spreadsheet)
 const showSidebar = computed(() => {
-  const show = isCht.value || isAsm.value;
-  console.log('[Sidebar] Role:', auth.role, 'isCht:', isCht.value, 'isAsm:', isAsm.value, 'showSidebar:', show);
+  const show = isAdmin.value || isCht.value || isAsm.value;
+  console.log('[Sidebar] Role:', auth.role, 'isAdmin:', isAdmin.value, 'isCht:', isCht.value, 'isAsm:', isAsm.value, 'showSidebar:', show);
   return show;
 });
 
@@ -250,23 +251,35 @@ const showImportModal = ref(false);
 const importFile = ref<File | null>(null);
 const isImporting = ref(false);
 
+// Export Report modal state
+const showExportModal = ref(false);
+const isExporting = ref(false);
+
 // Import Excel handlers
 function handleImportExcel() {
   showImportModal.value = true;
 }
 
-async function handleExportReport() {
+// Show export modal
+function handleExportReport() {
+  showExportModal.value = true;
+}
+
+// Handle export submission with selected store
+async function handleExportSubmit(storeId: string) {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
+  isExporting.value = true;
+
   try {
-    const rows = await fetchReport(month, year);
+    const rows = await fetchReport(month, year, storeId);
 
     if (rows.length === 0) {
       toaster.create({
         title: 'Không có dữ liệu',
-        description: 'Chưa có dữ liệu báo cáo cho tháng này',
+        description: 'Chưa có dữ liệu báo cáo cho cửa hàng này',
         type: 'info',
       });
       return;
@@ -301,7 +314,7 @@ async function handleExportReport() {
 
     await writeXlsxFile(data as any, {
       schema,
-      fileName: `bao-cao-${month.toString().padStart(2, '0')}-${year}.xlsx`,
+      fileName: `bao-cao-${storeId}-${month.toString().padStart(2, '0')}-${year}.xlsx`,
       headerStyle: {
         fontWeight: 'bold',
         align: 'center',
@@ -310,15 +323,21 @@ async function handleExportReport() {
 
     toaster.create({
       title: 'Thành công',
-      description: `Đã xuất báo cáo tháng ${month}/${year}`,
+      description: `Đã xuất báo cáo cửa hàng ${storeId} tháng ${month}/${year}`,
       type: 'success',
     });
-  } catch (error: any) {
+
+    // Close modal
+    showExportModal.value = false;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Lỗi không xác định';
     toaster.create({
       title: 'Lỗi',
-      description: `Xuất báo cáo thất bại: ${error?.message || 'Lỗi không xác định'}`,
+      description: `Xuất báo cáo thất bại: ${message}`,
       type: 'error',
     });
+  } finally {
+    isExporting.value = false;
   }
 }
 
@@ -451,9 +470,10 @@ async function handleImportSubmit() {
           status: schedule.status,
         });
         successCount++;
-      } catch (error: any) {
+      } catch (error: unknown) {
         errorCount++;
-        errors.push(`${schedule.employee_name}: ${error.message}`);
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        errors.push(`${schedule.employee_name}: ${message}`);
         console.error(`Failed to save schedule for ${schedule.employee_name}:`, error);
       }
     }
@@ -506,11 +526,12 @@ async function handleImportSubmit() {
         });
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Import Excel error:', error);
+    const message = error instanceof Error ? error.message : 'Lỗi không xác định';
     toaster.create({
       title: 'Lỗi',
-      description: `Import thất bại: ${error?.message || 'Lỗi không xác định'}`,
+      description: `Import thất bại: ${message}`,
       type: 'error',
     });
   } finally {
@@ -1702,6 +1723,12 @@ function applyDatePickerValidation() {
 }
 
 onMounted(async () => {
+  // Admin users don't use spreadsheets - they only view user data through the sidebar
+  if (isAdmin.value) {
+    console.log('[SheetPage] Admin user detected - skipping spreadsheet initialization');
+    return;
+  }
+
   if (!containerRef.value) return;
 
   // Validate deadlines on page load (invalidate expired tasks without CHT validation)
@@ -2128,10 +2155,11 @@ onMounted(async () => {
                   type: 'success',
                   duration: 3000,
                 });
-              } catch (error: any) {
+              } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : 'Unknown error';
                 toaster.create({
                   title: 'Lỗi',
-                  description: `Không thể cập nhật: ${error?.message || 'Unknown error'}`,
+                  description: `Không thể cập nhật: ${message}`,
                   type: 'error',
                 });
               }
@@ -2294,8 +2322,8 @@ onMounted(async () => {
                 }
               }
             }
-          } catch (error: any) {
-            const errorMsg = error?.message || 'Failed to update';
+          } catch (error: unknown) {
+            const errorMsg = error instanceof Error ? error.message : 'Failed to update';
             toaster.create({
               title: 'Error',
               description: errorMsg,
@@ -2572,15 +2600,15 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', visibilityHandler);
 
   // Store handler for cleanup
-  (window as any).__datePickerVisibilityHandler = visibilityHandler;
+  (window as unknown as { __datePickerVisibilityHandler?: () => void }).__datePickerVisibilityHandler = visibilityHandler;
 });
 
 onUnmounted(() => {
   // Cleanup visibility change listener
-  const handler = (window as any).__datePickerVisibilityHandler;
+  const handler = (window as unknown as { __datePickerVisibilityHandler?: () => void }).__datePickerVisibilityHandler;
   if (handler) {
     document.removeEventListener('visibilitychange', handler);
-    delete (window as any).__datePickerVisibilityHandler;
+    delete (window as unknown as { __datePickerVisibilityHandler?: () => void }).__datePickerVisibilityHandler;
   }
 
   univerAPI?.dispose();
@@ -2764,7 +2792,7 @@ onUnmounted(() => {
       <UserMenu
         :user-name="auth.userName"
         :user-email="auth.userEmail"
-        :role="auth.role"
+        :role="auth.role || 'employee'"
         :notification-count="notificationStore.notificationCount"
         :notification-message="notificationStore.notificationMessage"
         @logout="auth.logout"
@@ -2775,11 +2803,26 @@ onUnmounted(() => {
 
     <!-- Main Content Area with optional sidebar -->
     <div class="flex-1 flex overflow-hidden relative z-0">
-      <!-- Employee Sidebar (CHT/ASM only) -->
+      <!-- Employee Sidebar (Admin/CHT/ASM) -->
       <EmployeeSidebar v-if="showSidebar" @select="onEmployeeSelect" />
 
-      <!-- Spreadsheet Area -->
-      <div class="flex-1 p-3 sm:p-5 overflow-hidden">
+      <!-- Admin View: Only sidebar, no spreadsheet -->
+      <div v-if="isAdmin" class="flex-1 p-3 sm:p-5 overflow-hidden flex items-center justify-center">
+        <div class="text-center max-w-md">
+          <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-purple-600/10 mb-6">
+            <svg class="w-10 h-10 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+          <h2 class="text-2xl font-semibold text-paper-white mb-3">Chế độ quản trị</h2>
+          <p class="text-paper-muted text-base leading-relaxed">
+            Chọn một nhân viên từ thanh bên để xem dữ liệu của họ. Admin có thể xem tất cả người dùng trong hệ thống.
+          </p>
+        </div>
+      </div>
+
+      <!-- Spreadsheet Area (Non-admin users) -->
+      <div v-else class="flex-1 p-3 sm:p-5 overflow-hidden">
         <div class="relative h-full glass-card rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl z-0" style="box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(242, 236, 226, 0.05);">
           <!-- Spreadsheet container -->
           <div ref="containerRef" class="w-full h-full"></div>
@@ -2805,6 +2848,14 @@ onUnmounted(() => {
       :is-importing="isImporting"
       @file-select="handleFileSelect"
       @submit="handleImportSubmit"
+    />
+
+    <!-- Export Report Modal -->
+    <ExportReportModal
+      v-model:open="showExportModal"
+      :is-exporting="isExporting"
+      :stores="auth.stores"
+      @submit="handleExportSubmit"
     />
   </div>
 </template>

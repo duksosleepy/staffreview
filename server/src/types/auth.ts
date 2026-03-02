@@ -1,5 +1,6 @@
 // Role definitions
 export const ROLES = {
+  ADMIN: 'admin',
   ASM: 'asm',
   CHT: 'cht',
   EMPLOYEE: 'employee',
@@ -8,10 +9,11 @@ export const ROLES = {
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 // Permission definitions
-export type Permission = 'sheet:view' | 'checklist:check_employee' | 'checklist:check_cht' | 'checklist:check_asm';
+export type Permission = 'sheet:view' | 'checklist:check_employee' | 'checklist:check_cht' | 'checklist:check_asm' | 'admin:view_all';
 
 // Role to permissions mapping
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
+  admin: ['sheet:view', 'checklist:check_employee', 'checklist:check_cht', 'checklist:check_asm', 'admin:view_all'],
   asm: ['sheet:view', 'checklist:check_employee', 'checklist:check_cht', 'checklist:check_asm'],
   cht: ['sheet:view', 'checklist:check_employee', 'checklist:check_cht'],
   employee: ['sheet:view', 'checklist:check_employee'],

@@ -2,6 +2,7 @@
 import { useAsyncState, useLocalStorage, useMagicKeys, whenever } from '@vueuse/core';
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
 import ChevronIcon from '@/components/icons/ChevronIcon.vue';
+import CurrentUserWidget from '@/components/CurrentUserWidget.vue';
 import { useRoleDisplay } from '@/composables/useRoleDisplay';
 import { FOCUS_RING_CLASSES } from '@/constants/ui';
 import { fetchStoreEmployees, type StoreEmployee } from '@/lib/gel-client';
@@ -102,12 +103,32 @@ const employeesByStore = computed(() => {
   const grouped = new Map<string, StoreEmployee[]>();
 
   for (const emp of employees.value) {
-    // RBAC: CHT users should not see ASM users
+    // Skip the current user - they're shown in the widget above
+    if (emp.casdoor_id === userId) {
+      continue;
+    }
+
+    // RBAC rules based on role
     const empRole = getEffectiveRole(emp);
+
+    // Admin can see everyone
+    if (userRole === 'admin') {
+      // Admin sees all employees across all stores
+      for (const store of emp.stores) {
+        if (!grouped.has(store)) {
+          grouped.set(store, []);
+        }
+        grouped.get(store)?.push(emp);
+      }
+      continue;
+    }
+
+    // CHT users should not see ASM users
     if (userRole === 'cht' && empRole === 'asm') {
       continue;
     }
 
+    // For non-admin users, filter by their stores
     for (const store of emp.stores) {
       if (userStores.includes(store)) {
         if (!grouped.has(store)) {
@@ -118,10 +139,10 @@ const employeesByStore = computed(() => {
     }
   }
 
-  // Role hierarchy: ASM > CHT > Employee
-  const roleLevel: Record<string, number> = { asm: 3, cht: 2, employee: 1 };
+  // Role hierarchy: Admin > ASM > CHT > Employee
+  const roleLevel: Record<string, number> = { admin: 4, asm: 3, cht: 2, employee: 1 };
 
-  // Sort each store's employees by role level (high to low), then current user first, then alphabetically
+  // Sort each store's employees by role level (high to low), then alphabetically
   for (const emps of grouped.values()) {
     emps.sort((a, b) => {
       const aRole = getEffectiveRole(a);
@@ -129,11 +150,6 @@ const employeesByStore = computed(() => {
 
       const roleDiff = (roleLevel[bRole] ?? 0) - (roleLevel[aRole] ?? 0);
       if (roleDiff !== 0) return roleDiff;
-
-      const aIsCurrent = a.casdoor_id === userId;
-      const bIsCurrent = b.casdoor_id === userId;
-      if (aIsCurrent && !bIsCurrent) return -1;
-      if (!aIsCurrent && bIsCurrent) return 1;
 
       return a.displayName.localeCompare(b.displayName);
     });
@@ -175,14 +191,6 @@ const selectEmployee = (emp: StoreEmployee) => {
 
   selectedId.value = emp.id;
   emit('select', emp);
-};
-
-/**
- * Clear the current employee selection
- */
-const clearSelection = () => {
-  selectedId.value = null;
-  emit('select', null);
 };
 
 /**
@@ -246,8 +254,11 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown);
 });
 
-// Computed totals
-const totalEmployees = computed(() => employees.value.length);
+// Computed totals (excluding current user who is shown in the widget)
+const totalEmployees = computed(() => {
+  const userId = currentUserId.value;
+  return employees.value.filter(emp => emp.casdoor_id !== userId).length;
+});
 const totalStores = computed(() => employeesByStore.value.size);
 </script>
 
@@ -390,6 +401,11 @@ const totalStores = computed(() => employeesByStore.value.size);
 
     <!-- Content Area (Expanded only) -->
     <div v-if="!isCollapsed" class="flex-1 overflow-y-auto">
+      <!-- Current User Widget -->
+      <div v-if="!isLoading && !error" class="px-3 pt-3 pb-3 border-b border-white/5">
+        <CurrentUserWidget />
+      </div>
+
       <!-- Loading State -->
       <div v-if="isLoading" class="flex flex-col items-center justify-center py-16">
         <div class="w-6 h-6 border-2 border-white/10 border-t-vermillion-500 rounded-full animate-spin mb-3"></div>

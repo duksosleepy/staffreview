@@ -243,6 +243,16 @@ module default {
             constraint one_of('asm', 'cht', 'employee');
         }
 
+        # APPLICABLE DAYS - Controls which days this task appears in Sheet 1
+        # Array of day numbers (1-31) when this task should be shown
+        # Examples:
+        # - Daily tasks (Hằng ngày): [1,2,3,...,31] (all days) or null (means all days)
+        # - Weekly tasks (Hằng tuần): [1,8,15,22,29] (every 7 days)
+        # - Monthly tasks (Hằng tháng): [1,15] (day 1 and 15 of month)
+        # - Bi-weekly: [1,15] (twice per month)
+        # If null or empty, task appears every day (default for daily tasks)
+        applicable_days: array<int32>;
+
         # Computed backlink to monthly records (Sheet 2)
         multi monthly_records := .<detail_item[is DetailMonthlyRecord];
 

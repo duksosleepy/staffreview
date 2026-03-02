@@ -245,6 +245,20 @@ export const checklistRoutes = new Hono<Env>()
     }
     // ASM: no owner filter — sees all tasks
 
+    // Applicable days filter: filter tasks by their applicable_days array
+    // If a task has applicable_days set, only show it on those specific days of the month
+    // This allows weekly/monthly tasks to appear only on certain days
+    if (date) {
+      const dateParts = date.split('-');
+      const dayOfMonth = Number.parseInt(dateParts[2], 10); // Get day (1-31)
+
+      // Filter: show task if applicable_days is null/empty (daily tasks) OR if current day is in the array
+      itemFilter += ` and (not exists .applicable_days or len(.applicable_days) = 0 or <int32>$dayOfMonth in array_unpack(.applicable_days))`;
+      queryParams.dayOfMonth = dayOfMonth;
+
+      log?.info({ dayOfMonth, itemFilter }, 'Filtering tasks by applicable_days');
+    }
+
     // Shift filter: auto-assign tasks based on the user's/employee's shift for the date.
     // Applies when:
     // 1. Employee views their own tasks
@@ -352,6 +366,7 @@ export const checklistRoutes = new Hono<Env>()
             notes,
             baseline,
             owner,
+            applicable_days,
             category: { id, name, category_type, classification_criteria },
             record := assert_single((
               select .checklist_records {
@@ -392,6 +407,7 @@ export const checklistRoutes = new Hono<Env>()
             notes,
             baseline,
             owner,
+            applicable_days,
             category: { id, name, category_type, classification_criteria },
             record := assert_single((
               select .checklist_records {
@@ -522,6 +538,7 @@ export const checklistRoutes = new Hono<Env>()
         notes,
         baseline,
         owner,
+        applicable_days,
         category: { id, name, category_type, classification_criteria },
         record := assert_single((
           select .monthly_records {
@@ -1073,9 +1090,10 @@ export const checklistRoutes = new Hono<Env>()
   })
 
   /**
-   * GET /api/checklist/report?month=&year=
+   * GET /api/checklist/report?month=&year=&store_id=
    * Returns per-employee achievement summary for ASM export report.
    * Only ASM role is allowed.
+   * Optionally filter by store_id parameter.
    */
   .get('/report', async (c) => {
     const db = c.get('db');
@@ -1093,6 +1111,7 @@ export const checklistRoutes = new Hono<Env>()
     const now = new Date();
     const targetMonth = c.req.query('month') ? Number.parseInt(c.req.query('month')!, 10) : now.getMonth() + 1;
     const targetYear = c.req.query('year') ? Number.parseInt(c.req.query('year')!, 10) : now.getFullYear();
+    const targetStoreId = c.req.query('store_id');
 
     try {
       const { fetchCasdoorUsersByStores } = await import('../lib/oidc.js');
@@ -1149,6 +1168,7 @@ export const checklistRoutes = new Hono<Env>()
       const scoreByStaffId = new Map(monthlyScores.map(s => [s.staff_id, s]));
 
       // Build report rows (only employees, skip CHT/ASM)
+      // Filter by targetStoreId if provided
       const rows = [];
       let stt = 1;
       for (const emp of casdoorEmployees) {
@@ -1158,6 +1178,12 @@ export const checklistRoutes = new Hono<Env>()
         const hrId = emp.casdoor_id;
         const schedule = scheduleByHrId.get(hrId);
         const storeId = schedule?.store_id ?? emp.stores[0] ?? '';
+
+        // Filter by store_id if targetStoreId is provided
+        if (targetStoreId && storeId !== targetStoreId) {
+          continue;
+        }
+
         const score = scoreByStaffId.get(emp.id);
 
         rows.push({
@@ -1173,7 +1199,7 @@ export const checklistRoutes = new Hono<Env>()
         });
       }
 
-      log?.info({ month: targetMonth, year: targetYear, rowCount: rows.length }, 'Report generated');
+      log?.info({ month: targetMonth, year: targetYear, storeId: targetStoreId, rowCount: rows.length }, 'Report generated');
       return c.json(rows);
     } catch (error) {
       log?.error({ error }, 'Failed to generate report');

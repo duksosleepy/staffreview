@@ -112,6 +112,7 @@ export const useAuthStore = defineStore('auth', () => {
     role,
     permissions,
     userName,
+    userDisplayName,
     userEmail,
     stores,
     casdoorId,

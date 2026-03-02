@@ -35,11 +35,13 @@ export const usePermission = () => {
   const canCheckCht = computed(() => can('checklist:check_cht'));
   const canCheckAsm = computed(() => can('checklist:check_asm'));
   const canViewSheet = computed(() => can('sheet:view'));
+  const canViewAll = computed(() => can('admin:view_all'));
 
   // Role checks
-  const isEmployee = computed(() => isRole('employee'));
-  const isCht = computed(() => isRole('cht'));
+  const isAdmin = computed(() => isRole('admin'));
   const isAsm = computed(() => isRole('asm'));
+  const isCht = computed(() => isRole('cht'));
+  const isEmployee = computed(() => isRole('employee'));
 
   return {
     // Permission checks
@@ -56,11 +58,13 @@ export const usePermission = () => {
     canCheckCht,
     canCheckAsm,
     canViewSheet,
+    canViewAll,
 
     // Computed role helpers
-    isEmployee,
-    isCht,
+    isAdmin,
     isAsm,
+    isCht,
+    isEmployee,
 
     // Access to auth store data
     role: computed(() => auth.role),

@@ -67,6 +67,7 @@ insert DetailCategory {
 # ============================================================================
 # 2. INSERT DETAIL CHECKLIST ITEMS - CHECK LIST HẰNG NGÀY (19 items)
 # task_type and owner sourced from checklist.xlsx section "CHECK LIST HẰNG NGÀY"
+# applicable_days: null or empty for daily tasks (appear every day)
 # ============================================================================
 
 # Excel row 3 — S — both employee & cht
@@ -392,6 +393,7 @@ insert DetailChecklistItem {
 # ============================================================================
 # 3. INSERT DETAIL CHECKLIST ITEMS - CHECK LIST HẰNG TUẦN (4 items)
 # task_type and owner sourced from checklist.xlsx section "CHECK LIST HẰNG TUẦN"
+# applicable_days: [1, 8, 15, 22, 29] for weekly tasks (every Monday/7 days)
 # ============================================================================
 
 # Excel row 26 — S — both employee & cht (different text)
@@ -408,7 +410,8 @@ insert DetailChecklistItem {
     score := 1,
     order := 1,
     task_type := ShiftType.S,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 8, 15, 22, 29]
 };
 
 # Excel row 26 — S — same row, cht column
@@ -425,7 +428,8 @@ insert DetailChecklistItem {
     score := 1,
     order := 2,
     task_type := ShiftType.S,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 8, 15, 22, 29]
 };
 
 # Excel row 27 — S — both employee & cht
@@ -442,7 +446,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 3,
     task_type := ShiftType.S,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 5, 8, 12, 15, 19, 22, 26, 29]
 };
 
 # Excel row 28 — S — both employee & cht
@@ -459,7 +464,8 @@ insert DetailChecklistItem {
     score := 1,
     order := 4,
     task_type := ShiftType.S,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 8, 15, 22, 29]
 };
 
 
@@ -467,6 +473,7 @@ insert DetailChecklistItem {
 # 4. INSERT DETAIL CHECKLIST ITEMS - CHECK LIST HẰNG THÁNG (10 items)
 # task_type and owner sourced from checklist.xlsx sections
 # "CHECK LIST HẰNG THÁNG" (rows 34–38) and "XỬ LÝ KHI CÓ PHÁT SINH" (rows 40–47)
+# applicable_days: [1, 15] for monthly tasks (twice per month - 1st and 15th)
 # ============================================================================
 
 # Excel row 34 — S — both employee & cht
@@ -483,7 +490,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 1,
     task_type := ShiftType.S,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 35 — S — both employee & cht
@@ -500,7 +508,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 2,
     task_type := ShiftType.S,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 36 — S — cht only
@@ -517,7 +526,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 3,
     task_type := ShiftType.S,
-    owner := "cht"
+    owner := "cht",
+    applicable_days := [1, 15]
 };
 
 # Excel row 37 — S — cht only
@@ -534,7 +544,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 4,
     task_type := ShiftType.S,
-    owner := "cht"
+    owner := "cht",
+    applicable_days := [1, 15]
 };
 
 # Excel row 38 — S — cht only
@@ -551,7 +562,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 5,
     task_type := ShiftType.S,
-    owner := "cht"
+    owner := "cht",
+    applicable_days := [1, 15]
 };
 
 # Excel row 40 — F — both employee & cht
@@ -568,7 +580,8 @@ insert DetailChecklistItem {
     score := 1,
     order := 6,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 41 — F — employee only (cht has different task "Xử lý khiếu nại")
@@ -585,7 +598,8 @@ insert DetailChecklistItem {
     score := 1,
     order := 7,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 42 — F — both employee & cht
@@ -602,7 +616,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 8,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 43 — F — both employee & cht
@@ -619,7 +634,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 9,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 44 — F — both employee & cht
@@ -636,7 +652,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 10,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 45 — F — both employee & cht
@@ -653,7 +670,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 11,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 46 — F — both employee & cht
@@ -670,7 +688,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 12,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 47 — C, GC, GS — both employee & cht
@@ -687,13 +706,15 @@ insert DetailChecklistItem {
     score := 2,
     order := 13,
     task_type := ShiftType.C,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 
 # ============================================================================
 # 5. INSERT DETAIL CHECKLIST ITEMS - KHO HÀNG TẠI CỬA HÀNG (3 items)
 # task_type and owner sourced from checklist.xlsx section "KHO HÀNG TẠI CỬA HÀNG"
+# applicable_days: [1, 15] for monthly tasks (twice per month - 1st and 15th)
 # ============================================================================
 
 # Excel row 49 — F — both employee & cht
@@ -710,7 +731,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 1,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 50 — F — both employee & cht
@@ -727,7 +749,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 2,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 51 — F — both employee & cht
@@ -744,13 +767,15 @@ insert DetailChecklistItem {
     score := 2,
     order := 3,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 
 # ============================================================================
 # 6. INSERT DETAIL CHECKLIST ITEMS - ONLINE TO OFLINE (9 items)
 # task_type and owner sourced from checklist.xlsx section "ONLINE TO OFLINE"
+# applicable_days: [1, 15] for monthly tasks (twice per month - 1st and 15th)
 # ============================================================================
 
 # Excel row 53 — F — both employee & cht
@@ -767,7 +792,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 1,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 54 — F — both employee & cht
@@ -784,7 +810,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 2,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 55 — F — both employee & cht
@@ -801,7 +828,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 3,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 56 — F — both employee & cht
@@ -818,7 +846,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 4,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 57 — F — both employee & cht
@@ -835,7 +864,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 5,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 58 — F — both employee & cht
@@ -852,7 +882,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 6,
     task_type := ShiftType.F,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 59 — C. GC, GS — both employee & cht
@@ -869,7 +900,8 @@ insert DetailChecklistItem {
     score := 3,
     order := 7,
     task_type := ShiftType.C,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 60 — C. GC, GS — both employee & cht
@@ -886,7 +918,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 8,
     task_type := ShiftType.C,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 # Excel row 61 — C. GC, GS — both employee & cht
@@ -903,7 +936,8 @@ insert DetailChecklistItem {
     score := 2,
     order := 9,
     task_type := ShiftType.C,
-    owner := "employee"
+    owner := "employee",
+    applicable_days := [1, 15]
 };
 
 

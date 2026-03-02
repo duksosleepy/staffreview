@@ -10,6 +10,7 @@ import type { Role } from '../types/auth.js';
 export type ChecklistColumn = 'employee_checked' | 'cht_checked' | 'asm_checked';
 
 const ROLE_COLUMN_MAP: Record<Role, ChecklistColumn[]> = {
+  admin: ['employee_checked', 'cht_checked', 'asm_checked'],
   employee: ['employee_checked'],
   cht: ['cht_checked'],
   asm: ['asm_checked'],

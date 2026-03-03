@@ -54,7 +54,8 @@ const roleDisplay = computed(() => getRoleDisplay(props.role));
  */
 const roleBadgeClasses = computed(() => {
   const role = props.role.toLowerCase();
-  const baseClasses = 'mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase w-fit';
+  const baseClasses =
+    'mt-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-body font-medium rounded uppercase w-fit';
 
   const roleStyles: Record<string, string> = {
     asm: 'bg-gold-500 text-white',

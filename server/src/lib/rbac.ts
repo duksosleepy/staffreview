@@ -19,12 +19,15 @@ const ROLE_COLUMN_MAP: Record<Role, ChecklistColumn[]> = {
 /**
  * Validates column access and returns denied columns
  */
-export function validateColumnAccess(userRole: Role, requestedColumns: ChecklistColumn[]): {
+export function validateColumnAccess(
+  userRole: Role,
+  requestedColumns: ChecklistColumn[],
+): {
   allowed: boolean;
   deniedColumns: ChecklistColumn[];
 } {
   const allowedColumns = ROLE_COLUMN_MAP[userRole] || [];
-  const deniedColumns = requestedColumns.filter(col => !allowedColumns.includes(col));
+  const deniedColumns = requestedColumns.filter((col) => !allowedColumns.includes(col));
 
   return {
     allowed: deniedColumns.length === 0,

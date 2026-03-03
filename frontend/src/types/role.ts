@@ -6,7 +6,7 @@ export const RoleType = {
   EMPLOYEE: 'employee',
 } as const;
 
-export type Role = typeof RoleType[keyof typeof RoleType];
+export type Role = (typeof RoleType)[keyof typeof RoleType];
 
 export const ROLE_DISPLAY: Record<string, string> = {
   admin: 'Admin',

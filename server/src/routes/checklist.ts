@@ -31,7 +31,8 @@ async function recomputeMonthlyScore(
     category_type: string;
     classification_criteria: { thresholds: { A: number; B: number; C: number }; baseline?: number } | null;
     daily_checks: boolean[];
-  }>(`
+  }>(
+    `
     with
       item := (select DetailChecklistItem filter .id = <uuid>$detailItemId),
       rec := assert_single((
@@ -48,15 +49,15 @@ async function recomputeMonthlyScore(
       classification_criteria := item.category.classification_criteria,
       daily_checks := rec.daily_checks
     }
-  `, { detailItemId, staffId, month, year });
+  `,
+    { detailItemId, staffId, month, year },
+  );
 
   if (!meta) return;
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const effectiveBaseline =
-    meta.category_type === 'daily'
-      ? (meta.classification_criteria?.baseline ?? 26)
-      : meta.baseline;
+    meta.category_type === 'daily' ? (meta.classification_criteria?.baseline ?? 26) : meta.baseline;
 
   const successfulCompletions = (meta.daily_checks ?? []).slice(0, daysInMonth).filter(Boolean).length;
   const achievementPct = effectiveBaseline > 0 ? (successfulCompletions / effectiveBaseline) * 100 : 0;
@@ -69,7 +70,8 @@ async function recomputeMonthlyScore(
   else if (scoreAchieved >= thresholds.C) itemClassification = 'C';
 
   // Write computed values back to DetailMonthlyRecord
-  await db.query(`
+  await db.query(
+    `
     update DetailMonthlyRecord
     filter .detail_item.id = <uuid>$detailItemId
       and .staff_id = <str>$staffId
@@ -82,19 +84,22 @@ async function recomputeMonthlyScore(
       classification := <str>$itemClassification,
       updated_at := datetime_current()
     }
-  `, {
-    detailItemId,
-    staffId,
-    month,
-    year,
-    achievementPct: Math.round(achievementPct * 100) / 100,
-    successfulCompletions,
-    scoreAchieved: Math.round(scoreAchieved * 100) / 100,
-    itemClassification,
-  });
+  `,
+    {
+      detailItemId,
+      staffId,
+      month,
+      year,
+      achievementPct: Math.round(achievementPct * 100) / 100,
+      successfulCompletions,
+      scoreAchieved: Math.round(scoreAchieved * 100) / 100,
+      itemClassification,
+    },
+  );
 
   // Re-aggregate total_score for this staff/month/year
-  const [agg] = await db.query<{ total: number }>(`
+  const [agg] = await db.query<{ total: number }>(
+    `
     select { total := sum((
       select DetailMonthlyRecord.score_achieved
       filter DetailMonthlyRecord.staff_id = <str>$staffId
@@ -102,7 +107,9 @@ async function recomputeMonthlyScore(
         and DetailMonthlyRecord.year = <int32>$year
         and not DetailMonthlyRecord.is_deleted
     )) }
-  `, { staffId, month, year });
+  `,
+    { staffId, month, year },
+  );
 
   const totalScore = agg?.total ?? 0;
   let finalClassification = 'D';
@@ -111,7 +118,8 @@ async function recomputeMonthlyScore(
   else if (totalScore > 50) finalClassification = 'C';
 
   // Upsert EmployeeMonthlyScore summary
-  await db.query(`
+  await db.query(
+    `
     insert EmployeeMonthlyScore {
       staff_id := <str>$staffId,
       store_id := <str>$storeId,
@@ -131,7 +139,9 @@ async function recomputeMonthlyScore(
         updated_at := datetime_current()
       }
     )
-  `, { staffId, storeId, month, year, totalScore: Math.round(totalScore * 100) / 100, finalClassification });
+  `,
+    { staffId, storeId, month, year, totalScore: Math.round(totalScore * 100) / 100, finalClassification },
+  );
 }
 
 // Query params validation
@@ -217,7 +227,10 @@ export const checklistRoutes = new Hono<Env>()
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    log?.info({ userId: user.sub, role: user.role, date, staff_id, casdoor_id: user.casdoor_id }, 'Fetching checklist items');
+    log?.info(
+      { userId: user.sub, role: user.role, date, staff_id, casdoor_id: user.casdoor_id },
+      'Fetching checklist items',
+    );
 
     const { filterCondition, params } = buildStaffFilter(user, staff_id);
 
@@ -275,27 +288,45 @@ export const checklistRoutes = new Hono<Env>()
       let targetHrId: string | null = null;
 
       if (staff_id) {
-        // CHT/ASM viewing an employee - need to get employee's hr_id (casdoor_id)
-        // staff_id is the Casdoor user UUID
-        // We need to fetch the user from Casdoor to get their properties.ID (hr_id)
+        // CHT/ASM viewing an employee
+        // First, try to resolve from Casdoor (for employees with accounts)
         try {
           const { fetchCasdoorUserById } = await import('../lib/oidc.js');
           const userInfo = await fetchCasdoorUserById(staff_id);
           targetHrId = userInfo?.casdoor_id || null;
-          log?.info({ staff_id, targetHrId }, 'Resolved staff_id to hr_id');
+          log?.info({ staff_id, targetHrId, source: 'casdoor' }, 'Resolved staff_id to hr_id from Casdoor');
         } catch (error) {
-          log?.warn({ error, staff_id }, 'Failed to resolve staff_id to hr_id');
+          log?.debug({ error, staff_id }, 'Not found in Casdoor, trying EmployeeSchedule');
+        }
+
+        // Fallback: For imported employees (not in Casdoor), staff_id IS the hr_id
+        // Try to find in EmployeeSchedule directly
+        if (!targetHrId) {
+          try {
+            const schedule = await db.querySingle<{ hr_id: string }>(
+              `select EmployeeSchedule { hr_id }
+               filter .hr_id = <str>$hrId
+                 and .store_id in array_unpack(<array<str>>$storeIds)
+                 and .is_deleted = false
+               limit 1`,
+              { hrId: staff_id, storeIds: user.stores },
+            );
+
+            if (schedule) {
+              targetHrId = schedule.hr_id;
+              log?.info(
+                { staff_id, targetHrId, source: 'employee_schedule' },
+                'Resolved staff_id to hr_id from EmployeeSchedule',
+              );
+            } else {
+              log?.warn({ staff_id }, 'Employee not found in Casdoor or EmployeeSchedule');
+            }
+          } catch (error) {
+            log?.warn({ error, staff_id }, 'Failed to query EmployeeSchedule');
+          }
         }
       } else {
         targetHrId = user.casdoor_id;
-      }
-
-      // If we couldn't determine hr_id but have staff_id, try finding by store match
-      // This is a fallback - we'll need better mapping later
-      if (!targetHrId && staff_id) {
-        // For now, skip filtering if we can't determine hr_id for CHT viewing employee
-        // This will be improved when we add better user mapping
-        log?.debug({ staff_id }, 'Skipping shift filter - cannot map staff_id to hr_id yet');
       }
 
       if (targetHrId && date) {
@@ -315,13 +346,10 @@ export const checklistRoutes = new Hono<Env>()
         `;
 
         try {
-          const employeeSchedule = await db.querySingle<{ daily_schedule: string[] }>(
-            employeeShiftQuery,
-            {
-              hrId: targetHrId,
-              storeIds: user.stores,
-            }
-          );
+          const employeeSchedule = await db.querySingle<{ daily_schedule: string[] }>(employeeShiftQuery, {
+            hrId: targetHrId,
+            storeIds: user.stores,
+          });
 
           if (employeeSchedule?.daily_schedule) {
             const dayIndex = dayOfMonth - 1; // Array is 0-indexed
@@ -335,7 +363,10 @@ export const checklistRoutes = new Hono<Env>()
               if (shiftType === 'S' || shiftType === 'C' || shiftType === 'F') {
                 itemFilter += ` and (.task_type = <optional default::ShiftType>$taskType or not exists .task_type)`;
                 queryParams.taskType = shiftType;
-                log?.info({ shiftType, date, hrId: targetHrId, isStaffView: !!staff_id, itemFilter, queryParams }, 'Filtering tasks by shift type');
+                log?.info(
+                  { shiftType, date, hrId: targetHrId, isStaffView: !!staff_id, itemFilter, queryParams },
+                  'Filtering tasks by shift type',
+                );
               }
             }
           } else {
@@ -737,8 +768,11 @@ export const checklistRoutes = new Hono<Env>()
     const validation = validateColumnAccess(user.role, requestedColumns);
     if (!validation.allowed) {
       const columnNames = { employee_checked: 'NHÂN VIÊN', cht_checked: 'CHT', asm_checked: 'ASM' };
-      const denied = validation.deniedColumns.map(c => columnNames[c]).join(', ');
-      log?.warn({ role: user.role, requested: requestedColumns, denied: validation.deniedColumns }, 'Unauthorized column access');
+      const denied = validation.deniedColumns.map((c) => columnNames[c]).join(', ');
+      log?.warn(
+        { role: user.role, requested: requestedColumns, denied: validation.deniedColumns },
+        'Unauthorized column access',
+      );
       return c.json({ error: `You can only edit your own column. Cannot update: ${denied}` }, 403);
     }
 
@@ -760,16 +794,12 @@ export const checklistRoutes = new Hono<Env>()
     };
 
     // Calculate deadline_date (assessment_date + 3 days)
-    const assessmentDateObj = new Date(
-      assessmentDate.year,
-      assessmentDate.month - 1,
-      assessmentDate.day
-    );
+    const assessmentDateObj = new Date(assessmentDate.year, assessmentDate.month - 1, assessmentDate.day);
     assessmentDateObj.setDate(assessmentDateObj.getDate() + 3);
     const deadlineDate = new LocalDate(
       assessmentDateObj.getFullYear(),
       assessmentDateObj.getMonth() + 1,
-      assessmentDateObj.getDate()
+      assessmentDateObj.getDate(),
     );
     params.deadlineDate = deadlineDate;
 
@@ -1069,19 +1099,22 @@ export const checklistRoutes = new Hono<Env>()
           staffId: record.staff_id,
           month,
           year,
-          day
+          day,
         });
 
         // Recompute score fields and update EmployeeMonthlyScore summary
         await recomputeMonthlyScore(db, record.checklist_item.id, record.staff_id, record.store_id ?? '', month, year);
       }
 
-      log?.info({ count: result.length, invalidatedCount: invalidatedRecords.length }, 'Validated deadlines and invalidated expired tasks');
+      log?.info(
+        { count: result.length, invalidatedCount: invalidatedRecords.length },
+        'Validated deadlines and invalidated expired tasks',
+      );
 
       return c.json({
         success: true,
         invalidatedCount: result.length,
-        sheet2UpdatedCount: invalidatedRecords.length
+        sheet2UpdatedCount: invalidatedRecords.length,
       });
     } catch (error) {
       log?.error({ error }, 'Failed to validate deadlines');
@@ -1133,39 +1166,42 @@ export const checklistRoutes = new Hono<Env>()
       const staffIds = [...staffIdToHrId.keys()];
 
       // Query EmployeeSchedule for employee info keyed by hr_id
-      const schedules = hrIds.length > 0
-        ? await db.query<{ hr_id: string; employee_name: string; store_id: string; position: string | null }>(
-            `select EmployeeSchedule { hr_id, employee_name, store_id, position }
+      const schedules =
+        hrIds.length > 0
+          ? await db.query<{ hr_id: string; employee_name: string; store_id: string; position: string | null }>(
+              `select EmployeeSchedule { hr_id, employee_name, store_id, position }
              filter .hr_id in array_unpack(<array<str>>$hrIds) and .is_deleted = false`,
-            { hrIds }
-          )
-        : [];
+              { hrIds },
+            )
+          : [];
 
-      const scheduleByHrId = new Map(schedules.map(s => [s.hr_id, s]));
+      const scheduleByHrId = new Map(schedules.map((s) => [s.hr_id, s]));
 
       // Collect all store_ids to look up regions from Area table
-      const storeIds = [...new Set(schedules.map(s => s.store_id).filter(Boolean))];
-      const areas = storeIds.length > 0
-        ? await db.query<{ store_id: string; region: string }>(
-            `select Area { store_id, region } filter .store_id in array_unpack(<array<str>>$storeIds)`,
-            { storeIds }
-          )
-        : [];
+      const storeIds = [...new Set(schedules.map((s) => s.store_id).filter(Boolean))];
+      const areas =
+        storeIds.length > 0
+          ? await db.query<{ store_id: string; region: string }>(
+              `select Area { store_id, region } filter .store_id in array_unpack(<array<str>>$storeIds)`,
+              { storeIds },
+            )
+          : [];
 
-      const regionByStoreId = new Map(areas.map(a => [a.store_id, a.region]));
+      const regionByStoreId = new Map(areas.map((a) => [a.store_id, a.region]));
 
       // Query pre-aggregated EmployeeMonthlyScore for the target month/year
-      const monthlyScores = staffIds.length > 0
-        ? await db.query<{ staff_id: string; total_score: number; final_classification: string }>(
-            `select EmployeeMonthlyScore { staff_id, total_score, final_classification }
+      const monthlyScores =
+        staffIds.length > 0
+          ? await db.query<{ staff_id: string; total_score: number; final_classification: string }>(
+              `select EmployeeMonthlyScore { staff_id, total_score, final_classification }
              filter .staff_id in array_unpack(<array<str>>$staffIds)
                and .month = <int32>$month
                and .year = <int32>$year`,
-            { staffIds, month: targetMonth, year: targetYear }
-          )
-        : [];
+              { staffIds, month: targetMonth, year: targetYear },
+            )
+          : [];
 
-      const scoreByStaffId = new Map(monthlyScores.map(s => [s.staff_id, s]));
+      const scoreByStaffId = new Map(monthlyScores.map((s) => [s.staff_id, s]));
 
       // Build report rows (only employees, skip CHT/ASM)
       // Filter by targetStoreId if provided
@@ -1199,7 +1235,10 @@ export const checklistRoutes = new Hono<Env>()
         });
       }
 
-      log?.info({ month: targetMonth, year: targetYear, storeId: targetStoreId, rowCount: rows.length }, 'Report generated');
+      log?.info(
+        { month: targetMonth, year: targetYear, storeId: targetStoreId, rowCount: rows.length },
+        'Report generated',
+      );
       return c.json(rows);
     } catch (error) {
       log?.error({ error }, 'Failed to generate report');

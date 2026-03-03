@@ -27,14 +27,17 @@ const selectedFileName = ref<string>('');
 const isDragging = ref(false);
 
 // Clear file selection when modal is closed
-watch(() => props.open, (newOpen) => {
-  if (!newOpen) {
-    selectedFileName.value = '';
-    if (fileInputRef.value) {
-      fileInputRef.value.value = '';
+watch(
+  () => props.open,
+  (newOpen) => {
+    if (!newOpen) {
+      selectedFileName.value = '';
+      if (fileInputRef.value) {
+        fileInputRef.value.value = '';
+      }
     }
-  }
-});
+  },
+);
 
 const fileSize = computed(() => {
   if (!fileInputRef.value?.files?.[0]) return null;

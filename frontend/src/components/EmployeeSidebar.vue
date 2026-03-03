@@ -209,6 +209,11 @@ onMounted(async () => {
   autoSelectCurrentUser();
 });
 
+// Expose loadEmployees for parent component to call after Excel import
+defineExpose({
+  loadEmployees,
+});
+
 // Keyboard navigation - optimized for performance
 const handleKeydown = (event: KeyboardEvent) => {
   // Early returns for better performance
@@ -257,7 +262,7 @@ onUnmounted(() => {
 // Computed totals (excluding current user who is shown in the widget)
 const totalEmployees = computed(() => {
   const userId = currentUserId.value;
-  return employees.value.filter(emp => emp.casdoor_id !== userId).length;
+  return employees.value.filter((emp) => emp.casdoor_id !== userId).length;
 });
 const totalStores = computed(() => employeesByStore.value.size);
 </script>

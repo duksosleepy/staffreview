@@ -9,7 +9,12 @@ export const ROLES = {
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 // Permission definitions
-export type Permission = 'sheet:view' | 'checklist:check_employee' | 'checklist:check_cht' | 'checklist:check_asm' | 'admin:view_all';
+export type Permission =
+  | 'sheet:view'
+  | 'checklist:check_employee'
+  | 'checklist:check_cht'
+  | 'checklist:check_asm'
+  | 'admin:view_all';
 
 // Role to permissions mapping
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {

@@ -25,11 +25,14 @@ const emit = defineEmits<{
 const selectedStore = ref<string>('');
 
 // Clear selection when modal is closed
-watch(() => props.open, (newOpen) => {
-  if (!newOpen) {
-    selectedStore.value = '';
-  }
-});
+watch(
+  () => props.open,
+  (newOpen) => {
+    if (!newOpen) {
+      selectedStore.value = '';
+    }
+  },
+);
 
 const handleClose = () => {
   emit('update:open', false);

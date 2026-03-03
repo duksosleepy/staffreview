@@ -354,9 +354,7 @@ export const fetchCasdoorUsersByStores = async (
 };
 
 // Fetch a single Casdoor user by their Casdoor user ID to get their hr_id (properties.ID)
-export const fetchCasdoorUserById = async (
-  userId: string
-): Promise<{ casdoor_id: string } | null> => {
+export const fetchCasdoorUserById = async (userId: string): Promise<{ casdoor_id: string } | null> => {
   const owner = process.env.CASDOOR_ORG || 'lug.vn';
   const params = new URLSearchParams({
     owner,

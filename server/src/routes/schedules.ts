@@ -175,10 +175,16 @@ export const scheduleRoutes = new Hono<Env>()
 
       return c.json({ success: true });
     } catch (error) {
-      log?.error({ error, errorMessage: error instanceof Error ? error.message : String(error) }, 'Failed to upsert employee schedule');
-      return c.json({
-        error: 'Failed to save schedule',
-        details: error instanceof Error ? error.message : String(error)
-      }, 500);
+      log?.error(
+        { error, errorMessage: error instanceof Error ? error.message : String(error) },
+        'Failed to upsert employee schedule',
+      );
+      return c.json(
+        {
+          error: 'Failed to save schedule',
+          details: error instanceof Error ? error.message : String(error),
+        },
+        500,
+      );
     }
   });

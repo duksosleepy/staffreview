@@ -41,9 +41,7 @@ defineOptions({
 });
 
 // Lazy load EmployeeSidebar for better initial load performance
-const EmployeeSidebar = defineAsyncComponent(() =>
-  import('@/components/EmployeeSidebar.vue')
-);
+const EmployeeSidebar = defineAsyncComponent(() => import('@/components/EmployeeSidebar.vue'));
 
 import '@univerjs/preset-sheets-core/lib/index.css';
 import '@univerjs/preset-sheets-data-validation/lib/index.css';
@@ -90,7 +88,18 @@ onErrorCaptured((err, instance, info) => {
 // Show sidebar for Admin/CHT/ASM (Admin can view all users but has no spreadsheet)
 const showSidebar = computed(() => {
   const show = isAdmin.value || isCht.value || isAsm.value;
-  console.log('[Sidebar] Role:', auth.role, 'isAdmin:', isAdmin.value, 'isCht:', isCht.value, 'isAsm:', isAsm.value, 'showSidebar:', show);
+  console.log(
+    '[Sidebar] Role:',
+    auth.role,
+    'isAdmin:',
+    isAdmin.value,
+    'isCht:',
+    isCht.value,
+    'isAsm:',
+    isAsm.value,
+    'showSidebar:',
+    show,
+  );
   return show;
 });
 
@@ -106,8 +115,8 @@ const sheet1ColumnVisibility = computed(() => {
   // Default: hide all columns except Employee
   const visibility = {
     employee: false, // Column 1 - "NHÂN VIÊN"
-    cht: false,      // Column 2 - "CHT"
-    asm: false,      // Column 3 - "ASM"
+    cht: false, // Column 2 - "CHT"
+    asm: false, // Column 3 - "ASM"
   };
 
   if (isViewingOwnData) {
@@ -209,7 +218,7 @@ function toggleSheet3Visibility(visible: boolean) {
         rowData: { 0: { h: 42, hd: 0 } },
         columnData: {
           0: { w: 200 }, // Employee name
-          1: { w: 80 },  // Region
+          1: { w: 80 }, // Region
           2: { w: 120 }, // Department
           3: { w: 100 }, // Position
           // Day columns (N1-N31) - columns 4-34
@@ -237,6 +246,7 @@ function toggleSheet3Visibility(visible: boolean) {
 
 const containerRef = ref<HTMLDivElement | null>(null);
 const loadingOverlayRef = ref<HTMLDivElement | null>(null);
+const employeeSidebarRef = ref<InstanceType<typeof EmployeeSidebar> | null>(null);
 let univerInstance: Univer | null = null;
 let univerAPI: FUniver | null = null;
 
@@ -289,28 +299,31 @@ async function handleExportSubmit(storeId: string) {
     type Schema = Parameters<typeof writeXlsxFile>[1]['schema'];
 
     const schema: Schema = [
-      { column: 'STT',            type: Number, value: (r: CellValue[]) => r[0] as number },
-      { column: 'MIỀN',           type: String, value: (r: CellValue[]) => r[1] as string },
-      { column: 'CỬA HÀNG',       type: String, value: (r: CellValue[]) => r[2] as string },
-      { column: 'ASM PHỤ TRÁCH',  type: String, value: (r: CellValue[]) => r[3] as string },
-      { column: 'ID HRM',         type: String, value: (r: CellValue[]) => r[4] as string },
-      { column: 'TÊN NHÂN VIÊN',  type: String, value: (r: CellValue[]) => r[5] as string },
-      { column: 'VỊ TRÍ',         type: String, value: (r: CellValue[]) => r[6] as string },
-      { column: 'TỶ LỆ ĐẠT (%)',  type: Number, value: (r: CellValue[]) => r[7] as number | null },
-      { column: 'XẾP LOẠI',       type: String, value: (r: CellValue[]) => r[8] as string | null },
+      { column: 'STT', type: Number, value: (r: CellValue[]) => r[0] as number },
+      { column: 'MIỀN', type: String, value: (r: CellValue[]) => r[1] as string },
+      { column: 'CỬA HÀNG', type: String, value: (r: CellValue[]) => r[2] as string },
+      { column: 'ASM PHỤ TRÁCH', type: String, value: (r: CellValue[]) => r[3] as string },
+      { column: 'ID HRM', type: String, value: (r: CellValue[]) => r[4] as string },
+      { column: 'TÊN NHÂN VIÊN', type: String, value: (r: CellValue[]) => r[5] as string },
+      { column: 'VỊ TRÍ', type: String, value: (r: CellValue[]) => r[6] as string },
+      { column: 'TỶ LỆ ĐẠT (%)', type: Number, value: (r: CellValue[]) => r[7] as number | null },
+      { column: 'XẾP LOẠI', type: String, value: (r: CellValue[]) => r[8] as string | null },
     ];
 
-    const data = rows.map(r => [
-      r.stt,
-      r.region,
-      r.store_id,
-      r.asm_name,
-      r.hr_id,
-      r.employee_name,
-      r.position,
-      r.total_score,
-      r.final_classification,
-    ] as CellValue[]);
+    const data = rows.map(
+      (r) =>
+        [
+          r.stt,
+          r.region,
+          r.store_id,
+          r.asm_name,
+          r.hr_id,
+          r.employee_name,
+          r.position,
+          r.total_score,
+          r.final_classification,
+        ] as CellValue[],
+    );
 
     await writeXlsxFile(data as any, {
       schema,
@@ -501,7 +514,7 @@ async function handleImportSubmit() {
     // Reload Sheet 3 data to reflect changes
     if (successCount > 0 && isCht.value && univerAPI) {
       const schedules = await fetchEmployeeSchedules().catch(() => [] as EmployeeSchedule[]);
-      sheet3Employees = schedules.map(schedule => ({
+      sheet3Employees = schedules.map((schedule) => ({
         id: schedule.hr_id,
         name: schedule.hr_id,
         displayName: schedule.employee_name,
@@ -525,6 +538,14 @@ async function handleImportSubmit() {
           value: cells3,
         });
       }
+
+      // Refresh Sheet 1 to show tasks for imported employees with shift filtering
+      if (selectedDate.value) {
+        await refreshSheet1(selectedDate.value);
+      }
+
+      // Reload sidebar to show newly imported employees
+      await employeeSidebarRef.value?.loadEmployees();
     }
   } catch (error: unknown) {
     console.error('Import Excel error:', error);
@@ -584,7 +605,10 @@ async function groupItemsByCategory1(items: ChecklistItemWithRecord[]) {
   // Fetch all categories from database
   const allCategories = await fetchDetailCategories();
 
-  console.log('[Sheet1] All categories from DB:', allCategories.map(c => c.name));
+  console.log(
+    '[Sheet1] All categories from DB:',
+    allCategories.map((c) => c.name),
+  );
   console.log('[Sheet1] Items received:', items.length);
 
   // Initialize all categories with empty arrays
@@ -601,10 +625,13 @@ async function groupItemsByCategory1(items: ChecklistItemWithRecord[]) {
   }
 
   // Log final grouping
-  console.log('[Sheet1] Grouped categories:', Array.from(grouped.entries()).map(([name, items]) => ({
-    name,
-    itemCount: items.length
-  })));
+  console.log(
+    '[Sheet1] Grouped categories:',
+    Array.from(grouped.entries()).map(([name, items]) => ({
+      name,
+      itemCount: items.length,
+    })),
+  );
 
   return grouped;
 }
@@ -702,7 +729,9 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
   let currentRow = DATA_START_ROW;
 
   for (const [categoryName, categoryItems] of grouped) {
-    console.log(`[Sheet1] BEFORE - Category: ${categoryName}, items: ${categoryItems.length}, currentRow: ${currentRow}`);
+    console.log(
+      `[Sheet1] BEFORE - Category: ${categoryName}, items: ${categoryItems.length}, currentRow: ${currentRow}`,
+    );
 
     expandedGroups1.set(categoryName, false);
     rowMapping1.checklistRows.set(currentRow, categoryName);
@@ -750,11 +779,18 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
       start: childStartRow,
       count: categoryItems.length,
     });
-    console.log(`[Sheet1] AFTER - Category: ${categoryName}, currentRow: ${currentRow}, childRange: {start: ${childStartRow}, count: ${categoryItems.length}}\n`);
+    console.log(
+      `[Sheet1] AFTER - Category: ${categoryName}, currentRow: ${currentRow}, childRange: {start: ${childStartRow}, count: ${categoryItems.length}}\n`,
+    );
   }
 
   console.log(`[Sheet1] Total rows rendered: ${currentRow}, Total cells created: ${Object.keys(cells).length}`);
-  console.log('[Sheet1] Cell rows:', Object.keys(cells).map(Number).sort((a, b) => a - b));
+  console.log(
+    '[Sheet1] Cell rows:',
+    Object.keys(cells)
+      .map(Number)
+      .sort((a, b) => a - b),
+  );
 
   return { cells, totalRows: currentRow, columnMap, totalColumns };
 }
@@ -814,8 +850,10 @@ async function refreshSheet1(date?: string) {
     const items = await fetchAllChecklistItems(date, selectedStaffId.value);
     const { cells, totalRows, columnMap, totalColumns } = await buildSheet1CellData(items, date || '');
 
-    console.log('[refreshSheet1] After buildSheet1CellData, rowMapping1.checklistRows:',
-      Array.from(rowMapping1.checklistRows.entries()));
+    console.log(
+      '[refreshSheet1] After buildSheet1CellData, rowMapping1.checklistRows:',
+      Array.from(rowMapping1.checklistRows.entries()),
+    );
     console.log('[refreshSheet1] Column map:', columnMap);
     console.log('[refreshSheet1] Total columns:', totalColumns);
 
@@ -1058,7 +1096,9 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
   let currentRow = 2; // Start data at row 2 (after header and summary row)
 
   for (const [categoryName, categoryItems] of grouped) {
-    console.log(`[Sheet2] BEFORE - Category: ${categoryName}, items: ${categoryItems.length}, currentRow: ${currentRow}`);
+    console.log(
+      `[Sheet2] BEFORE - Category: ${categoryName}, items: ${categoryItems.length}, currentRow: ${currentRow}`,
+    );
 
     expandedGroups2.set(categoryName, false);
     rowMapping2.checklistRows.set(currentRow, categoryName);
@@ -1089,7 +1129,8 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
       itemCount++;
     }
     const averageScore = itemCount > 0 ? Math.round((totalScore / itemCount) * 100) / 100 : 0;
-    const averageAchievementPercentage = itemCount > 0 ? Math.round((totalAchievementPercentage / itemCount) * 100) / 100 : 0;
+    const averageAchievementPercentage =
+      itemCount > 0 ? Math.round((totalAchievementPercentage / itemCount) * 100) / 100 : 0;
 
     // Category header row
     const categoryRow: Record<number, { v: string | number; s?: object }> = {
@@ -1158,7 +1199,9 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
       row[summaryColStart + 5] = { v: r?.notes ?? item.notes ?? '', s: itemCellStyle };
 
       cells[currentRow] = row;
-      console.log(`[Sheet2] Created item row at ${currentRow} for item #${item.item_number}: ${item.name.substring(0, 30)}...`);
+      console.log(
+        `[Sheet2] Created item row at ${currentRow} for item #${item.item_number}: ${item.name.substring(0, 30)}...`,
+      );
       // Map this row to the DetailChecklistItem ID for Sheet 2
       rowToItemId2.set(currentRow, item.id);
       // Reverse mapping: item ID to row (for syncing from Sheet 1)
@@ -1172,8 +1215,13 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
       start: childStartRow,
       count: categoryItems.length,
     });
-    console.log(`[Sheet2] AFTER - Category: ${categoryName}, currentRow: ${currentRow}, childRange: {start: ${childStartRow}, count: ${categoryItems.length}}`);
-    console.log(`[Sheet2] rowMapping2.checklistRows for category at row ${currentRow - categoryItems.length - 1}:`, rowMapping2.checklistRows.get(currentRow - categoryItems.length - 1));
+    console.log(
+      `[Sheet2] AFTER - Category: ${categoryName}, currentRow: ${currentRow}, childRange: {start: ${childStartRow}, count: ${categoryItems.length}}`,
+    );
+    console.log(
+      `[Sheet2] rowMapping2.checklistRows for category at row ${currentRow - categoryItems.length - 1}:`,
+      rowMapping2.checklistRows.get(currentRow - categoryItems.length - 1),
+    );
   }
 
   // Calculate overall summary for row 1
@@ -1223,7 +1271,8 @@ async function buildSheet2CellData(items: DetailChecklistItemWithRecord[], month
   }
 
   // Calculate averages
-  const avgAchievementPercentage = categoryCount > 0 ? Math.round((totalAchievementPercentage / categoryCount) * 100) / 100 : 0;
+  const avgAchievementPercentage =
+    categoryCount > 0 ? Math.round((totalAchievementPercentage / categoryCount) * 100) / 100 : 0;
 
   // Determine classification based on total score
   let overallClassification = 'D';
@@ -1273,7 +1322,10 @@ function toggleGroup2(categoryName: string, headerRowIndex: number) {
   const range = rowMapping2.childRowRanges.get(categoryName);
   if (!range) return;
 
-  console.log(`[toggleGroup2] Category: "${categoryName}", headerRow: ${headerRowIndex}, isExpanded: ${isExpanded}, range:`, range);
+  console.log(
+    `[toggleGroup2] Category: "${categoryName}", headerRow: ${headerRowIndex}, isExpanded: ${isExpanded}, range:`,
+    range,
+  );
 
   // Don't toggle if there are no child rows (empty category)
   if (range.count === 0) {
@@ -1282,12 +1334,16 @@ function toggleGroup2(categoryName: string, headerRowIndex: number) {
   }
 
   if (isExpanded) {
-    console.log(`[toggleGroup2] HIDING rows ${range.start} to ${range.start + range.count - 1} (count: ${range.count})`);
+    console.log(
+      `[toggleGroup2] HIDING rows ${range.start} to ${range.start + range.count - 1} (count: ${range.count})`,
+    );
     sheet.hideRows(range.start, range.count);
     expandedGroups2.set(categoryName, false);
     sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▶ ${categoryName}`);
   } else {
-    console.log(`[toggleGroup2] SHOWING rows ${range.start} to ${range.start + range.count - 1} (count: ${range.count})`);
+    console.log(
+      `[toggleGroup2] SHOWING rows ${range.start} to ${range.start + range.count - 1} (count: ${range.count})`,
+    );
     sheet.showRows(range.start, range.count);
     expandedGroups2.set(categoryName, true);
     sheet.getRange(headerRowIndex, 1, 1, 1)?.setValue(`▼ ${categoryName}`);
@@ -1351,7 +1407,8 @@ function updateCategoryAverage(categoryName: string) {
   }
 
   const averageScore = itemCount > 0 ? Math.round((totalScore / itemCount) * 100) / 100 : 0;
-  const averageAchievementPercentage = itemCount > 0 ? Math.round((totalAchievementPercentage / itemCount) * 100) / 100 : 0;
+  const averageAchievementPercentage =
+    itemCount > 0 ? Math.round((totalAchievementPercentage / itemCount) * 100) / 100 : 0;
 
   // Update the category header row's "TL(%)ĐẠT" column (summaryCol)
   sheet.getRange(categoryHeaderRow, summaryCol, 1, 1)?.setValue(averageAchievementPercentage);
@@ -1394,7 +1451,8 @@ function updateOverallSummary() {
   }
 
   // Calculate averages
-  const avgAchievementPercentage = categoryCount > 0 ? Math.round((totalAchievementPercentage / categoryCount) * 100) / 100 : 0;
+  const avgAchievementPercentage =
+    categoryCount > 0 ? Math.round((totalAchievementPercentage / categoryCount) * 100) / 100 : 0;
 
   // Determine classification based on total score
   let overallClassification = 'D';
@@ -1535,7 +1593,8 @@ function buildSheet3CellData(items: ChecklistItemWithRecord[]) {
 
   const headerStyle = { bl: 1, vt: 2, bg: { rgb: '#E0E0E0' }, ht: 2 };
   const departmentHeaderStyle = {
-    bl: 1, vt: 2,
+    bl: 1,
+    vt: 2,
     bg: { rgb: '#4A90D9' },
     cl: { rgb: '#FFFFFF' },
     tb: 3,
@@ -1709,11 +1768,7 @@ function applyDatePickerValidation() {
 
   sheet1
     .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
-    ?.setDataValidation(
-      univerAPI.newDataValidation()
-        .requireDateBetween(minDate, maxDate)
-        .build()
-    );
+    ?.setDataValidation(univerAPI.newDataValidation().requireDateBetween(minDate, maxDate).build());
 
   console.log('[DatePicker] Applied 3-day deadline validation:', {
     role: auth.role,
@@ -1774,11 +1829,11 @@ onMounted(async () => {
   if (isCht.value) {
     const [schedules, assignments] = await Promise.all([
       fetchEmployeeSchedules().catch(() => [] as EmployeeSchedule[]),
-      fetchAssignmentsByCht().catch(() => ({} as Record<string, string[]>)),
+      fetchAssignmentsByCht().catch(() => ({}) as Record<string, string[]>),
     ]);
 
     // Convert EmployeeSchedule to StoreEmployee format for compatibility
-    sheet3Employees = schedules.map(schedule => ({
+    sheet3Employees = schedules.map((schedule) => ({
       id: schedule.hr_id,
       name: schedule.hr_id,
       displayName: schedule.employee_name,
@@ -1804,7 +1859,12 @@ onMounted(async () => {
   }
 
   // Build Sheet 1 data with selected date
-  const { cells: cells1, totalRows: totalRows1, columnMap: columnMap1, totalColumns: totalColumns1 } = await buildSheet1CellData(sheet1Items, selectedDate.value);
+  const {
+    cells: cells1,
+    totalRows: totalRows1,
+    columnMap: columnMap1,
+    totalColumns: totalColumns1,
+  } = await buildSheet1CellData(sheet1Items, selectedDate.value);
 
   // Build Sheet 2 data
   const currentDate = new Date();
@@ -1897,7 +1957,7 @@ onMounted(async () => {
       rowData: { 0: { h: 42, hd: 0 } },
       columnData: {
         0: { w: 200 }, // Employee name
-        1: { w: 80 },  // Region
+        1: { w: 80 }, // Region
         2: { w: 120 }, // Department
         3: { w: 100 }, // Position
         // Day columns (N1-N31) - columns 4-34
@@ -2099,7 +2159,9 @@ onMounted(async () => {
               });
               isRevertingValue = true;
               sheet?.getRange(row, column, 1, 1)?.setValue(0);
-              setTimeout(() => { isRevertingValue = false; }, 100);
+              setTimeout(() => {
+                isRevertingValue = false;
+              }, 100);
               return;
             }
 
@@ -2116,7 +2178,9 @@ onMounted(async () => {
               // Reset category header checkbox to 0 after action
               sheet?.getRange(row, column, 1, 1)?.setValue(0);
 
-              setTimeout(() => { isRevertingValue = false; }, 100);
+              setTimeout(() => {
+                isRevertingValue = false;
+              }, 100);
 
               // Save all child items to database
               const updatePromises: Promise<any>[] = [];
@@ -2184,8 +2248,8 @@ onMounted(async () => {
           type ColumnRole = 'employee' | 'cht' | 'asm';
           const COLUMN_CONFIG: Record<number, { role: ColumnRole; name: string }> = {
             1: { role: 'employee', name: 'NHÂN VIÊN' }, // Column B
-            2: { role: 'cht', name: 'CHT' },            // Column C
-            3: { role: 'asm', name: 'ASM' },            // Column D
+            2: { role: 'cht', name: 'CHT' }, // Column C
+            3: { role: 'asm', name: 'ASM' }, // Column D
           };
 
           const columnConfig = COLUMN_CONFIG[column];
@@ -2200,7 +2264,9 @@ onMounted(async () => {
             // Set flag to prevent recursion, then revert the value
             isRevertingValue = true;
             sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
-            setTimeout(() => { isRevertingValue = false; }, 100);
+            setTimeout(() => {
+              isRevertingValue = false;
+            }, 100);
             return;
           }
 
@@ -2244,7 +2310,8 @@ onMounted(async () => {
                 // 2. CHT is viewing an employee's spreadsheet (selectedStaffCasdoorId is set and not viewing own data)
                 const employeeValue = sheet?.getRange(row, 1, 1, 1)?.getValue();
                 const employeeChecked = employeeValue === 1 || employeeValue === '1' || employeeValue === true;
-                const isViewingEmployeeData = selectedStaffCasdoorId.value !== undefined && selectedStaffCasdoorId.value !== auth.casdoorId;
+                const isViewingEmployeeData =
+                  selectedStaffCasdoorId.value !== undefined && selectedStaffCasdoorId.value !== auth.casdoorId;
                 shouldSync = !employeeChecked && isViewingEmployeeData;
               }
 
@@ -2332,7 +2399,9 @@ onMounted(async () => {
             // Set flag to prevent recursion, then revert the value
             isRevertingValue = true;
             sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
-            setTimeout(() => { isRevertingValue = false; }, 100);
+            setTimeout(() => {
+              isRevertingValue = false;
+            }, 100);
           }
         }
 
@@ -2600,7 +2669,8 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', visibilityHandler);
 
   // Store handler for cleanup
-  (window as unknown as { __datePickerVisibilityHandler?: () => void }).__datePickerVisibilityHandler = visibilityHandler;
+  (window as unknown as { __datePickerVisibilityHandler?: () => void }).__datePickerVisibilityHandler =
+    visibilityHandler;
 });
 
 onUnmounted(() => {
@@ -2804,7 +2874,7 @@ onUnmounted(() => {
     <!-- Main Content Area with optional sidebar -->
     <div class="flex-1 flex overflow-hidden relative z-0">
       <!-- Employee Sidebar (Admin/CHT/ASM) -->
-      <EmployeeSidebar v-if="showSidebar" @select="onEmployeeSelect" />
+      <EmployeeSidebar v-if="showSidebar" ref="employeeSidebarRef" @select="onEmployeeSelect" />
 
       <!-- Admin View: Only sidebar, no spreadsheet -->
       <div v-if="isAdmin" class="flex-1 p-3 sm:p-5 overflow-hidden flex items-center justify-center">

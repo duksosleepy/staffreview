@@ -17,11 +17,11 @@ const label = (d: ClassificationData) => d.type;
 
 // Color mapping for classification types
 const colorMap: Record<string, string> = {
-  'A': '#10B981', // Green - Excellent
-  'B': '#3B82F6', // Blue - Good
-  'C': '#F59E0B', // Orange - Acceptable
-  'D': '#EF4444', // Red - Below Standard
-  'KHONG_DAT': '#EF4444', // Red - Not Achieved
+  A: '#10B981', // Green - Excellent
+  B: '#3B82F6', // Blue - Good
+  C: '#F59E0B', // Orange - Acceptable
+  D: '#EF4444', // Red - Below Standard
+  KHONG_DAT: '#EF4444', // Red - Not Achieved
 };
 
 const color = (d: ClassificationData) => colorMap[d.type] || '#6B7280';

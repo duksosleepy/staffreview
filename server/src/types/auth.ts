@@ -19,9 +19,9 @@ export type Permission =
 // Role to permissions mapping
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: ['sheet:view', 'checklist:check_employee', 'checklist:check_cht', 'checklist:check_asm', 'admin:view_all'],
-  asm: ['sheet:view', 'checklist:check_employee', 'checklist:check_cht', 'checklist:check_asm'],
-  cht: ['sheet:view', 'checklist:check_employee', 'checklist:check_cht'],
-  employee: ['sheet:view', 'checklist:check_employee'],
+  asm: ['sheet:view', 'checklist:check_asm'], // ASM can only check ASM column
+  cht: ['sheet:view', 'checklist:check_cht'], // CHT can only check CHT column
+  employee: ['sheet:view', 'checklist:check_employee'], // Employee can only check employee column
 };
 
 // User type from JWT payload

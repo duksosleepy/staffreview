@@ -261,8 +261,9 @@ export const checklistRoutes = new Hono<Env>()
       const dateParts = date.split('-');
       const dayOfMonth = Number.parseInt(dateParts[2], 10); // Get day (1-31)
 
-      // Filter: show task if applicable_days is null/empty (daily tasks) OR if current day is in the array
-      itemFilter += ` and (not exists .applicable_days or len(.applicable_days) = 0 or <int32>$dayOfMonth in array_unpack(.applicable_days))`;
+      // Filter: show task if applicable_days is null (daily tasks) OR if current day is in the array
+      // Note: We don't need to check len = 0 because empty arrays won't have dayOfMonth in them anyway
+      itemFilter += ` and (not exists .applicable_days or <int32>$dayOfMonth in array_unpack(.applicable_days))`;
       queryParams.dayOfMonth = dayOfMonth;
 
       log?.info({ dayOfMonth, itemFilter }, 'Filtering tasks by applicable_days');
@@ -375,6 +376,16 @@ export const checklistRoutes = new Hono<Env>()
       }
     }
 
+    // Log final filter for debugging
+    log?.info({
+      itemFilter,
+      queryParams,
+      date,
+      staff_id,
+      role: user.role,
+      shouldFilterByShift
+    }, 'Final filter before query execution');
+
     // Now using DetailChecklistItem as the source of truth for both sheets
     // Sheet 1 uses checklist_records backlink for approval workflow
     const query = date
@@ -471,6 +482,13 @@ export const checklistRoutes = new Hono<Env>()
           ),
         })
       : await db.query(query, queryParams);
+
+    log?.info({
+      resultCount: result.length,
+      date,
+      staff_id,
+      role: user.role
+    }, 'Query result count');
 
     return c.json(result);
   })

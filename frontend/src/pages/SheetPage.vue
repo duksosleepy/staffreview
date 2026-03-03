@@ -583,13 +583,20 @@ const DATE_PICKER_VALUE_COL = 1; // The dropdown cell is in column B (index 1)
 const DATA_START_ROW = 2; // Data starts after header row (row 1)
 
 // Convert Excel serial date number to ISO date string (YYYY-MM-DD)
+// Uses UTC to avoid timezone-related off-by-one errors
 function serialToDate(serial: number): string {
-  const excelEpoch = new Date(1899, 11, 30);
+  // Excel epoch: December 30, 1899 (accounting for Excel's 1900 leap year bug)
+  const excelEpochDays = 25569; // Days between Dec 30, 1899 and Jan 1, 1970 (Unix epoch)
   const msPerDay = 24 * 60 * 60 * 1000;
-  const date = new Date(excelEpoch.getTime() + serial * msPerDay);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+
+  // Convert to Unix timestamp in UTC
+  const unixTimestamp = (serial - excelEpochDays) * msPerDay;
+  const date = new Date(unixTimestamp);
+
+  // Use UTC methods to avoid timezone issues
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
@@ -2599,12 +2606,15 @@ onMounted(async () => {
         } else if (typeof cellValue === 'string') {
           // Parse M/D/YYYY or other date string formats
           const dateStr = cellValue.toString();
-          const parsed = new Date(dateStr);
-          if (!Number.isNaN(parsed.getTime())) {
-            const year = parsed.getFullYear();
-            const month = String(parsed.getMonth() + 1).padStart(2, '0');
-            const day = String(parsed.getDate()).padStart(2, '0');
-            isoDate = `${year}-${month}-${day}`;
+          // Parse as local date to avoid timezone issues
+          const parts = dateStr.split('/');
+          if (parts.length === 3) {
+            const month = Number.parseInt(parts[0], 10);
+            const day = Number.parseInt(parts[1], 10);
+            const year = Number.parseInt(parts[2], 10);
+            if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+              isoDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            }
           }
         }
 

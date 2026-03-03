@@ -121,6 +121,7 @@ const extractRoleFromUser = (user: any): Role => {
 
 // Map Casdoor tag display names to internal role codes
 const TAG_TO_ROLE: Record<string, Role> = {
+  admin: 'admin',
   'area manager': 'asm',
   asm: 'asm',
   cht: 'cht',
@@ -134,7 +135,7 @@ const normalizeRole = (value: string): Role | null => {
 
 // Validate role string
 const isValidRole = (role: string): role is Role => {
-  return ['asm', 'cht', 'employee'].includes(role);
+  return ['admin', 'asm', 'cht', 'employee'].includes(role);
 };
 
 // Create app JWT with user info and role

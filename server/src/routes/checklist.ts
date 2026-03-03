@@ -272,8 +272,9 @@ export const checklistRoutes = new Hono<Env>()
     // Applies when:
     // 1. Employee views their own tasks
     // 2. CHT/ASM views a specific employee's tasks (staff_id provided)
-    // 3. CHT views their own tasks (no staff_id) — filter by CHT's own shift
-    const shouldFilterByShift = (user.role === 'employee' || user.role === 'cht' || staff_id) && date;
+    // CHT viewing their own sheet (no staff_id) should NOT filter by shift
+    // because they are reviewing employee tasks, not doing tasks themselves
+    const shouldFilterByShift = (user.role === 'employee' || staff_id) && date;
 
     log?.info({ shouldFilterByShift, staff_id, date, role: user.role }, 'Shift filter decision');
 

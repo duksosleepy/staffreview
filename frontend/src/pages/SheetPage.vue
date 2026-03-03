@@ -466,6 +466,9 @@ async function handleImportSubmit() {
       status: assignment.status,
     }));
 
+    console.log('Schedules to upsert:', schedulesToUpsert.length);
+    console.log('Sample schedule:', schedulesToUpsert[0]);
+
     // Save schedules to database
     let successCount = 0;
     let errorCount = 0;
@@ -473,6 +476,7 @@ async function handleImportSubmit() {
 
     for (const schedule of schedulesToUpsert) {
       try {
+        console.log(`Upserting schedule for ${schedule.employee_name} (${schedule.hr_id})`);
         await upsertEmployeeSchedule({
           hr_id: schedule.hr_id,
           employee_name: schedule.employee_name,
@@ -483,6 +487,7 @@ async function handleImportSubmit() {
           status: schedule.status,
         });
         successCount++;
+        console.log(`Success: ${schedule.employee_name}`);
       } catch (error: unknown) {
         errorCount++;
         const message = error instanceof Error ? error.message : 'Unknown error';

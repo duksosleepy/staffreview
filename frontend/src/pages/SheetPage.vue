@@ -681,7 +681,8 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
     columnMap.push({ index: nextColIndex++, type: 'asm' });
   }
 
-  const totalColumns = nextColIndex; // Total number of columns
+  // Ensure at least 2 columns for date picker (label + value)
+  const totalColumns = Math.max(nextColIndex, 2);
 
   // Row 0: Date picker row with label and dropdown cell
   const datePickerLabelStyle = {
@@ -1941,6 +1942,7 @@ onMounted(async () => {
   // Build column data for Sheet 1 dynamically based on visible columns
   const sheet1ColumnData: Record<number, { w: number }> = {
     0: { w: 400 }, // Checklist/Item name (always visible)
+    1: { w: 100 }, // Ensure column 1 exists for date picker value (or first checkbox)
   };
   for (const col of columnMap1) {
     sheet1ColumnData[col.index] = { w: 100 }; // Standard width for checkbox columns

@@ -922,6 +922,15 @@ async function refreshSheet1(date?: string) {
       expandedGroups1.set(categoryName, false);
     }
 
+    // Re-apply date picker validation (must be done after sheet recreation)
+    const { minDate, maxDate } = calculateValidDateRange();
+    const dateValidation = univerAPI
+      .newDataValidation()
+      .requireDateBetween(minDate, maxDate)
+      .setOptions({ renderMode: 1 }) // DataValidationRenderMode.ARROW = 1 (shows dropdown arrow)
+      .build();
+    sheet.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)?.setDataValidation(dateValidation);
+
     // Re-apply checkbox validation for visible columns
     const checkboxStartRow = DATA_START_ROW + 1;
     const columnLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
@@ -1783,9 +1792,13 @@ function applyDatePickerValidation() {
   const sheet1 = workbook.getSheetBySheetId('sheet1');
   if (!sheet1) return;
 
-  sheet1
-    .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
-    ?.setDataValidation(univerAPI.newDataValidation().requireDateBetween(minDate, maxDate).build());
+  const validation = univerAPI
+    .newDataValidation()
+    .requireDateBetween(minDate, maxDate)
+    .setOptions({ renderMode: 1 }) // DataValidationRenderMode.ARROW = 1 (shows dropdown arrow)
+    .build();
+
+  sheet1.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)?.setDataValidation(validation);
 
   console.log('[DatePicker] Applied 3-day deadline validation:', {
     role: auth.role,
@@ -2018,9 +2031,12 @@ onMounted(async () => {
       // Set up date picker with DATE validation (shows calendar popup)
       // Dynamic date range based on role and 3-day deadline rule
       const { minDate, maxDate } = calculateValidDateRange();
-      sheet1
-        .getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)
-        ?.setDataValidation(api.newDataValidation().requireDateBetween(minDate, maxDate).build());
+      const dateValidation = api
+        .newDataValidation()
+        .requireDateBetween(minDate, maxDate)
+        .setOptions({ renderMode: 1 }) // DataValidationRenderMode.ARROW = 1 (shows dropdown arrow)
+        .build();
+      sheet1.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)?.setDataValidation(dateValidation);
 
       // Set initial date value using the correct format for Univer
       const todayFormatted = `${today.getMonth() + 1}/${today.getDate()}/${today.getFullYear()}`;

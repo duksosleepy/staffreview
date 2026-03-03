@@ -243,18 +243,14 @@ export const checklistRoutes = new Hono<Env>()
     let itemFilter = '.is_deleted = false';
     const queryParams: Record<string, unknown> = { ...params };
 
-    // Owner filter: each role only sees tasks assigned to them.
-    // When CHT views a specific employee (staff_id provided), show employee-owned tasks.
+    // Owner filter: Sheet 1 is for daily approval workflow
+    // CHT always sees employee tasks (to approve), even when viewing their own sheet
+    // Employee sees their own tasks
     if (user.role === 'employee') {
       itemFilter += " and .owner = 'employee'";
     } else if (user.role === 'cht') {
-      if (staff_id) {
-        // CHT viewing an employee's sheet — show tasks owned by employee
-        itemFilter += " and .owner = 'employee'";
-      } else {
-        // CHT viewing their own task list
-        itemFilter += " and .owner = 'cht'";
-      }
+      // CHT always sees employee tasks in Sheet 1 (approval workflow)
+      itemFilter += " and .owner = 'employee'";
     }
     // ASM: no owner filter — sees all tasks
 

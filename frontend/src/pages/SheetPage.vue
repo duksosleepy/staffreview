@@ -1815,12 +1815,6 @@ function applyDatePickerValidation() {
 }
 
 onMounted(async () => {
-  // Admin users don't use spreadsheets - they only view user data through the sidebar
-  if (isAdmin.value) {
-    console.log('[SheetPage] Admin user detected - skipping spreadsheet initialization');
-    return;
-  }
-
   if (!containerRef.value) return;
 
   // Validate deadlines on page load (invalidate expired tasks without CHT validation)
@@ -1855,12 +1849,15 @@ onMounted(async () => {
   selectedDate.value = todayStr;
 
   // Fetch data for both sheets + Sheet 3 data (CHT only)
-  const [sheet1Items, sheet2Items] = await Promise.all([
-    fetchAllChecklistItems(selectedDate.value || undefined, selectedStaffId.value),
-    fetchAllDetailChecklistItems(undefined, undefined, selectedStaffId.value).catch(
-      () => [] as DetailChecklistItemWithRecord[],
-    ),
-  ]);
+  // For admins, start with empty data - they'll select a user to view
+  const [sheet1Items, sheet2Items] = isAdmin.value
+    ? [[], []]
+    : await Promise.all([
+        fetchAllChecklistItems(selectedDate.value || undefined, selectedStaffId.value),
+        fetchAllDetailChecklistItems(undefined, undefined, selectedStaffId.value).catch(
+          () => [] as DetailChecklistItemWithRecord[],
+        ),
+      ]);
 
   // Sheet 3: fetch employee schedules from EmployeeSchedule table (CHT/ASM only)
   if (isCht.value || isAsm.value) {
@@ -2919,8 +2916,8 @@ onUnmounted(() => {
       <!-- Employee Sidebar (Admin/CHT/ASM) -->
       <EmployeeSidebar v-if="showSidebar" ref="employeeSidebarRef" @select="onEmployeeSelect" />
 
-      <!-- Admin View: Only sidebar, no spreadsheet -->
-      <div v-if="isAdmin" class="flex-1 p-3 sm:p-5 overflow-hidden flex items-center justify-center">
+      <!-- Admin View: Show placeholder when no user selected, otherwise show spreadsheet -->
+      <div v-if="isAdmin && !selectedStaffId" class="flex-1 p-3 sm:p-5 overflow-hidden flex items-center justify-center">
         <div class="text-center max-w-md">
           <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-purple-600/10 mb-6">
             <svg class="w-10 h-10 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2934,7 +2931,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Spreadsheet Area (Non-admin users) -->
+      <!-- Spreadsheet Area (All users including admin when user selected) -->
       <div v-else class="flex-1 p-3 sm:p-5 overflow-hidden">
         <div class="relative h-full glass-card rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl z-0" style="box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(242, 236, 226, 0.05);">
           <!-- Spreadsheet container -->

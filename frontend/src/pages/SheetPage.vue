@@ -163,10 +163,22 @@ const selectedStaffRole = ref<string | undefined>(undefined);
 // Handle employee selection from sidebar
 const onEmployeeSelect = async (employee: StoreEmployee | null) => {
   if (employee) {
-    selectedStaffId.value = employee.id; // For API calls
-    selectedStaffCasdoorId.value = employee.casdoor_id; // For identity comparison
-    selectedStaffName.value = employee.displayName;
-    selectedStaffRole.value = employee.role;
+    // Check if selected employee is the current user
+    const isCurrentUser = employee.casdoor_id === auth.casdoorId;
+
+    if (isCurrentUser) {
+      // When selecting self, clear staff_id to view own data
+      selectedStaffId.value = undefined;
+      selectedStaffCasdoorId.value = undefined;
+      selectedStaffName.value = '';
+      selectedStaffRole.value = undefined;
+    } else {
+      // When selecting another employee, set their staff_id
+      selectedStaffId.value = employee.id; // For API calls
+      selectedStaffCasdoorId.value = employee.casdoor_id; // For identity comparison
+      selectedStaffName.value = employee.displayName;
+      selectedStaffRole.value = employee.role;
+    }
   } else {
     selectedStaffId.value = undefined;
     selectedStaffCasdoorId.value = undefined;
@@ -176,9 +188,9 @@ const onEmployeeSelect = async (employee: StoreEmployee | null) => {
   // Refresh both sheets with the selected employee's data
   await Promise.all([refreshSheet1(selectedDate.value || undefined), refreshSheet2()]);
 
-  // Sheet 3 ("Phân công") is only visible when CHT views their own data.
-  // Toggle it based on whether the selected employee is the CHT themselves.
-  if (isCht.value && univerAPI) {
+  // Sheet 3 ("Phân công") is only visible when CHT/ASM views their own data.
+  // Toggle it based on whether the selected employee is themselves.
+  if ((isCht.value || isAsm.value) && univerAPI) {
     const viewingSelf = !selectedStaffCasdoorId.value || selectedStaffCasdoorId.value === auth.casdoorId;
     toggleSheet3Visibility(viewingSelf);
   }
@@ -517,7 +529,7 @@ async function handleImportSubmit() {
     importFile.value = null;
 
     // Reload Sheet 3 data to reflect changes
-    if (successCount > 0 && isCht.value && univerAPI) {
+    if (successCount > 0 && (isCht.value || isAsm.value) && univerAPI) {
       const schedules = await fetchEmployeeSchedules().catch(() => [] as EmployeeSchedule[]);
       sheet3Employees = schedules.map((schedule) => ({
         id: schedule.hr_id,
@@ -1830,8 +1842,8 @@ onMounted(async () => {
     ),
   ]);
 
-  // Sheet 3: fetch employee schedules from EmployeeSchedule table (CHT only)
-  if (isCht.value) {
+  // Sheet 3: fetch employee schedules from EmployeeSchedule table (CHT/ASM only)
+  if (isCht.value || isAsm.value) {
     const [schedules, assignments] = await Promise.all([
       fetchEmployeeSchedules().catch(() => [] as EmployeeSchedule[]),
       fetchAssignmentsByCht().catch(() => ({}) as Record<string, string[]>),
@@ -1917,17 +1929,17 @@ onMounted(async () => {
     sheet1ColumnData[col.index] = { w: 100 }; // Standard width for checkbox columns
   }
 
-  // Sheet 3: build cell data (CHT only)
+  // Sheet 3: build cell data (CHT/ASM only)
   let cells3: Record<number, Record<number, { v: string | number; s?: object }>> = {};
   let totalRows3 = 0;
-  if (isCht.value) {
+  if (isCht.value || isAsm.value) {
     const sheet3Data = buildSheet3CellData(sheet1Items);
     cells3 = sheet3Data.cells;
     totalRows3 = sheet3Data.totalRows;
   }
 
-  // Create workbook — include sheet3 tab only for CHT
-  const sheetOrder = isCht.value ? ['sheet1', 'sheet2', 'sheet3'] : ['sheet1', 'sheet2'];
+  // Create workbook — include sheet3 tab only for CHT/ASM
+  const sheetOrder = (isCht.value || isAsm.value) ? ['sheet1', 'sheet2', 'sheet3'] : ['sheet1', 'sheet2'];
   const sheetsConfig: Record<string, any> = {
     sheet1: {
       id: 'sheet1',
@@ -1953,7 +1965,7 @@ onMounted(async () => {
     },
   };
 
-  if (isCht.value) {
+  if (isCht.value || isAsm.value) {
     sheetsConfig.sheet3 = {
       id: 'sheet3',
       name: 'Phân công',
@@ -1979,8 +1991,8 @@ onMounted(async () => {
 
   if (workbook) {
     // Remove any sheets that don't belong to this role.
-    // sheet3 ("Phân công") is CHT-only — delete it if present for other roles.
-    if (!isCht.value) {
+    // sheet3 ("Phân công") is CHT/ASM only — delete it if present for other roles.
+    if (!isCht.value && !isAsm.value) {
       for (const sheet of workbook.getSheets()) {
         if (sheet.getSheetId() === 'sheet3') {
           workbook.deleteSheet(sheet);
@@ -2047,8 +2059,8 @@ onMounted(async () => {
       }
     }
 
-    // Setup Sheet 3 (CHT only)
-    if (isCht.value) {
+    // Setup Sheet 3 (CHT/ASM only)
+    if (isCht.value || isAsm.value) {
       const sheet3 = workbook.getSheetBySheetId('sheet3');
       if (sheet3) {
         // Hide child rows (collapsed by default)

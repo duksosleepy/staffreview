@@ -28,8 +28,8 @@ export const scheduleRoutes = new Hono<Env>()
 
   /**
    * GET /api/schedules/by-store
-   * Returns all employee schedules for the CHT's store.
-   * Only accessible by CHT role.
+   * Returns all employee schedules for the CHT/ASM's store.
+   * Only accessible by CHT and ASM roles.
    */
   .get('/by-store', async (c) => {
     const db = c.get('db');
@@ -40,7 +40,7 @@ export const scheduleRoutes = new Hono<Env>()
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    if (user.role !== 'cht') {
+    if (user.role !== 'cht' && user.role !== 'asm') {
       return c.json({ error: 'Forbidden' }, 403);
     }
 

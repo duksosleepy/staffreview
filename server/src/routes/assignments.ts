@@ -23,7 +23,7 @@ export const assignmentRoutes = new Hono<Env>()
 
   /**
    * GET /api/assignments/by-cht
-   * Returns assignments created by the current CHT user.
+   * Returns assignments created by the current CHT/ASM user.
    * Shape: { [item_id: string]: string[] }  — item_id → list of employee_ids
    *
    * NOTE: TaskAssignment type has been removed. Tasks are now automatically assigned
@@ -37,7 +37,7 @@ export const assignmentRoutes = new Hono<Env>()
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    if (user.role !== 'cht') {
+    if (user.role !== 'cht' && user.role !== 'asm') {
       return c.json({ error: 'Forbidden' }, 403);
     }
 
@@ -61,7 +61,7 @@ export const assignmentRoutes = new Hono<Env>()
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    if (user.role !== 'cht') {
+    if (user.role !== 'cht' && user.role !== 'asm') {
       return c.json({ error: 'Forbidden' }, 403);
     }
 

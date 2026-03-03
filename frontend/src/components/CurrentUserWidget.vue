@@ -7,6 +7,10 @@ defineOptions({
   name: 'CurrentUserWidget',
 });
 
+const emit = defineEmits<{
+  click: [];
+}>();
+
 const auth = useAuthStore();
 const { getRoleDisplay, getRoleBadgeClass } = useRoleDisplay();
 
@@ -37,6 +41,7 @@ const storesDisplay = computed(() => {
   border-radius: 12px;
   padding: 14px;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .user-widget:hover {
@@ -44,6 +49,10 @@ const storesDisplay = computed(() => {
   border-color: rgba(239, 68, 68, 0.25);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+}
+
+.user-widget:active {
+  transform: scale(0.98);
 }
 
 .user-avatar {
@@ -103,7 +112,12 @@ const storesDisplay = computed(() => {
 </style>
 
 <template>
-  <div class="user-widget">
+  <button
+    type="button"
+    class="user-widget w-full text-left"
+    @click="emit('click')"
+    title="Nhấn để xem bảng công việc của bạn"
+  >
     <div class="flex items-center gap-3">
       <!-- Avatar -->
       <div class="user-avatar">
@@ -139,5 +153,5 @@ const storesDisplay = computed(() => {
         </span>
       </div>
     </div>
-  </div>
+  </button>
 </template>

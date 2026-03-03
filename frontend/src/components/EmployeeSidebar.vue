@@ -194,6 +194,17 @@ const selectEmployee = (emp: StoreEmployee) => {
 };
 
 /**
+ * Select current user (from widget click)
+ */
+const selectCurrentUser = () => {
+  const currentUser = employees.value.find((emp) => emp.casdoor_id === currentUserId.value);
+  if (currentUser) {
+    selectedId.value = currentUser.id;
+    emit('select', currentUser);
+  }
+};
+
+/**
  * Auto-select current user after employees are loaded
  */
 const autoSelectCurrentUser = () => {
@@ -408,7 +419,7 @@ const totalStores = computed(() => employeesByStore.value.size);
     <div v-if="!isCollapsed" class="flex-1 overflow-y-auto">
       <!-- Current User Widget -->
       <div v-if="!isLoading && !error" class="px-3 pt-3 pb-3 border-b border-white/5">
-        <CurrentUserWidget />
+        <CurrentUserWidget @click="selectCurrentUser" />
       </div>
 
       <!-- Loading State -->

@@ -2916,25 +2916,25 @@ onUnmounted(() => {
       <!-- Employee Sidebar (Admin/CHT/ASM) -->
       <EmployeeSidebar v-if="showSidebar" ref="employeeSidebarRef" @select="onEmployeeSelect" />
 
-      <!-- Admin View: Show placeholder when no user selected, otherwise show spreadsheet -->
-      <div v-if="isAdmin && !selectedStaffId" class="flex-1 p-3 sm:p-5 overflow-hidden flex items-center justify-center">
-        <div class="text-center max-w-md">
-          <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-purple-600/10 mb-6">
-            <svg class="w-10 h-10 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
+      <!-- Spreadsheet Area (Always rendered for initialization, conditionally displayed) -->
+      <div class="flex-1 p-3 sm:p-5 overflow-hidden relative">
+        <!-- Admin Placeholder Overlay: Show when admin has no user selected -->
+        <div v-if="isAdmin && !selectedStaffId" class="absolute inset-0 flex items-center justify-center z-10 bg-ink-deep">
+          <div class="text-center max-w-md">
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-purple-600/10 mb-6">
+              <svg class="w-10 h-10 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </div>
+            <h2 class="text-2xl font-semibold text-paper-white mb-3">Chế độ quản trị</h2>
+            <p class="text-paper-muted text-base leading-relaxed">
+              Chọn một nhân viên từ thanh bên để xem dữ liệu của họ. Admin có thể xem tất cả người dùng trong hệ thống.
+            </p>
           </div>
-          <h2 class="text-2xl font-semibold text-paper-white mb-3">Chế độ quản trị</h2>
-          <p class="text-paper-muted text-base leading-relaxed">
-            Chọn một nhân viên từ thanh bên để xem dữ liệu của họ. Admin có thể xem tất cả người dùng trong hệ thống.
-          </p>
         </div>
-      </div>
 
-      <!-- Spreadsheet Area (All users including admin when user selected) -->
-      <div v-else class="flex-1 p-3 sm:p-5 overflow-hidden">
+        <!-- Spreadsheet container (always rendered, hidden behind overlay when admin has no selection) -->
         <div class="relative h-full glass-card rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl z-0" style="box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(242, 236, 226, 0.05);">
-          <!-- Spreadsheet container -->
           <div ref="containerRef" class="w-full h-full"></div>
 
           <!-- Loading overlay -->

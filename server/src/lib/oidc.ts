@@ -331,12 +331,18 @@ export const fetchCasdoorUsersByStores = async (
       }
     }
 
-    // RBAC: CHT can only see employees and other CHTs, not ASMs
+    // RBAC: Users can only see employees with lower privilege
     // Normalize role strings to lowercase for case-insensitive comparison
     const normalizedRequesterRole = (requesterRole || 'employee').toLowerCase().trim();
     const normalizedUserRole = (role || 'employee').toLowerCase().trim();
 
-    if (normalizedRequesterRole === 'cht' && normalizedUserRole === 'asm') {
+    // Define role hierarchy
+    const roleLevel: Record<string, number> = { admin: 4, asm: 3, cht: 2, employee: 1 };
+    const requesterRoleLevel = roleLevel[normalizedRequesterRole] ?? 0;
+    const userRoleLevel = roleLevel[normalizedUserRole] ?? 0;
+
+    // Skip users with equal or higher privilege than requester
+    if (userRoleLevel >= requesterRoleLevel) {
       continue;
     }
 

@@ -102,6 +102,10 @@ const employeesByStore = computed(() => {
   const userRole = auth.role;
   const grouped = new Map<string, StoreEmployee[]>();
 
+  // Role hierarchy: Admin > ASM > CHT > Employee
+  const roleLevel: Record<string, number> = { admin: 4, asm: 3, cht: 2, employee: 1 };
+  const userRoleLevel = roleLevel[userRole] ?? 0;
+
   for (const emp of employees.value) {
     // Skip the current user - they're shown in the widget above
     if (emp.casdoor_id === userId) {
@@ -123,8 +127,11 @@ const employeesByStore = computed(() => {
       continue;
     }
 
-    // CHT users should not see ASM users
-    if (userRole === 'cht' && empRole === 'asm') {
+    // Role hierarchy filtering: users can only see lower privilege users
+    const empRoleLevel = roleLevel[empRole] ?? 0;
+
+    // Skip employees with equal or higher privilege than current user
+    if (empRoleLevel >= userRoleLevel) {
       continue;
     }
 
@@ -138,9 +145,6 @@ const employeesByStore = computed(() => {
       }
     }
   }
-
-  // Role hierarchy: Admin > ASM > CHT > Employee
-  const roleLevel: Record<string, number> = { admin: 4, asm: 3, cht: 2, employee: 1 };
 
   // Sort each store's employees by role level (high to low), then alphabetically
   for (const emps of grouped.values()) {

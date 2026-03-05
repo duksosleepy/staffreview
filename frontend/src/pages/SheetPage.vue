@@ -2449,13 +2449,34 @@ onMounted(async () => {
         const dayColStart2 = 9;
         const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
         if (sheetId === 'sheet2' && row >= 3 && column >= dayColStart2 && column < dayColStart2 + currentDaysInMonth) {
+          // Prevent all users from checking day columns in Sheet 2
+          const sheet = workbook.getSheetBySheetId('sheet2');
+          const cellValue = sheet?.getRange(row, column, 1, 1)?.getValue();
+          const isChecked = cellValue === 1 || cellValue === '1' || cellValue === true;
+
+          // Show permission denied notification
+          toaster.create({
+            title: 'Không có quyền',
+            description: 'Bạn không có quyền chỉnh sửa các cột ngày trong Sheet 2.',
+            type: 'error',
+            duration: 3000,
+          });
+
+          // Set flag to prevent recursion, then revert the change
+          isRevertingValue = true;
+          sheet?.getRange(row, column, 1, 1)?.setValue(isChecked ? 0 : 1);
+          setTimeout(() => {
+            isRevertingValue = false;
+          }, 100);
+
+          return;
+
           const itemId = rowToItemId2.get(row);
           if (!itemId) return;
 
           // Get the current checkbox value
-          const sheet = workbook.getSheetBySheetId('sheet2');
-          const cellValue = sheet?.getRange(row, column, 1, 1)?.getValue();
-          const isChecked = cellValue === 1 || cellValue === '1' || cellValue === true;
+          const cellValue2 = sheet?.getRange(row, column, 1, 1)?.getValue();
+          const isChecked2 = cellValue2 === 1 || cellValue2 === '1' || cellValue2 === true;
 
           // Calculate the day number (1-31) from the column
           const dayNumber = column - dayColStart2 + 1;

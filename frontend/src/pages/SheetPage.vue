@@ -621,6 +621,9 @@ let rowToItemId1 = new Map<number, string>();
 // Reverse mapping: item ID to row number in Sheet 1 (for syncing from Sheet 2)
 let itemIdToRow1 = new Map<string, number>();
 
+// Column mapping for Sheet 1: maps physical column index to column type (employee/cht/asm)
+let sheet1ColumnTypeMap = new Map<number, 'employee' | 'cht' | 'asm'>();
+
 // Group items by category (unified with Sheet 2)
 // Ensures all categories are present even if no items match after filtering
 async function groupItemsByCategory1(items: ChecklistItemWithRecord[]) {
@@ -749,6 +752,12 @@ async function buildSheet1CellData(items: ChecklistItemWithRecord[], dateValue: 
   rowMapping1 = { checklistRows: new Map(), childRowRanges: new Map() };
   rowToItemId1 = new Map(); // Reset the item ID mapping
   itemIdToRow1 = new Map(); // Reset the reverse mapping for Sheet 1
+
+  // Reset and populate the column type mapping
+  sheet1ColumnTypeMap.clear();
+  for (const col of columnMap) {
+    sheet1ColumnTypeMap.set(col.index, col.type);
+  }
   // Use category grouping (unified with Sheet 2)
   const grouped = await groupItemsByCategory1(items);
   let currentRow = DATA_START_ROW;
@@ -2179,21 +2188,20 @@ onMounted(async () => {
             const assessmentDate = selectedDate.value;
             if (!assessmentDate) return;
 
-            // Role-based column validation
-            type ColumnRole = 'employee' | 'cht' | 'asm';
-            const COLUMN_CONFIG: Record<number, { role: ColumnRole; name: string }> = {
-              1: { role: 'employee', name: 'NHÂN VIÊN' },
-              2: { role: 'cht', name: 'CHT' },
-              3: { role: 'asm', name: 'ASM' },
+            // Role-based column validation using dynamic column type mapping
+            const columnType = sheet1ColumnTypeMap.get(column);
+            if (!columnType) return;
+
+            const columnNameMap = {
+              employee: 'NHÂN VIÊN',
+              cht: 'CHT',
+              asm: 'ASM',
             };
 
-            const columnConfig = COLUMN_CONFIG[column];
-            if (!columnConfig) return;
-
-            if (!isRole(columnConfig.role)) {
+            if (!isRole(columnType)) {
               toaster.create({
                 title: 'Không có quyền',
-                description: `You can only edit your own column (${columnConfig.name})`,
+                description: `You can only edit your own column (${columnNameMap[columnType]})`,
                 type: 'error',
               });
               isRevertingValue = true;
@@ -2237,11 +2245,11 @@ onMounted(async () => {
                     assessment_date: assessmentDate,
                   };
 
-                  if (column === 1) {
+                  if (columnType === 'employee') {
                     payload.employee_checked = shouldTickAll;
-                  } else if (column === 2) {
+                  } else if (columnType === 'cht') {
                     payload.cht_checked = shouldTickAll;
-                  } else if (column === 3) {
+                  } else if (columnType === 'asm') {
                     payload.asm_checked = shouldTickAll;
                   }
 
@@ -2283,21 +2291,20 @@ onMounted(async () => {
           const assessmentDate = selectedDate.value;
           if (!assessmentDate) return;
 
-          // Role-based column validation
-          type ColumnRole = 'employee' | 'cht' | 'asm';
-          const COLUMN_CONFIG: Record<number, { role: ColumnRole; name: string }> = {
-            1: { role: 'employee', name: 'NHÂN VIÊN' }, // Column B
-            2: { role: 'cht', name: 'CHT' }, // Column C
-            3: { role: 'asm', name: 'ASM' }, // Column D
+          // Role-based column validation using dynamic column type mapping
+          const columnType = sheet1ColumnTypeMap.get(column);
+          if (!columnType) return;
+
+          const columnNameMap = {
+            employee: 'NHÂN VIÊN',
+            cht: 'CHT',
+            asm: 'ASM',
           };
 
-          const columnConfig = COLUMN_CONFIG[column];
-          if (!columnConfig) return;
-
-          if (!isRole(columnConfig.role)) {
+          if (!isRole(columnType)) {
             toaster.create({
               title: 'Không có quyền',
-              description: `You can only edit your own column (${columnConfig.name})`,
+              description: `You can only edit your own column (${columnNameMap[columnType]})`,
               type: 'error',
             });
             // Set flag to prevent recursion, then revert the value
@@ -2309,7 +2316,7 @@ onMounted(async () => {
             return;
           }
 
-          // Build the payload based on which column was changed
+          // Build the payload based on which column was changed (using dynamic column type)
           const payload: {
             checklist_item_id: string;
             assessment_date: string;
@@ -2321,11 +2328,11 @@ onMounted(async () => {
             assessment_date: assessmentDate,
           };
 
-          if (column === 1) {
+          if (columnType === 'employee') {
             payload.employee_checked = isChecked;
-          } else if (column === 2) {
+          } else if (columnType === 'cht') {
             payload.cht_checked = isChecked;
-          } else if (column === 3) {
+          } else if (columnType === 'asm') {
             payload.asm_checked = isChecked;
           }
 

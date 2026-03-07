@@ -254,20 +254,16 @@ export const checklistRoutes = new Hono<Env>()
     }
     // ASM: no owner filter — sees all tasks
 
-    // Applicable days filter: filter tasks by their applicable_days array
-    // If a task has applicable_days set, only show it on those specific days of the month
-    // This allows weekly/monthly tasks to appear only on certain days
-    if (date) {
-      const dateParts = date.split('-');
-      const dayOfMonth = Number.parseInt(dateParts[2], 10); // Get day (1-31)
-
-      // Filter: show task if applicable_days is null (daily tasks) OR if current day is in the array
-      // Note: We don't need to check len = 0 because empty arrays won't have dayOfMonth in them anyway
-      itemFilter += ` and (not exists .applicable_days or <int32>$dayOfMonth in array_unpack(.applicable_days))`;
-      queryParams.dayOfMonth = dayOfMonth;
-
-      log?.info({ dayOfMonth, itemFilter }, 'Filtering tasks by applicable_days');
-    }
+    // Applicable days filter: DISABLED - show all tasks on all days
+    // Previously filtered tasks by their applicable_days array to show weekly/monthly tasks only on specific days
+    // Now all tasks appear every day regardless of applicable_days setting
+    // if (date) {
+    //   const dateParts = date.split('-');
+    //   const dayOfMonth = Number.parseInt(dateParts[2], 10); // Get day (1-31)
+    //   itemFilter += ` and (not exists .applicable_days or <int32>$dayOfMonth in array_unpack(.applicable_days))`;
+    //   queryParams.dayOfMonth = dayOfMonth;
+    //   log?.info({ dayOfMonth, itemFilter }, 'Filtering tasks by applicable_days');
+    // }
 
     // Shift filter: auto-assign tasks based on the user's/employee's shift for the date.
     // Applies when:
@@ -1183,8 +1179,14 @@ export const checklistRoutes = new Hono<Env>()
       // Query EmployeeSchedule for employee info keyed by hr_id
       const schedules =
         hrIds.length > 0
-          ? await db.query<{ hr_id: string; employee_name: string; store_id: string; position: string | null }>(
-              `select EmployeeSchedule { hr_id, employee_name, store_id, position }
+          ? await db.query<{
+              hr_id: string;
+              employee_name: string;
+              store_id: string;
+              position: string | null;
+              region: string | null;
+            }>(
+              `select EmployeeSchedule { hr_id, employee_name, store_id, position, region }
              filter .hr_id in array_unpack(<array<str>>$hrIds) and .is_deleted = false`,
               { hrIds },
             )
@@ -1192,17 +1194,20 @@ export const checklistRoutes = new Hono<Env>()
 
       const scheduleByHrId = new Map(schedules.map((s) => [s.hr_id, s]));
 
-      // Collect all store_ids to look up regions from Area table
-      const storeIds = [...new Set(schedules.map((s) => s.store_id).filter(Boolean))];
-      const areas =
-        storeIds.length > 0
-          ? await db.query<{ store_id: string; region: string }>(
-              `select Area { store_id, region } filter .store_id in array_unpack(<array<str>>$storeIds)`,
-              { storeIds },
-            )
-          : [];
+      // Fetch all Area records and build a mapping from individual store_id to region
+      // Note: Area.store_id can contain comma-separated values like "LUG_THD,LUG_KDV,LUG_ABC"
+      const areas = await db.query<{ store_id: string; region: string }>(`select Area { store_id, region }`);
 
-      const regionByStoreId = new Map(areas.map((a) => [a.store_id, a.region]));
+      const regionByStoreId = new Map<string, string>();
+      for (const area of areas) {
+        // Split comma-separated store_ids and map each one to the region
+        const storeIdList = area.store_id.split(',').map((id) => id.trim());
+        for (const storeId of storeIdList) {
+          if (storeId) {
+            regionByStoreId.set(storeId, area.region);
+          }
+        }
+      }
 
       // Query pre-aggregated EmployeeMonthlyScore for the target month/year
       const monthlyScores =
@@ -1218,12 +1223,12 @@ export const checklistRoutes = new Hono<Env>()
 
       const scoreByStaffId = new Map(monthlyScores.map((s) => [s.staff_id, s]));
 
-      // Build report rows (only employees, skip CHT/ASM)
+      // Build report rows (include all roles: employee, CHT, and ASM)
       // Filter by targetStoreId if provided
       const rows = [];
       let stt = 1;
       for (const emp of casdoorEmployees) {
-        if (emp.role !== 'employee') continue;
+        // Include all roles in the report
         if (!emp.casdoor_id) continue;
 
         const hrId = emp.casdoor_id;
@@ -1237,9 +1242,12 @@ export const checklistRoutes = new Hono<Env>()
 
         const score = scoreByStaffId.get(emp.id);
 
+        // Get region from Area table first, fallback to EmployeeSchedule.region, then empty string
+        const region = regionByStoreId.get(storeId) ?? schedule?.region ?? '';
+
         rows.push({
           stt: stt++,
-          region: regionByStoreId.get(storeId) ?? '',
+          region,
           store_id: storeId,
           asm_name: user.displayName,
           hr_id: hrId,

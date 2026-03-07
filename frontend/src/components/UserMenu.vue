@@ -219,8 +219,8 @@ const handleExportReport = () => {
             <span class="text-sm font-medium text-paper-medium hover:text-paper-white transition-colors font-body flex-1">Cài đặt</span>
           </Menu.Item>
 
-          <!-- Import Excel (CHT and ASM only) -->
-          <Menu.Item v-if="role.toLowerCase() === 'cht' || role.toLowerCase() === 'asm'" value="import-excel" :class="`px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 hover:bg-ink-lighter transition-[background-color,color] duration-200 rounded-lg cursor-pointer ${FOCUS_RING_CLASSES} focus-visible:ring-inset`" @click="handleImportExcel">
+          <!-- Import Excel (CHT, ASM, and Admin) -->
+          <Menu.Item v-if="role.toLowerCase() === 'cht' || role.toLowerCase() === 'asm' || role.toLowerCase() === 'admin'" value="import-excel" :class="`px-3 py-2 mx-1 my-0.5 flex items-center gap-2.5 hover:bg-ink-lighter transition-[background-color,color] duration-200 rounded-lg cursor-pointer ${FOCUS_RING_CLASSES} focus-visible:ring-inset`" @click="handleImportExcel">
             <div class="p-1.5 rounded-lg bg-sky-500/10 text-sky-400">
               <svg
                 class="w-4 h-4"

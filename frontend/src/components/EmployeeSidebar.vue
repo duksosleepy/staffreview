@@ -75,6 +75,30 @@ const getEffectiveRole = (employee: StoreEmployee): string => {
 };
 
 /**
+ * Collapsed regions state (persisted)
+ */
+const collapsedRegions = useLocalStorage<string[]>('sidebar-collapsed-regions', []);
+
+/**
+ * Toggle region collapse state
+ */
+const toggleRegionCollapse = (regionName: string) => {
+  const index = collapsedRegions.value.indexOf(regionName);
+  if (index > -1) {
+    collapsedRegions.value.splice(index, 1);
+  } else {
+    collapsedRegions.value.push(regionName);
+  }
+};
+
+/**
+ * Check if region is collapsed
+ */
+const isRegionCollapsed = (regionName: string) => {
+  return collapsedRegions.value.includes(regionName);
+};
+
+/**
  * Toggle store section collapse
  */
 const toggleStoreCollapse = (storeName: string) => {
@@ -163,7 +187,64 @@ const employeesByStore = computed(() => {
 });
 
 /**
- * Filtered employees by search query
+ * Group employees by region, then by store
+ * Structure: Map<RegionName, Map<StoreName, StoreEmployee[]>>
+ */
+const employeesByRegion = computed(() => {
+  const byStore = employeesByStore.value;
+  const regionGrouped = new Map<string, Map<string, StoreEmployee[]>>();
+
+  // Iterate through each store and its employees
+  for (const [storeName, storeEmployees] of byStore) {
+    // Get region from the first employee in the store (all employees in same store should have same region)
+    const region = storeEmployees[0]?.region || 'Không xác định';
+
+    if (!regionGrouped.has(region)) {
+      regionGrouped.set(region, new Map());
+    }
+
+    regionGrouped.get(region)!.set(storeName, storeEmployees);
+  }
+
+  // Sort regions alphabetically
+  const sortedRegions = new Map([...regionGrouped.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+
+  return sortedRegions;
+});
+
+/**
+ * Filtered employees by search query (region grouped)
+ */
+const filteredEmployeesByRegion = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return employeesByRegion.value;
+  }
+
+  const query = searchQuery.value.toLowerCase().trim();
+  const filtered = new Map<string, Map<string, StoreEmployee[]>>();
+
+  for (const [regionName, storeMap] of employeesByRegion.value) {
+    const filteredStoreMap = new Map<string, StoreEmployee[]>();
+
+    for (const [storeName, emps] of storeMap) {
+      const matching = emps.filter(
+        (emp) => emp.displayName.toLowerCase().includes(query) || getEffectiveRole(emp).toLowerCase().includes(query),
+      );
+      if (matching.length > 0) {
+        filteredStoreMap.set(storeName, matching);
+      }
+    }
+
+    if (filteredStoreMap.size > 0) {
+      filtered.set(regionName, filteredStoreMap);
+    }
+  }
+
+  return filtered;
+});
+
+/**
+ * Filtered employees by search query (legacy - for backwards compatibility)
  */
 const filteredEmployeesByStore = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -448,31 +529,53 @@ const totalStores = computed(() => employeesByStore.value.size);
         </button>
       </div>
 
-      <!-- Employee List grouped by store -->
-      <div v-else-if="filteredEmployeesByStore.size > 0" class="p-2">
-        <div v-for="[storeName, storeEmployees] in filteredEmployeesByStore" :key="storeName" class="mb-4">
-          <!-- Store Header - Collapsible with improved hit area -->
+      <!-- Employee List grouped by region and store -->
+      <div v-else-if="filteredEmployeesByRegion.size > 0" class="p-2">
+        <div v-for="[regionName, storeMap] in filteredEmployeesByRegion" :key="regionName" class="mb-4">
+          <!-- Region Header - Collapsible -->
           <button
-            class="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium uppercase tracking-wider text-paper-white hover:text-paper-white/80 transition-colors duration-150 rounded-lg hover:bg-ink-lighter/50 group"
-            @click="toggleStoreCollapse(storeName)"
-            :aria-expanded="!isStoreCollapsed(storeName)"
+            class="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-bold uppercase tracking-wider text-vermillion-200 hover:text-vermillion-100 transition-colors duration-150 rounded-lg hover:bg-ink-lighter/50 group"
+            @click="toggleRegionCollapse(regionName)"
+            :aria-expanded="!isRegionCollapsed(regionName)"
           >
-            <!-- Larger chevron with better visual hierarchy -->
+            <!-- Chevron for region -->
             <div class="shrink-0 w-5 h-5 flex items-center justify-center">
               <ChevronIcon
-                :direction="isStoreCollapsed(storeName) ? 'right' : 'down'"
+                :direction="isRegionCollapsed(regionName) ? 'right' : 'down'"
                 class="w-4 h-4 transition-transform duration-200 ease-out group-hover:scale-110"
               />
             </div>
-            <span class="truncate flex-1 text-left">{{ storeName }}</span>
-            <span class="text-[10px] text-paper-muted shrink-0 px-1.5 py-0.5 rounded bg-ink-lighter/50">{{ storeEmployees.length }}</span>
+            <span class="truncate flex-1 text-left">{{ regionName }}</span>
+            <span class="text-[10px] text-paper-muted shrink-0 px-1.5 py-0.5 rounded bg-vermillion-500/30">
+              {{ Array.from(storeMap.values()).reduce((sum, emps) => sum + emps.length, 0) }}
+            </span>
           </button>
 
-          <!-- Employee List -->
-          <div
-            v-show="!isStoreCollapsed(storeName)"
-            class="space-y-0.5 mt-0.5 ml-2 pl-3"
-          >
+          <!-- Stores within Region -->
+          <div v-show="!isRegionCollapsed(regionName)" class="ml-4 mt-2 space-y-3">
+            <div v-for="[storeName, storeEmployees] in storeMap" :key="storeName" class="mb-2">
+              <!-- Store Header - Collapsible with improved hit area -->
+              <button
+                class="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium uppercase tracking-wider text-paper-white hover:text-paper-white/80 transition-colors duration-150 rounded-lg hover:bg-ink-lighter/50 group"
+                @click="toggleStoreCollapse(storeName)"
+                :aria-expanded="!isStoreCollapsed(storeName)"
+              >
+                <!-- Larger chevron with better visual hierarchy -->
+                <div class="shrink-0 w-5 h-5 flex items-center justify-center">
+                  <ChevronIcon
+                    :direction="isStoreCollapsed(storeName) ? 'right' : 'down'"
+                    class="w-4 h-4 transition-transform duration-200 ease-out group-hover:scale-110"
+                  />
+                </div>
+                <span class="truncate flex-1 text-left">{{ storeName }}</span>
+                <span class="text-[10px] text-paper-muted shrink-0 px-1.5 py-0.5 rounded bg-ink-lighter/50">{{ storeEmployees.length }}</span>
+              </button>
+
+              <!-- Employee List -->
+              <div
+                v-show="!isStoreCollapsed(storeName)"
+                class="space-y-0.5 mt-0.5 ml-2 pl-3"
+              >
             <button
               v-for="emp in storeEmployees"
               :key="emp.id"
@@ -531,12 +634,14 @@ const totalStores = computed(() => employeesByStore.value.size);
                 </div>
               </div>
             </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Empty Search State -->
-      <div v-else-if="searchQuery && filteredEmployeesByStore.size === 0" class="px-4 py-12 text-center">
+      <div v-else-if="searchQuery && filteredEmployeesByRegion.size === 0" class="px-4 py-12 text-center">
         <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-ink-lighter/50 mb-3">
           <svg class="w-5 h-5 text-paper-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

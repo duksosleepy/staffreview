@@ -36,6 +36,21 @@ export const employeeRoutes = new Hono<Env>()
       // Fetch Casdoor users
       const casdoorEmployees = await fetchCasdoorUsersByStores(user.stores, user.role);
 
+      // Fetch all Area records and build a mapping from individual store_id to region
+      // Note: Area.store_id can contain comma-separated values like "LUG_THD,LUG_KDV,LUG_ABC"
+      const areas = await db.query<{ store_id: string; region: string }>(`select Area { store_id, region }`);
+
+      const regionByStoreId = new Map<string, string>();
+      for (const area of areas) {
+        // Split comma-separated store_ids and map each one to the region
+        const storeIdList = area.store_id.split(',').map((id) => id.trim());
+        for (const storeId of storeIdList) {
+          if (storeId) {
+            regionByStoreId.set(storeId, area.region);
+          }
+        }
+      }
+
       // Fetch imported employees from EmployeeSchedule (those not in Casdoor yet)
       const schedules = await db.query<{
         hr_id: string;
@@ -75,7 +90,7 @@ export const employeeRoutes = new Hono<Env>()
           casdoor_id: schedule.hr_id,
           role: 'employee',
           department: schedule.store_id,
-          region: schedule.region,
+          region: regionByStoreId.get(schedule.store_id) || schedule.region || '',
           hr_id: schedule.hr_id,
           position: schedule.position,
           daily_schedule: schedule.daily_schedule,
@@ -86,14 +101,23 @@ export const employeeRoutes = new Hono<Env>()
         if (emp.casdoor_id) {
           const schedule = schedules.find((s) => s.hr_id === emp.casdoor_id);
           if (schedule) {
+            // Get region from Area table first, fallback to EmployeeSchedule.region
+            const region = regionByStoreId.get(schedule.store_id) || schedule.region || '';
             return {
               ...emp,
               department: schedule.store_id,
-              region: schedule.region,
+              region,
               hr_id: schedule.hr_id,
               position: schedule.position,
               daily_schedule: schedule.daily_schedule,
             };
+          }
+        }
+        // For employees without schedule, try to get region from their first store
+        if (emp.stores && emp.stores.length > 0) {
+          const region = regionByStoreId.get(emp.stores[0]);
+          if (region) {
+            return { ...emp, region };
           }
         }
         return emp;

@@ -82,7 +82,7 @@ export const scheduleRoutes = new Hono<Env>()
   /**
    * POST /api/schedules/upsert
    * Upserts an employee's schedule (creates or updates).
-   * Both CHT and ASM roles are allowed.
+   * CHT, ASM, and Admin roles are allowed.
    */
   .post('/upsert', zValidator('json', UpsertScheduleSchema), async (c) => {
     const { hr_id, employee_name, store_id, daily_schedule, region, position, status } = c.req.valid('json');
@@ -94,8 +94,8 @@ export const scheduleRoutes = new Hono<Env>()
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    // Allow both CHT and ASM to import employee schedules
-    if (user.role !== 'cht' && user.role !== 'asm') {
+    // Allow CHT, ASM, and Admin to import employee schedules
+    if (user.role !== 'cht' && user.role !== 'asm' && user.role !== 'admin') {
       return c.json({ error: 'Forbidden' }, 403);
     }
 

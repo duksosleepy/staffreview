@@ -1200,8 +1200,8 @@ export const checklistRoutes = new Hono<Env>()
 
   /**
    * GET /api/checklist/report?month=&year=&store_id=
-   * Returns per-employee achievement summary for ASM export report.
-   * Only ASM role is allowed.
+   * Returns per-employee achievement summary for ASM and Admin export report.
+   * ASM and Admin roles are allowed.
    * Optionally filter by store_id parameter.
    */
   .get('/report', async (c) => {
@@ -1213,7 +1213,7 @@ export const checklistRoutes = new Hono<Env>()
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    if (user.role !== 'asm') {
+    if (user.role !== 'asm' && user.role !== 'admin') {
       return c.json({ error: 'Forbidden' }, 403);
     }
 

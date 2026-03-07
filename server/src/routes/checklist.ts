@@ -355,8 +355,14 @@ export const checklistRoutes = new Hono<Env>()
 
               // Filter items: show tasks matching this shift type (keep existing owner filter)
               if (shiftType === 'S' || shiftType === 'C' || shiftType === 'F') {
-                itemFilter += ` and (.task_type = <optional default::ShiftType>$taskType or not exists .task_type)`;
-                queryParams.taskType = shiftType;
+                if (shiftType === 'F') {
+                  // Full day shift: show S (Morning), C (Afternoon), and F (Full day) tasks
+                  itemFilter += ` and (.task_type in {ShiftType.S, ShiftType.C, ShiftType.F} or not exists .task_type)`;
+                } else {
+                  // Morning (S) or Afternoon (C) shift: show only matching tasks
+                  itemFilter += ` and (.task_type = <optional default::ShiftType>$taskType or not exists .task_type)`;
+                  queryParams.taskType = shiftType;
+                }
                 log?.info(
                   { shiftType, date, hrId: targetHrId, isStaffView: !!staff_id, itemFilter, queryParams },
                   'Filtering tasks by shift type',

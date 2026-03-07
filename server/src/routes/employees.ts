@@ -34,7 +34,9 @@ export const employeeRoutes = new Hono<Env>()
       log?.info({ requesterRole: user.role, stores: user.stores }, 'Fetching store employees');
 
       // Fetch Casdoor users
+      log?.info({ userStores: user.stores }, 'Current user stores from JWT');
       const casdoorEmployees = await fetchCasdoorUsersByStores(user.stores, user.role);
+      log?.info({ casdoorEmployeesCount: casdoorEmployees.length }, 'Casdoor employees fetched');
 
       // Fetch all Area records and build a mapping from individual store_id to region
       // Note: Area.store_id can contain comma-separated values like "LUG_THD,LUG_KDV,LUG_ABC"
@@ -126,13 +128,22 @@ export const employeeRoutes = new Hono<Env>()
       // Combine both lists
       const allEmployees = [...enrichedCasdoorEmployees, ...importedOnly];
 
-      // Log result for debugging
+      // Log result for debugging with store breakdown
+      const storeBreakdown = new Map<string, number>();
+      for (const emp of allEmployees) {
+        for (const store of emp.stores) {
+          storeBreakdown.set(store, (storeBreakdown.get(store) || 0) + 1);
+        }
+      }
+
       log?.info(
         {
           requesterRole: user.role,
           casdoorCount: casdoorEmployees.length,
           importedOnlyCount: importedOnly.length,
           totalCount: allEmployees.length,
+          storeBreakdown: Object.fromEntries(storeBreakdown),
+          regions: [...new Set(allEmployees.map(e => e.region).filter(Boolean))],
         },
         'Store employees fetched (Casdoor + imported)',
       );

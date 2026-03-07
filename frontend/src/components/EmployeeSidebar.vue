@@ -49,6 +49,22 @@ const isCollapsed = useLocalStorage('sidebar-collapsed', false);
 const collapsedStores = useLocalStorage<string[]>('sidebar-collapsed-stores', []);
 const selectedId = shallowRef<string | null>(props.initialSelectedId || null);
 
+// Fetch store to region mapping
+const storeRegions = shallowRef<Record<string, string>>({});
+const fetchStoreRegions = async () => {
+  try {
+    const response = await fetch('/api/employees/store-regions', {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (response.ok) {
+      storeRegions.value = await response.json();
+    }
+  } catch (error) {
+    console.error('Failed to fetch store regions:', error);
+  }
+};
+
 // Use shallowRef for better performance with large arrays
 const {
   state: employees,
@@ -196,8 +212,8 @@ const employeesByRegion = computed(() => {
 
   // Iterate through each store and its employees
   for (const [storeName, storeEmployees] of byStore) {
-    // Get region from the first employee in the store (all employees in same store should have same region)
-    const region = storeEmployees[0]?.region || 'Không xác định';
+    // Get region from the storeRegions mapping (fetched from Area table)
+    const region = storeRegions.value[storeName] || storeEmployees[0]?.region || 'Không xác định';
 
     if (!regionGrouped.has(region)) {
       regionGrouped.set(region, new Map());
@@ -301,7 +317,10 @@ const autoSelectCurrentUser = () => {
 };
 
 onMounted(async () => {
-  await loadEmployees();
+  await Promise.all([
+    loadEmployees(),
+    fetchStoreRegions(),
+  ]);
   autoSelectCurrentUser();
 });
 

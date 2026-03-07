@@ -153,4 +153,37 @@ export const employeeRoutes = new Hono<Env>()
       log?.error({ error }, 'Failed to fetch store employees');
       return c.json({ error: 'Failed to fetch employees' }, 500);
     }
+  })
+
+  /**
+   * GET /api/employees/store-regions
+   * Fetch store to region mapping from Area table
+   * Returns a map of store_id -> region
+   */
+  .get('/store-regions', async (c) => {
+    const db = c.get('db');
+    const log = c.get('log');
+
+    try {
+      // Fetch all Area records
+      const areas = await db.query<{ store_id: string; region: string }>(`select Area { store_id, region }`);
+
+      // Build a map from individual store_id to region
+      // Note: Area.store_id can contain comma-separated values like "LUG_THD,LUG_KDV,LUG_ABC"
+      const storeRegionMap: Record<string, string> = {};
+      for (const area of areas) {
+        const storeIdList = area.store_id.split(',').map((id) => id.trim());
+        for (const storeId of storeIdList) {
+          if (storeId) {
+            storeRegionMap[storeId] = area.region;
+          }
+        }
+      }
+
+      log?.info({ totalStores: Object.keys(storeRegionMap).length }, 'Store regions fetched');
+      return c.json(storeRegionMap);
+    } catch (error) {
+      log?.error({ error }, 'Failed to fetch store regions');
+      return c.json({ error: 'Failed to fetch store regions' }, 500);
+    }
   });

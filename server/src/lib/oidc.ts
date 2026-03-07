@@ -360,8 +360,10 @@ export const fetchCasdoorUsersByStores = async (
   return employees;
 };
 
-// Fetch a single Casdoor user by their Casdoor user ID to get their hr_id (properties.ID)
-export const fetchCasdoorUserById = async (userId: string): Promise<{ casdoor_id: string } | null> => {
+// Fetch a single Casdoor user by their Casdoor user ID to get their hr_id (properties.ID) and role
+export const fetchCasdoorUserById = async (
+  userId: string,
+): Promise<{ casdoor_id: string; role: string } | null> => {
   const owner = process.env.CASDOOR_ORG || 'lug.vn';
   const params = new URLSearchParams({
     owner,
@@ -392,8 +394,9 @@ export const fetchCasdoorUserById = async (userId: string): Promise<{ casdoor_id
 
     const properties = user.properties ?? {};
     const casdoorId = properties.ID ?? '';
+    const role = extractRole(user.tag || '');
 
-    return { casdoor_id: casdoorId };
+    return { casdoor_id: casdoorId, role };
   } catch (error) {
     console.error('Failed to fetch Casdoor user by ID:', error);
     return null;

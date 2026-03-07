@@ -244,15 +244,46 @@ export const checklistRoutes = new Hono<Env>()
     const queryParams: Record<string, unknown> = { ...params };
 
     // Owner filter: Sheet 1 is for daily approval workflow
-    // CHT always sees employee tasks (to approve), even when viewing their own sheet
-    // Employee sees their own tasks
+    // Determine based on viewer and viewed user roles
+    let viewedUserRole: string | undefined;
+
+    // If viewing another user (staff_id provided), fetch their role
+    if (staff_id) {
+      try {
+        const { fetchCasdoorUserById } = await import('../lib/oidc.js');
+        const viewedUser = await fetchCasdoorUserById(staff_id);
+        viewedUserRole = viewedUser?.role;
+        log?.debug({ staff_id, viewedUserRole }, 'Fetched viewed user role for Sheet 1');
+      } catch (error) {
+        log?.warn({ error, staff_id }, 'Failed to fetch viewed user role for Sheet 1');
+      }
+    }
+
     if (user.role === 'employee') {
+      // Employee: sees their own tasks
       itemFilter += " and .owner = 'employee'";
     } else if (user.role === 'cht') {
       // CHT always sees employee tasks in Sheet 1 (approval workflow)
       itemFilter += " and .owner = 'employee'";
+    } else if (user.role === 'asm') {
+      // ASM viewing another user: show tasks based on viewed user's role
+      if (staff_id && viewedUserRole) {
+        if (viewedUserRole === 'employee') {
+          itemFilter += " and .owner = 'employee'";
+        } else if (viewedUserRole === 'cht') {
+          // CHT's Sheet 1 shows employee tasks (approval workflow)
+          itemFilter += " and .owner = 'employee'";
+        } else if (viewedUserRole === 'asm') {
+          // ASM's Sheet 1 - for now, show all tasks or ASM tasks
+          // This depends on your business logic
+          itemFilter += " and .owner = 'asm'";
+        }
+      }
+      // ASM viewing self (no staff_id): show ASM-owned tasks
+      else if (!staff_id) {
+        itemFilter += " and .owner = 'asm'";
+      }
     }
-    // ASM: no owner filter — sees all tasks
 
     // Applicable days filter: DISABLED - show all tasks on all days
     // Previously filtered tasks by their applicable_days array to show weekly/monthly tasks only on specific days
@@ -556,8 +587,22 @@ export const checklistRoutes = new Hono<Env>()
 
     const { filterCondition, params: staffParams } = buildStaffFilter(user, staff_id);
 
-    // Owner filter for items: same logic as Sheet 1
+    // Owner filter for items: determine based on viewer and viewed user
     let itemOwnerFilter = '.is_deleted = false';
+    let viewedUserRole: string | undefined;
+
+    // If viewing another user (staff_id provided), fetch their role
+    if (staff_id) {
+      try {
+        const { fetchCasdoorUserById } = await import('../lib/oidc.js');
+        const viewedUser = await fetchCasdoorUserById(staff_id);
+        viewedUserRole = viewedUser?.role;
+        log?.debug({ staff_id, viewedUserRole }, 'Fetched viewed user role');
+      } catch (error) {
+        log?.warn({ error, staff_id }, 'Failed to fetch viewed user role');
+      }
+    }
+
     if (user.role === 'employee') {
       itemOwnerFilter += " and .owner = 'employee'";
     } else if (user.role === 'cht') {
@@ -566,8 +611,22 @@ export const checklistRoutes = new Hono<Env>()
       } else {
         itemOwnerFilter += " and .owner = 'cht'";
       }
+    } else if (user.role === 'asm') {
+      // ASM viewing another user: show tasks based on viewed user's role
+      if (staff_id && viewedUserRole) {
+        if (viewedUserRole === 'employee') {
+          itemOwnerFilter += " and .owner = 'employee'";
+        } else if (viewedUserRole === 'cht') {
+          itemOwnerFilter += " and .owner = 'cht'";
+        } else if (viewedUserRole === 'asm') {
+          itemOwnerFilter += " and .owner = 'asm'";
+        }
+      }
+      // ASM viewing self (no staff_id): show ASM-owned tasks
+      else if (!staff_id) {
+        itemOwnerFilter += " and .owner = 'asm'";
+      }
     }
-    // ASM: no owner filter
 
     // Sheet 2 uses monthly_records backlink for monthly tracking
     const query = `

@@ -308,44 +308,73 @@ async function handleExportSubmit(storeId: string) {
     }
 
     type CellValue = string | number | null;
-    type Schema = Parameters<typeof writeXlsxFile>[1]['schema'];
 
-    const schema: Schema = [
-      { column: 'STT', type: Number, value: (r: CellValue[]) => r[0] as number },
-      { column: 'MIỀN', type: String, value: (r: CellValue[]) => r[1] as string },
-      { column: 'CỬA HÀNG', type: String, value: (r: CellValue[]) => r[2] as string },
-      { column: 'ASM PHỤ TRÁCH', type: String, value: (r: CellValue[]) => r[3] as string },
-      { column: 'ID HRM', type: String, value: (r: CellValue[]) => r[4] as string },
-      { column: 'TÊN NHÂN VIÊN', type: String, value: (r: CellValue[]) => r[5] as string },
-      { column: 'VỊ TRÍ', type: String, value: (r: CellValue[]) => r[6] as string },
-      { column: 'TỶ LỆ ĐẠT (%)', type: Number, value: (r: CellValue[]) => r[7] as number | null },
-      { column: 'XẾP LOẠI', type: String, value: (r: CellValue[]) => r[8] as string | null },
+    // Add title row as first row (will not use schema for this row)
+    const titleRow = [
+      {
+        value: `BÁO CÁO TỶ LỆ HOÀN THÀNH CÔNG VIỆC - HTHT/MIỀN/ASM/CH\nTHÁNG ${month.toString().padStart(2, '0')} NĂM ${year}`,
+        fontWeight: 'bold',
+        align: 'center',
+        span: 9,
+      }
     ];
 
     const data = rows.map(
       (r) =>
         [
-          r.stt,
-          r.region,
-          r.store_id,
-          r.asm_name,
-          r.hr_id,
-          r.employee_name,
-          r.position,
-          r.total_score,
-          r.final_classification,
-        ] as CellValue[],
+          {
+            type: Number,
+            value: r.stt,
+          },
+          {
+            type: String,
+            value: r.region,
+          },
+          {
+            type: String,
+            value: r.store_id,
+          },
+          {
+            type: String,
+            value: r.asm_name,
+          },
+          {
+            type: String,
+            value: r.hr_id,
+          },
+          {
+            type: String,
+            value: r.employee_name,
+          },
+          {
+            type: String,
+            value: r.position,
+          },
+          {
+            type: Number,
+            value: r.total_score,
+          },
+          {
+            type: String,
+            value: r.final_classification,
+          },
+        ],
     );
 
-    await writeXlsxFile(data as any, {
-      schema,
+    await writeXlsxFile([titleRow, ...data], {
+      columns: [
+        { width: 5 },   // STT
+        { width: 10 },  // MIỀN
+        { width: 15 },  // CỬA HÀNG
+        { width: 20 },  // ASM PHỤ TRÁCH
+        { width: 10 },  // ID HRM
+        { width: 25 },  // TÊN NHÂN VIÊN
+        { width: 15 },  // VỊ TRÍ
+        { width: 12 },  // TỶ LỆ ĐẠT (%)
+        { width: 12 },  // XẾP LOẠI
+      ],
       fileName: `bao-cao-${storeId}-${month.toString().padStart(2, '0')}-${year}.xlsx`,
-      stickyRowsCount: 1,
-      headerStyle: {
-        fontWeight: 'bold',
-        align: 'center',
-      },
-      sheet: `BÁO CÁO TỶ LỆ HOÀN THÀNH CÔNG VIỆC - HTHT/MIỀN/ASM/CH THÁNG ${month.toString().padStart(2, '0')} NĂM ${year}`,
+      sheet: `BC ${month.toString().padStart(2, '0')}-${year}`,
     });
 
     toaster.create({

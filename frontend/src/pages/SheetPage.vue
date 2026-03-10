@@ -310,19 +310,6 @@ async function handleExportSubmit(storeId: string) {
     type CellValue = string | number | null;
     type Schema = Parameters<typeof writeXlsxFile>[1]['schema'];
 
-    // Add header row with title and month/year
-    const headerRow: CellValue[] = [
-      `BÁO CÁO TỶ LỆ HOÀN THÀNH CÔNG VIỆC - HTHT/MIỀN/ASM/CH\nTHÁNG ${month.toString().padStart(2, '0')} NĂM ${year}`,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-    ];
-
     const schema: Schema = [
       { column: 'STT', type: Number, value: (r: CellValue[]) => r[0] as number },
       { column: 'MIỀN', type: String, value: (r: CellValue[]) => r[1] as string },
@@ -350,16 +337,15 @@ async function handleExportSubmit(storeId: string) {
         ] as CellValue[],
     );
 
-    // Prepend header row to data
-    const dataWithHeader = [headerRow, ...data];
-
-    await writeXlsxFile(dataWithHeader as any, {
+    await writeXlsxFile(data as any, {
       schema,
       fileName: `bao-cao-${storeId}-${month.toString().padStart(2, '0')}-${year}.xlsx`,
+      stickyRowsCount: 1,
       headerStyle: {
         fontWeight: 'bold',
         align: 'center',
       },
+      sheet: `BÁO CÁO TỶ LỆ HOÀN THÀNH CÔNG VIỆC - HTHT/MIỀN/ASM/CH THÁNG ${month.toString().padStart(2, '0')} NĂM ${year}`,
     });
 
     toaster.create({

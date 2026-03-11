@@ -328,8 +328,10 @@ async function handleExportSubmit(storeIds: string[]) {
 
     type CellValue = string | number | null;
 
-    // Create sheets array for multi-sheet Excel
-    const sheets: any[] = [];
+    // Create parallel arrays for multi-sheet Excel
+    const allSheetData: any[][] = [];
+    const sheetNames: string[] = [];
+    const allColumns: any[][] = [];
 
     for (const [storeId, rows] of storeDataMap.entries()) {
       // Add title row as first row - must be an array with proper number of cells
@@ -393,21 +395,24 @@ async function handleExportSubmit(storeIds: string[]) {
         },
       ]);
 
-      sheets.push({
-        name: storeId, // Sheet name is the store ID
-        columns: [
-          { width: 5 }, // STT
-          { width: 10 }, // MIỀN
-          { width: 15 }, // CỬA HÀNG
-          { width: 20 }, // ASM PHỤ TRÁCH
-          { width: 10 }, // ID HRM
-          { width: 25 }, // TÊN NHÂN VIÊN
-          { width: 15 }, // VỊ TRÍ
-          { width: 12 }, // TỶ LỆ ĐẠT (%)
-          { width: 12 }, // XẾP LOẠI
-        ],
-        data: [titleRow, headerRow, ...data],
-      });
+      // Add sheet name
+      sheetNames.push(storeId);
+
+      // Add sheet data (title row + header row + data rows)
+      allSheetData.push([titleRow, headerRow, ...data]);
+
+      // Add column configuration
+      allColumns.push([
+        { width: 5 }, // STT
+        { width: 10 }, // MIỀN
+        { width: 15 }, // CỬA HÀNG
+        { width: 20 }, // ASM PHỤ TRÁCH
+        { width: 10 }, // ID HRM
+        { width: 25 }, // TÊN NHÂN VIÊN
+        { width: 15 }, // VỊ TRÍ
+        { width: 12 }, // TỶ LỆ ĐẠT (%)
+        { width: 12 }, // XẾP LOẠI
+      ]);
     }
 
     // Generate filename based on number of stores
@@ -416,8 +421,10 @@ async function handleExportSubmit(storeIds: string[]) {
         ? `bao-cao-${storeIds[0]}-${month.toString().padStart(2, '0')}-${year}.xlsx`
         : `bao-cao-${storeIds.length}-cua-hang-${month.toString().padStart(2, '0')}-${year}.xlsx`;
 
-    // Write multi-sheet Excel file
-    await writeXlsxFile(sheets, {
+    // Write multi-sheet Excel file using parallel arrays
+    await writeXlsxFile(allSheetData, {
+      columns: allColumns,
+      sheets: sheetNames,
       fileName: fileName,
     });
 

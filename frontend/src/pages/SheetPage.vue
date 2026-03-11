@@ -365,39 +365,30 @@ async function handleExportSubmit(storeIds: string[]) {
 
       const data = rows.map((r) => [
         {
-          type: Number,
           value: r.stt,
         },
         {
-          type: String,
           value: r.region,
         },
         {
-          type: String,
           value: r.store_id,
         },
         {
-          type: String,
           value: r.asm_name,
         },
         {
-          type: String,
           value: r.hr_id,
         },
         {
-          type: String,
           value: r.employee_name,
         },
         {
-          type: String,
           value: r.position,
         },
         {
-          type: Number,
           value: r.total_score,
         },
         {
-          type: String,
           value: r.final_classification,
         },
       ]);

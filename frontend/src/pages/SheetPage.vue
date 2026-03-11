@@ -342,14 +342,14 @@ async function handleExportSubmit(storeIds: string[]) {
           align: 'center',
           span: 9,
         },
-        { value: null }, // Empty cells for spanning
-        { value: null },
-        { value: null },
-        { value: null },
-        { value: null },
-        { value: null },
-        { value: null },
-        { value: null },
+        null, // Empty cells for spanning - must be null, not { value: null }
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
       ];
 
       // Add header row

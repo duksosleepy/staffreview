@@ -463,6 +463,7 @@ export async function fetchReport(month: number, year: number, storeId?: string)
 export type UpsertChecklistRecordPayload = {
   checklist_item_id: string;
   assessment_date: string; // YYYY-MM-DD
+  staff_id?: string; // Optional: used when CHT/ASM is viewing another employee
   employee_checked?: boolean;
   cht_checked?: boolean;
   asm_checked?: boolean;

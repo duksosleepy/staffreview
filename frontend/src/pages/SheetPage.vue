@@ -332,7 +332,7 @@ async function handleExportSubmit(storeIds: string[]) {
     const sheets: any[] = [];
 
     for (const [storeId, rows] of storeDataMap.entries()) {
-      // Add title row as first row
+      // Add title row as first row - must be an array with proper number of cells
       const titleRow = [
         {
           value: `BÁO CÁO TỶ LỆ HOÀN THÀNH CÔNG VIỆC - HTHT/MIỀN/ASM/CH\nTHÁNG ${month.toString().padStart(2, '0')} NĂM ${year}`,
@@ -340,6 +340,27 @@ async function handleExportSubmit(storeIds: string[]) {
           align: 'center',
           span: 9,
         },
+        { value: null }, // Empty cells for spanning
+        { value: null },
+        { value: null },
+        { value: null },
+        { value: null },
+        { value: null },
+        { value: null },
+        { value: null },
+      ];
+
+      // Add header row
+      const headerRow = [
+        { value: 'STT', fontWeight: 'bold', align: 'center' },
+        { value: 'MIỀN', fontWeight: 'bold', align: 'center' },
+        { value: 'CỬA HÀNG', fontWeight: 'bold', align: 'center' },
+        { value: 'ASM PHỤ TRÁCH', fontWeight: 'bold', align: 'center' },
+        { value: 'ID HRM', fontWeight: 'bold', align: 'center' },
+        { value: 'TÊN NHÂN VIÊN', fontWeight: 'bold', align: 'center' },
+        { value: 'VỊ TRÍ', fontWeight: 'bold', align: 'center' },
+        { value: 'TỶ LỆ ĐẠT (%)', fontWeight: 'bold', align: 'center' },
+        { value: 'XẾP LOẠI', fontWeight: 'bold', align: 'center' },
       ];
 
       const data = rows.map((r) => [
@@ -394,7 +415,7 @@ async function handleExportSubmit(storeIds: string[]) {
           { width: 12 }, // TỶ LỆ ĐẠT (%)
           { width: 12 }, // XẾP LOẠI
         ],
-        data: [titleRow, ...data],
+        data: [titleRow, headerRow, ...data],
       });
     }
 
@@ -2315,6 +2336,7 @@ onMounted(async () => {
                   const payload: {
                     checklist_item_id: string;
                     assessment_date: string;
+                    staff_id?: string;
                     employee_checked?: boolean;
                     cht_checked?: boolean;
                     asm_checked?: boolean;
@@ -2322,6 +2344,11 @@ onMounted(async () => {
                     checklist_item_id: itemId,
                     assessment_date: assessmentDate,
                   };
+
+                  // Include staff_id when viewing another employee's data
+                  if (selectedStaffId.value) {
+                    payload.staff_id = selectedStaffId.value;
+                  }
 
                   if (columnType === 'employee') {
                     payload.employee_checked = shouldTickAll;
@@ -2535,6 +2562,7 @@ onMounted(async () => {
           const payload: {
             checklist_item_id: string;
             assessment_date: string;
+            staff_id?: string;
             employee_checked?: boolean;
             cht_checked?: boolean;
             asm_checked?: boolean;
@@ -2542,6 +2570,11 @@ onMounted(async () => {
             checklist_item_id: itemId,
             assessment_date: assessmentDate,
           };
+
+          // Include staff_id when viewing another employee's data
+          if (selectedStaffId.value) {
+            payload.staff_id = selectedStaffId.value;
+          }
 
           if (columnType === 'employee') {
             payload.employee_checked = isChecked;

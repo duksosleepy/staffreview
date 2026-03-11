@@ -160,6 +160,7 @@ const MonthYearQuerySchema = z.object({
 const UpsertChecklistRecordSchema = z.object({
   checklist_item_id: z.string().uuid(),
   assessment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+  staff_id: z.string().optional(), // Optional: used when CHT/ASM is viewing another employee
   employee_checked: z.boolean().optional(),
   cht_checked: z.boolean().optional(),
   asm_checked: z.boolean().optional(),
@@ -869,9 +870,13 @@ export const checklistRoutes = new Hono<Env>()
       Number.parseInt(body.assessment_date.split('-')[1], 10),
       Number.parseInt(body.assessment_date.split('-')[2], 10),
     );
+
+    // Use staff_id from payload if provided (when CHT/ASM views employee), otherwise use current user's sub
+    const targetStaffId = body.staff_id ?? user.sub;
+
     const params: Record<string, unknown> = {
       checklistItemId: body.checklist_item_id,
-      staffId: user.sub,
+      staffId: targetStaffId,
       storeId,
       assessmentDate,
     };

@@ -287,8 +287,8 @@ function handleExportReport() {
   showExportModal.value = true;
 }
 
-// Handle export submission with selected store
-async function handleExportSubmit(storeId: string) {
+// Handle export submission with selected stores (can be multiple)
+async function handleExportSubmit(storeIds: string[]) {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -296,12 +296,31 @@ async function handleExportSubmit(storeId: string) {
   isExporting.value = true;
 
   try {
-    const rows = await fetchReport(month, year, storeId);
+    if (storeIds.length === 0) {
+      toaster.create({
+        title: 'Lỗi',
+        description: 'Vui lòng chọn ít nhất một cửa hàng',
+        type: 'error',
+      });
+      return;
+    }
 
-    if (rows.length === 0) {
+    // Fetch data for all selected stores
+    const storeDataMap = new Map<string, any[]>();
+    let totalRows = 0;
+
+    for (const storeId of storeIds) {
+      const rows = await fetchReport(month, year, storeId);
+      if (rows.length > 0) {
+        storeDataMap.set(storeId, rows);
+        totalRows += rows.length;
+      }
+    }
+
+    if (totalRows === 0) {
       toaster.create({
         title: 'Không có dữ liệu',
-        description: 'Chưa có dữ liệu báo cáo cho cửa hàng này',
+        description: 'Chưa có dữ liệu báo cáo cho các cửa hàng đã chọn',
         type: 'info',
       });
       return;
@@ -309,74 +328,95 @@ async function handleExportSubmit(storeId: string) {
 
     type CellValue = string | number | null;
 
-    // Add title row as first row (will not use schema for this row)
-    const titleRow = [
-      {
-        value: `BÁO CÁO TỶ LỆ HOÀN THÀNH CÔNG VIỆC - HTHT/MIỀN/ASM/CH\nTHÁNG ${month.toString().padStart(2, '0')} NĂM ${year}`,
-        fontWeight: 'bold',
-        align: 'center',
-        span: 9,
-      },
-    ];
+    // Create sheets array for multi-sheet Excel
+    const sheets: any[] = [];
 
-    const data = rows.map((r) => [
-      {
-        type: Number,
-        value: r.stt,
-      },
-      {
-        type: String,
-        value: r.region,
-      },
-      {
-        type: String,
-        value: r.store_id,
-      },
-      {
-        type: String,
-        value: r.asm_name,
-      },
-      {
-        type: String,
-        value: r.hr_id,
-      },
-      {
-        type: String,
-        value: r.employee_name,
-      },
-      {
-        type: String,
-        value: r.position,
-      },
-      {
-        type: Number,
-        value: r.total_score,
-      },
-      {
-        type: String,
-        value: r.final_classification,
-      },
-    ]);
+    for (const [storeId, rows] of storeDataMap.entries()) {
+      // Add title row as first row
+      const titleRow = [
+        {
+          value: `BÁO CÁO TỶ LỆ HOÀN THÀNH CÔNG VIỆC - HTHT/MIỀN/ASM/CH\nTHÁNG ${month.toString().padStart(2, '0')} NĂM ${year}`,
+          fontWeight: 'bold',
+          align: 'center',
+          span: 9,
+        },
+      ];
 
-    await writeXlsxFile([titleRow, ...data], {
-      columns: [
-        { width: 5 }, // STT
-        { width: 10 }, // MIỀN
-        { width: 15 }, // CỬA HÀNG
-        { width: 20 }, // ASM PHỤ TRÁCH
-        { width: 10 }, // ID HRM
-        { width: 25 }, // TÊN NHÂN VIÊN
-        { width: 15 }, // VỊ TRÍ
-        { width: 12 }, // TỶ LỆ ĐẠT (%)
-        { width: 12 }, // XẾP LOẠI
-      ],
-      fileName: `bao-cao-${storeId}-${month.toString().padStart(2, '0')}-${year}.xlsx`,
-      sheet: `BC ${month.toString().padStart(2, '0')}-${year}`,
+      const data = rows.map((r) => [
+        {
+          type: Number,
+          value: r.stt,
+        },
+        {
+          type: String,
+          value: r.region,
+        },
+        {
+          type: String,
+          value: r.store_id,
+        },
+        {
+          type: String,
+          value: r.asm_name,
+        },
+        {
+          type: String,
+          value: r.hr_id,
+        },
+        {
+          type: String,
+          value: r.employee_name,
+        },
+        {
+          type: String,
+          value: r.position,
+        },
+        {
+          type: Number,
+          value: r.total_score,
+        },
+        {
+          type: String,
+          value: r.final_classification,
+        },
+      ]);
+
+      sheets.push({
+        name: storeId, // Sheet name is the store ID
+        columns: [
+          { width: 5 }, // STT
+          { width: 10 }, // MIỀN
+          { width: 15 }, // CỬA HÀNG
+          { width: 20 }, // ASM PHỤ TRÁCH
+          { width: 10 }, // ID HRM
+          { width: 25 }, // TÊN NHÂN VIÊN
+          { width: 15 }, // VỊ TRÍ
+          { width: 12 }, // TỶ LỆ ĐẠT (%)
+          { width: 12 }, // XẾP LOẠI
+        ],
+        data: [titleRow, ...data],
+      });
+    }
+
+    // Generate filename based on number of stores
+    const fileName =
+      storeIds.length === 1
+        ? `bao-cao-${storeIds[0]}-${month.toString().padStart(2, '0')}-${year}.xlsx`
+        : `bao-cao-${storeIds.length}-cua-hang-${month.toString().padStart(2, '0')}-${year}.xlsx`;
+
+    // Write multi-sheet Excel file
+    await writeXlsxFile(sheets, {
+      fileName: fileName,
     });
+
+    const description =
+      storeIds.length === 1
+        ? `Đã xuất báo cáo cửa hàng ${storeIds[0]} tháng ${month}/${year}`
+        : `Đã xuất báo cáo ${storeIds.length} cửa hàng (${storeDataMap.size} sheet) tháng ${month}/${year}`;
 
     toaster.create({
       title: 'Thành công',
-      description: `Đã xuất báo cáo cửa hàng ${storeId} tháng ${month}/${year}`,
+      description: description,
       type: 'success',
     });
 

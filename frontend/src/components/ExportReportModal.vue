@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Dialog } from '@ark-ui/vue';
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { FOCUS_RING_CLASSES } from '@/constants/ui';
 
 defineOptions({
@@ -19,34 +19,56 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:open': [value: boolean];
-  submit: [storeId: string];
+  submit: [storeIds: string[]];
 }>();
 
-const selectedStore = ref<string>('');
+const selectedStores = ref<string[]>([]);
+
+// Check if all stores are selected
+const isAllSelected = computed(() => {
+  return props.stores.length > 0 && selectedStores.value.length === props.stores.length;
+});
 
 // Clear selection when modal is closed
 watch(
   () => props.open,
   (newOpen) => {
     if (!newOpen) {
-      selectedStore.value = '';
+      selectedStores.value = [];
     }
   },
 );
 
 const handleClose = () => {
   emit('update:open', false);
-  selectedStore.value = '';
+  selectedStores.value = [];
 };
 
 const handleSubmit = () => {
-  if (selectedStore.value) {
-    emit('submit', selectedStore.value);
+  if (selectedStores.value.length > 0) {
+    emit('submit', selectedStores.value);
   }
 };
 
-const handleStoreSelect = (storeId: string) => {
-  selectedStore.value = storeId;
+const handleStoreToggle = (storeId: string) => {
+  const index = selectedStores.value.indexOf(storeId);
+  if (index > -1) {
+    // Remove from selection
+    selectedStores.value.splice(index, 1);
+  } else {
+    // Add to selection
+    selectedStores.value.push(storeId);
+  }
+};
+
+const handleSelectAll = () => {
+  if (isAllSelected.value) {
+    // Deselect all
+    selectedStores.value = [];
+  } else {
+    // Select all
+    selectedStores.value = [...props.stores];
+  }
 };
 </script>
 
@@ -91,9 +113,27 @@ const handleStoreSelect = (storeId: string) => {
         <div class="px-6 pb-6">
           <!-- Store Selection -->
           <div>
-            <label class="block text-[14px] font-medium text-gray-700 mb-2">
-              Chọn cửa hàng
-            </label>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-[14px] font-medium text-gray-700">
+                Chọn cửa hàng ({{ selectedStores.length }} đã chọn)
+              </label>
+
+              <!-- Select ALL Button -->
+              <button
+                v-if="stores.length > 0"
+                type="button"
+                :class="[
+                  'px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors duration-150',
+                  isAllSelected
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                  FOCUS_RING_CLASSES
+                ]"
+                @click="handleSelectAll"
+              >
+                {{ isAllSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả' }}
+              </button>
+            </div>
 
             <!-- Store Selection List -->
             <div class="space-y-2 max-h-[300px] overflow-y-auto rounded-[10px] border-[1.5px] border-gray-300 p-3">
@@ -102,33 +142,40 @@ const handleStoreSelect = (storeId: string) => {
                 :key="store"
                 :class="[
                   'flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-150',
-                  selectedStore === store
+                  selectedStores.includes(store)
                     ? 'bg-blue-50 border-[1.5px] border-blue-400'
                     : 'bg-white border-[1.5px] border-gray-200 hover:border-gray-300 hover:bg-gray-50',
                   FOCUS_RING_CLASSES
                 ]"
-                @click="handleStoreSelect(store)"
+                @click="handleStoreToggle(store)"
               >
-                <!-- Radio Icon -->
+                <!-- Checkbox Icon -->
                 <div
                   :class="[
-                    'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-150',
-                    selectedStore === store
+                    'w-5 h-5 rounded border-2 flex items-center justify-center transition-colors duration-150',
+                    selectedStores.includes(store)
                       ? 'border-blue-600 bg-blue-600'
                       : 'border-gray-300'
                   ]"
                 >
-                  <div
-                    v-if="selectedStore === store"
-                    class="w-2 h-2 rounded-full bg-white"
-                  />
+                  <!-- Checkmark -->
+                  <svg
+                    v-if="selectedStores.includes(store)"
+                    class="w-3.5 h-3.5 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    stroke-width="3"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
                 </div>
 
                 <!-- Store Name -->
                 <span
                   :class="[
                     'text-[14px] font-medium',
-                    selectedStore === store ? 'text-blue-700' : 'text-gray-800'
+                    selectedStores.includes(store) ? 'text-blue-700' : 'text-gray-800'
                   ]"
                 >
                   {{ store }}
@@ -161,7 +208,10 @@ const handleStoreSelect = (storeId: string) => {
               <div class="flex-1 min-w-0">
                 <p class="text-[14px] font-medium text-gray-800">Thông tin xuất báo cáo</p>
                 <p class="text-[13px] text-gray-500 leading-relaxed mt-1">
-                  Báo cáo sẽ bao gồm tất cả nhân viên thuộc cửa hàng được chọn cho tháng hiện tại.
+                  {{ selectedStores.length > 1
+                    ? `File Excel sẽ có ${selectedStores.length} sheet, mỗi sheet tương ứng với một cửa hàng.`
+                    : 'Báo cáo sẽ bao gồm tất cả nhân viên thuộc cửa hàng được chọn cho tháng hiện tại.'
+                  }}
                 </p>
               </div>
             </div>
@@ -192,12 +242,12 @@ const handleStoreSelect = (storeId: string) => {
               'h-9 px-5 text-[14px] font-medium rounded-[8px]',
               'transition-all duration-150',
               'disabled:opacity-50 disabled:cursor-not-allowed',
-              selectedStore && !isExporting
+              selectedStores.length > 0 && !isExporting
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed',
               FOCUS_RING_CLASSES
             ]"
-            :disabled="!selectedStore || isExporting"
+            :disabled="selectedStores.length === 0 || isExporting"
             @click="handleSubmit"
           >
             <span v-if="isExporting" class="flex items-center gap-2">

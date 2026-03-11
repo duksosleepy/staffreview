@@ -143,7 +143,7 @@ export const employeeRoutes = new Hono<Env>()
           importedOnlyCount: importedOnly.length,
           totalCount: allEmployees.length,
           storeBreakdown: Object.fromEntries(storeBreakdown),
-          regions: [...new Set(allEmployees.map(e => (e as any).region).filter(Boolean))],
+          regions: [...new Set(allEmployees.map((e) => (e as any).region).filter(Boolean))],
         },
         'Store employees fetched (Casdoor + imported)',
       );

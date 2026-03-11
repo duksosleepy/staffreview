@@ -302,7 +302,8 @@ export const checklistRoutes = new Hono<Env>()
     // 2. CHT views their own tasks (they also do tasks in Sheet 1)
     // 3. ASM views their own tasks (they also do tasks in Sheet 1)
     // 4. CHT/ASM views a specific employee's tasks (staff_id provided)
-    const shouldFilterByShift = date && (user.role === 'employee' || user.role === 'cht' || user.role === 'asm' || staff_id);
+    const shouldFilterByShift =
+      date && (user.role === 'employee' || user.role === 'cht' || user.role === 'asm' || staff_id);
 
     log?.info({ shouldFilterByShift, staff_id, date, role: user.role }, 'Shift filter decision');
 
@@ -410,14 +411,17 @@ export const checklistRoutes = new Hono<Env>()
     }
 
     // Log final filter for debugging
-    log?.info({
-      itemFilter,
-      queryParams,
-      date,
-      staff_id,
-      role: user.role,
-      shouldFilterByShift
-    }, 'Final filter before query execution');
+    log?.info(
+      {
+        itemFilter,
+        queryParams,
+        date,
+        staff_id,
+        role: user.role,
+        shouldFilterByShift,
+      },
+      'Final filter before query execution',
+    );
 
     // Now using DetailChecklistItem as the source of truth for both sheets
     // Sheet 1 uses checklist_records backlink for approval workflow
@@ -516,12 +520,15 @@ export const checklistRoutes = new Hono<Env>()
         })
       : await db.query(query, queryParams);
 
-    log?.info({
-      resultCount: result.length,
-      date,
-      staff_id,
-      role: user.role
-    }, 'Query result count');
+    log?.info(
+      {
+        resultCount: result.length,
+        date,
+        staff_id,
+        role: user.role,
+      },
+      'Query result count',
+    );
 
     return c.json(result);
   })

@@ -316,62 +316,59 @@ async function handleExportSubmit(storeId: string) {
         fontWeight: 'bold',
         align: 'center',
         span: 9,
-      }
+      },
     ];
 
-    const data = rows.map(
-      (r) =>
-        [
-          {
-            type: Number,
-            value: r.stt,
-          },
-          {
-            type: String,
-            value: r.region,
-          },
-          {
-            type: String,
-            value: r.store_id,
-          },
-          {
-            type: String,
-            value: r.asm_name,
-          },
-          {
-            type: String,
-            value: r.hr_id,
-          },
-          {
-            type: String,
-            value: r.employee_name,
-          },
-          {
-            type: String,
-            value: r.position,
-          },
-          {
-            type: Number,
-            value: r.total_score,
-          },
-          {
-            type: String,
-            value: r.final_classification,
-          },
-        ],
-    );
+    const data = rows.map((r) => [
+      {
+        type: Number,
+        value: r.stt,
+      },
+      {
+        type: String,
+        value: r.region,
+      },
+      {
+        type: String,
+        value: r.store_id,
+      },
+      {
+        type: String,
+        value: r.asm_name,
+      },
+      {
+        type: String,
+        value: r.hr_id,
+      },
+      {
+        type: String,
+        value: r.employee_name,
+      },
+      {
+        type: String,
+        value: r.position,
+      },
+      {
+        type: Number,
+        value: r.total_score,
+      },
+      {
+        type: String,
+        value: r.final_classification,
+      },
+    ]);
 
     await writeXlsxFile([titleRow, ...data], {
       columns: [
-        { width: 5 },   // STT
-        { width: 10 },  // MIỀN
-        { width: 15 },  // CỬA HÀNG
-        { width: 20 },  // ASM PHỤ TRÁCH
-        { width: 10 },  // ID HRM
-        { width: 25 },  // TÊN NHÂN VIÊN
-        { width: 15 },  // VỊ TRÍ
-        { width: 12 },  // TỶ LỆ ĐẠT (%)
-        { width: 12 },  // XẾP LOẠI
+        { width: 5 }, // STT
+        { width: 10 }, // MIỀN
+        { width: 15 }, // CỬA HÀNG
+        { width: 20 }, // ASM PHỤ TRÁCH
+        { width: 10 }, // ID HRM
+        { width: 25 }, // TÊN NHÂN VIÊN
+        { width: 15 }, // VỊ TRÍ
+        { width: 12 }, // TỶ LỆ ĐẠT (%)
+        { width: 12 }, // XẾP LOẠI
       ],
       fileName: `bao-cao-${storeId}-${month.toString().padStart(2, '0')}-${year}.xlsx`,
       sheet: `BC ${month.toString().padStart(2, '0')}-${year}`,
@@ -653,7 +650,7 @@ let rowToItemId1 = new Map<number, string>();
 let itemIdToRow1 = new Map<string, number>();
 
 // Column mapping for Sheet 1: maps physical column index to column type (employee/cht/asm)
-let sheet1ColumnTypeMap = new Map<number, 'employee' | 'cht' | 'asm'>();
+const sheet1ColumnTypeMap = new Map<number, 'employee' | 'cht' | 'asm'>();
 
 // Group items by category (unified with Sheet 2)
 // Ensures all categories are present even if no items match after filtering
@@ -1998,7 +1995,7 @@ onMounted(async () => {
   }
 
   // Create workbook — include sheet3 tab only for CHT/ASM
-  const sheetOrder = (isCht.value || isAsm.value) ? ['sheet1', 'sheet2', 'sheet3'] : ['sheet1', 'sheet2'];
+  const sheetOrder = isCht.value || isAsm.value ? ['sheet1', 'sheet2', 'sheet3'] : ['sheet1', 'sheet2'];
   const sheetsConfig: Record<string, any> = {
     sheet1: {
       id: 'sheet1',
@@ -2229,7 +2226,17 @@ onMounted(async () => {
               asm: 'ASM',
             };
 
-            if (!isRole(columnType)) {
+            // Check permission based on column type
+            let hasPermission = false;
+            if (columnType === 'employee') {
+              hasPermission = isEmployee.value;
+            } else if (columnType === 'cht') {
+              hasPermission = canCheckCht.value;
+            } else if (columnType === 'asm') {
+              hasPermission = canCheckAsm.value;
+            }
+
+            if (!hasPermission) {
               toaster.create({
                 title: 'Không có quyền',
                 description: `You can only edit your own column (${columnNameMap[columnType]})`,
@@ -2291,6 +2298,111 @@ onMounted(async () => {
               // Execute all updates
               try {
                 await Promise.all(updatePromises);
+
+                // SYNC LOGIC: Sync Sheet 1 category changes to Sheet 2
+                // Determine if we should sync to Sheet 2 based on column and viewing context
+                let shouldSync = false;
+
+                if (column === 1) {
+                  // Employee column always syncs
+                  shouldSync = true;
+                } else if (column === 2 || column === 3) {
+                  // CHT or ASM column only syncs if viewing an employee's spreadsheet
+                  const isViewingEmployeeData =
+                    selectedStaffCasdoorId.value !== undefined && selectedStaffCasdoorId.value !== auth.casdoorId;
+                  shouldSync = isViewingEmployeeData;
+                }
+
+                if (shouldSync) {
+                  // Extract date components
+                  const [yearStr, monthStr, dayStr] = assessmentDate.split('-');
+                  const day = Number.parseInt(dayStr, 10);
+                  const month = Number.parseInt(monthStr, 10);
+                  const year = Number.parseInt(yearStr, 10);
+
+                  // Only sync if the date matches Sheet 2's current month/year
+                  if (month === sheet2Month && year === sheet2Year) {
+                    const sheet2 = workbook.getSheetBySheetId('sheet2');
+                    const dayColStart2 = 9;
+                    const dayCol = dayColStart2 + day - 1;
+
+                    // Update all child items in Sheet 2
+                    const sheet2Updates: Promise<any>[] = [];
+                    for (let childRow = childRange.start; childRow < childRange.start + childRange.count; childRow++) {
+                      const itemId = rowToItemId1.get(childRow);
+                      if (itemId) {
+                        // Check if employee column is empty (for CHT/ASM columns)
+                        let shouldSyncThisItem = column === 1; // Employee column always syncs
+                        if (column === 2 || column === 3) {
+                          // For CHT/ASM, only sync if employee column is empty
+                          const employeeValue = sheet?.getRange(childRow, 1, 1, 1)?.getValue();
+                          const employeeChecked = employeeValue === 1 || employeeValue === '1' || employeeValue === true;
+                          shouldSyncThisItem = !employeeChecked;
+                        }
+
+                        if (shouldSyncThisItem) {
+                          const sheet2Row = itemIdToRow2.get(itemId);
+                          if (sheet2Row !== undefined) {
+                            // Update Sheet 2 cell
+                            sheet2?.getRange(sheet2Row, dayCol, 1, 1)?.setValue(shouldTickAll ? 1 : 0);
+
+                            // Save to DetailMonthlyRecord
+                            sheet2Updates.push(
+                              upsertDetailMonthlyRecord({
+                                detail_item_id: itemId,
+                                month: sheet2Month,
+                                year: sheet2Year,
+                                day: day,
+                                checked: shouldTickAll,
+                              }),
+                            );
+
+                            // Recalculate and update summary columns
+                            const metadata = rowToItemMetadata2.get(sheet2Row);
+                            const currentDaysInMonth = getDaysInMonth(sheet2Month, sheet2Year);
+                            if (metadata && sheet2) {
+                              // Read all daily checks from the row
+                              const dailyChecks: boolean[] = [];
+                              for (let d = 0; d < currentDaysInMonth; d++) {
+                                const val = sheet2.getRange(sheet2Row, dayColStart2 + d, 1, 1)?.getValue();
+                                dailyChecks.push(val === 1 || val === '1' || val === true);
+                              }
+                              // Pad to 31 days
+                              while (dailyChecks.length < 31) {
+                                dailyChecks.push(false);
+                              }
+
+                              // Calculate new summary values
+                              const summary = calculateSummaryValues(
+                                dailyChecks,
+                                metadata.categoryType,
+                                metadata.baseline,
+                                metadata.score,
+                                currentDaysInMonth,
+                                metadata.classificationCriteria,
+                              );
+
+                              // Update summary columns
+                              const summaryCol = dayColStart2 + currentDaysInMonth;
+                              sheet2.getRange(sheet2Row, summaryCol, 1, 1)?.setValue(summary.achievementPercentage);
+                              sheet2.getRange(sheet2Row, summaryCol + 1, 1, 1)?.setValue(summary.successfulCompletions);
+                              sheet2.getRange(sheet2Row, summaryCol + 2, 1, 1)?.setValue(summary.implementationIssuesCount);
+                              sheet2.getRange(sheet2Row, summaryCol + 3, 1, 1)?.setValue(summary.scoreAchieved);
+                              sheet2.getRange(sheet2Row, summaryCol + 4, 1, 1)?.setValue(summary.classification);
+                            }
+                          }
+                        }
+                      }
+                    }
+
+                    // Wait for all Sheet 2 updates to complete
+                    await Promise.all(sheet2Updates);
+
+                    // Update category average in Sheet 2
+                    updateCategoryAverage(categoryName);
+                  }
+                }
+
                 toaster.create({
                   title: 'Đã cập nhật',
                   description: `Đã ${shouldTickAll ? 'tick' : 'untick'} tất cả ${updatePromises.length} mục trong ${categoryName}`,
@@ -2332,7 +2444,17 @@ onMounted(async () => {
             asm: 'ASM',
           };
 
-          if (!isRole(columnType)) {
+          // Check permission based on column type
+          let hasPermission = false;
+          if (columnType === 'employee') {
+            hasPermission = isEmployee.value;
+          } else if (columnType === 'cht') {
+            hasPermission = canCheckCht.value;
+          } else if (columnType === 'asm') {
+            hasPermission = canCheckAsm.value;
+          }
+
+          if (!hasPermission) {
             toaster.create({
               title: 'Không có quyền',
               description: `You can only edit your own column (${columnNameMap[columnType]})`,
@@ -2376,6 +2498,7 @@ onMounted(async () => {
               // SYNC LOGIC: Sync Sheet 1 changes to Sheet 2
               // Column 1 (Employee): Always sync to Sheet 2
               // Column 2 (CHT): Only sync if Employee column is empty AND CHT is viewing employee's data
+              // Column 3 (ASM): Only sync if Employee column is empty AND ASM is viewing employee's data
               let shouldSync = false;
 
               if (column === 1) {
@@ -2385,6 +2508,15 @@ onMounted(async () => {
                 // CHT column only syncs if:
                 // 1. Employee column is empty
                 // 2. CHT is viewing an employee's spreadsheet (selectedStaffCasdoorId is set and not viewing own data)
+                const employeeValue = sheet?.getRange(row, 1, 1, 1)?.getValue();
+                const employeeChecked = employeeValue === 1 || employeeValue === '1' || employeeValue === true;
+                const isViewingEmployeeData =
+                  selectedStaffCasdoorId.value !== undefined && selectedStaffCasdoorId.value !== auth.casdoorId;
+                shouldSync = !employeeChecked && isViewingEmployeeData;
+              } else if (column === 3) {
+                // ASM column only syncs if:
+                // 1. Employee column is empty
+                // 2. ASM is viewing an employee's spreadsheet (selectedStaffCasdoorId is set and not viewing own data)
                 const employeeValue = sheet?.getRange(row, 1, 1, 1)?.getValue();
                 const employeeChecked = employeeValue === 1 || employeeValue === '1' || employeeValue === true;
                 const isViewingEmployeeData =

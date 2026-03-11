@@ -317,10 +317,7 @@ const autoSelectCurrentUser = () => {
 };
 
 onMounted(async () => {
-  await Promise.all([
-    loadEmployees(),
-    fetchStoreRegions(),
-  ]);
+  await Promise.all([loadEmployees(), fetchStoreRegions()]);
   autoSelectCurrentUser();
 });
 

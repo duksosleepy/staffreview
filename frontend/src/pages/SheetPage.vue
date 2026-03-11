@@ -2297,7 +2297,10 @@ onMounted(async () => {
 
               // Execute all updates
               try {
-                await Promise.all(updatePromises);
+                // Wait for all Sheet 1 updates to complete
+                const results = await Promise.allSettled(updatePromises);
+                const failedCount = results.filter((r) => r.status === 'rejected').length;
+                const successCount = results.filter((r) => r.status === 'fulfilled').length;
 
                 // SYNC LOGIC: Sync Sheet 1 category changes to Sheet 2
                 // Determine if we should sync to Sheet 2 based on column and viewing context
@@ -2346,7 +2349,7 @@ onMounted(async () => {
                             // Update Sheet 2 cell
                             sheet2?.getRange(sheet2Row, dayCol, 1, 1)?.setValue(shouldTickAll ? 1 : 0);
 
-                            // Save to DetailMonthlyRecord
+                            // Save to DetailMonthlyRecord - wrap in promise to catch individual errors
                             sheet2Updates.push(
                               upsertDetailMonthlyRecord({
                                 detail_item_id: itemId,
@@ -2354,6 +2357,9 @@ onMounted(async () => {
                                 year: sheet2Year,
                                 day: day,
                                 checked: shouldTickAll,
+                              }).catch((err) => {
+                                console.error('Failed to sync item to Sheet 2:', itemId, err);
+                                return null; // Return null on error to allow other promises to continue
                               }),
                             );
 
@@ -2395,20 +2401,36 @@ onMounted(async () => {
                       }
                     }
 
-                    // Wait for all Sheet 2 updates to complete
-                    await Promise.all(sheet2Updates);
+                    // Wait for all Sheet 2 updates to complete (with error handling)
+                    await Promise.allSettled(sheet2Updates);
 
                     // Update category average in Sheet 2
                     updateCategoryAverage(categoryName);
                   }
                 }
 
-                toaster.create({
-                  title: 'Đã cập nhật',
-                  description: `Đã ${shouldTickAll ? 'tick' : 'untick'} tất cả ${updatePromises.length} mục trong ${categoryName}`,
-                  type: 'success',
-                  duration: 3000,
-                });
+                // Show success or partial success message
+                if (failedCount === 0) {
+                  toaster.create({
+                    title: 'Đã cập nhật',
+                    description: `Đã ${shouldTickAll ? 'tick' : 'untick'} tất cả ${successCount} mục trong ${categoryName}`,
+                    type: 'success',
+                    duration: 3000,
+                  });
+                } else if (successCount > 0) {
+                  toaster.create({
+                    title: 'Cập nhật một phần',
+                    description: `Đã cập nhật ${successCount} mục, ${failedCount} mục thất bại`,
+                    type: 'warning',
+                    duration: 5000,
+                  });
+                } else {
+                  toaster.create({
+                    title: 'Lỗi',
+                    description: `Không thể cập nhật bất kỳ mục nào`,
+                    type: 'error',
+                  });
+                }
               } catch (error: unknown) {
                 const message = error instanceof Error ? error.message : 'Unknown error';
                 toaster.create({

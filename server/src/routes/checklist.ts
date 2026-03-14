@@ -258,6 +258,12 @@ export const checklistRoutes = new Hono<Env>()
       } catch (error) {
         log?.warn({ error, staff_id }, 'Failed to fetch viewed user role for Sheet 1');
       }
+
+      // If user not found in Casdoor (imported employee), assume they are an employee
+      if (!viewedUserRole) {
+        viewedUserRole = 'employee';
+        log?.info({ staff_id, viewedUserRole }, 'User not in Casdoor, assuming employee role');
+      }
     }
 
     // Determine the role to filter tasks by
@@ -596,6 +602,12 @@ export const checklistRoutes = new Hono<Env>()
         log?.debug({ staff_id, viewedUserRole }, 'Fetched viewed user role');
       } catch (error) {
         log?.warn({ error, staff_id }, 'Failed to fetch viewed user role');
+      }
+
+      // If user not found in Casdoor (imported employee), assume they are an employee
+      if (!viewedUserRole) {
+        viewedUserRole = 'employee';
+        log?.info({ staff_id, viewedUserRole }, 'User not in Casdoor, assuming employee role for Sheet 2');
       }
     }
 

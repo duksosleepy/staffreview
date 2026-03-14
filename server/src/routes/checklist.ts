@@ -260,30 +260,18 @@ export const checklistRoutes = new Hono<Env>()
       }
     }
 
-    if (user.role === 'employee') {
-      // Employee: sees their own tasks
+    // Determine the role to filter tasks by
+    // If viewing another user (staff_id provided), use their role
+    // If viewing self (no staff_id), use current user's role
+    const roleForFiltering = staff_id && viewedUserRole ? viewedUserRole : user.role;
+
+    // Filter tasks based on the role being viewed (not the viewer's role)
+    if (roleForFiltering === 'employee') {
       itemFilter += " and .owner = 'employee'";
-    } else if (user.role === 'cht') {
-      // CHT always sees employee tasks in Sheet 1 (approval workflow)
-      itemFilter += " and .owner = 'employee'";
-    } else if (user.role === 'asm') {
-      // ASM viewing another user: show tasks based on viewed user's role
-      if (staff_id && viewedUserRole) {
-        if (viewedUserRole === 'employee') {
-          itemFilter += " and .owner = 'employee'";
-        } else if (viewedUserRole === 'cht') {
-          // CHT's Sheet 1 shows employee tasks (approval workflow)
-          itemFilter += " and .owner = 'employee'";
-        } else if (viewedUserRole === 'asm') {
-          // ASM's Sheet 1 - for now, show all tasks or ASM tasks
-          // This depends on your business logic
-          itemFilter += " and .owner = 'asm'";
-        }
-      }
-      // ASM viewing self (no staff_id): show ASM-owned tasks
-      else if (!staff_id) {
-        itemFilter += " and .owner = 'asm'";
-      }
+    } else if (roleForFiltering === 'cht') {
+      itemFilter += " and .owner = 'cht'";
+    } else if (roleForFiltering === 'asm') {
+      itemFilter += " and .owner = 'asm'";
     }
 
     // Applicable days filter: DISABLED - show all tasks on all days
@@ -611,29 +599,18 @@ export const checklistRoutes = new Hono<Env>()
       }
     }
 
-    if (user.role === 'employee') {
+    // Determine the role to filter tasks by
+    // If viewing another user (staff_id provided), use their role
+    // If viewing self (no staff_id), use current user's role
+    const roleForFiltering = staff_id && viewedUserRole ? viewedUserRole : user.role;
+
+    // Filter tasks based on the role being viewed (not the viewer's role)
+    if (roleForFiltering === 'employee') {
       itemOwnerFilter += " and .owner = 'employee'";
-    } else if (user.role === 'cht') {
-      if (staff_id) {
-        itemOwnerFilter += " and .owner = 'employee'";
-      } else {
-        itemOwnerFilter += " and .owner = 'cht'";
-      }
-    } else if (user.role === 'asm') {
-      // ASM viewing another user: show tasks based on viewed user's role
-      if (staff_id && viewedUserRole) {
-        if (viewedUserRole === 'employee') {
-          itemOwnerFilter += " and .owner = 'employee'";
-        } else if (viewedUserRole === 'cht') {
-          itemOwnerFilter += " and .owner = 'cht'";
-        } else if (viewedUserRole === 'asm') {
-          itemOwnerFilter += " and .owner = 'asm'";
-        }
-      }
-      // ASM viewing self (no staff_id): show ASM-owned tasks
-      else if (!staff_id) {
-        itemOwnerFilter += " and .owner = 'asm'";
-      }
+    } else if (roleForFiltering === 'cht') {
+      itemOwnerFilter += " and .owner = 'cht'";
+    } else if (roleForFiltering === 'asm') {
+      itemOwnerFilter += " and .owner = 'asm'";
     }
 
     // Sheet 2 uses monthly_records backlink for monthly tracking

@@ -1008,16 +1008,22 @@ async function refreshSheet1(date?: string) {
     if (oldSheet) {
       workbook?.deleteSheet(oldSheet);
     }
+
+    // Important: Add a small delay after deletion to ensure Univer processes it
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     workbook?.insertSheet('Checklist', {
       index: 0, // Insert at the beginning
       sheet: sheetConfig,
     });
 
-    // Use nextTick to ensure Vue reactivity system processes the sheet change
+    // Ensure Vue and Univer both process the sheet insertion
     await nextTick();
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     workbook?.setActiveSheet('sheet1');
 
-    // Additional nextTick to ensure the active sheet change is fully rendered
+    // Final tick to ensure activation completes
     await nextTick();
 
     const sheet = workbook?.getSheetBySheetId('sheet1');
@@ -1054,16 +1060,8 @@ async function refreshSheet1(date?: string) {
     // Auto-resize rows to fit text-wrapped content
     sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
 
-    // Force a final re-render by toggling to another sheet and back
-    // This ensures the UI fully updates with the new content
-    await nextTick();
-    const sheet2 = workbook?.getSheetBySheetId('sheet2');
-    if (sheet2) {
-      workbook?.setActiveSheet('sheet2');
-      await nextTick();
-      workbook?.setActiveSheet('sheet1');
-      await nextTick();
-    }
+    // Final delay to ensure all Univer operations complete before hiding overlay
+    await new Promise(resolve => setTimeout(resolve, 100));
   } finally {
     hideLoadingOverlay();
   }

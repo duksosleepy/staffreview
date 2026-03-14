@@ -1012,7 +1012,13 @@ async function refreshSheet1(date?: string) {
       index: 0, // Insert at the beginning
       sheet: sheetConfig,
     });
+
+    // Use nextTick to ensure Vue reactivity system processes the sheet change
+    await nextTick();
     workbook?.setActiveSheet('sheet1');
+
+    // Additional nextTick to ensure the active sheet change is fully rendered
+    await nextTick();
 
     const sheet = workbook?.getSheetBySheetId('sheet1');
     if (!sheet) return;
@@ -1047,6 +1053,17 @@ async function refreshSheet1(date?: string) {
 
     // Auto-resize rows to fit text-wrapped content
     sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
+
+    // Force a final re-render by toggling to another sheet and back
+    // This ensures the UI fully updates with the new content
+    await nextTick();
+    const sheet2 = workbook?.getSheetBySheetId('sheet2');
+    if (sheet2) {
+      workbook?.setActiveSheet('sheet2');
+      await nextTick();
+      workbook?.setActiveSheet('sheet1');
+      await nextTick();
+    }
   } finally {
     hideLoadingOverlay();
   }

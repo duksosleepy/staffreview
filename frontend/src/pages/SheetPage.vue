@@ -981,35 +981,48 @@ async function refreshSheet1(date?: string) {
     console.log('[refreshSheet1] Total columns:', totalColumns);
 
     const workbook = univerAPI.getActiveWorkbook();
-    const sheet = workbook?.getSheetBySheetId('sheet1');
-    if (!sheet) {
-      console.error('[refreshSheet1] Sheet1 not found');
-      return;
+
+    // CRITICAL: Delete and recreate entire sheet to fix row mapping sync issue
+    // Using setValues() only updates cell values but doesn't change row structure
+    // This causes category headers to be at wrong row numbers when filtering changes
+    // See: issues/SHIFT_BASED_FILTERING.md - Issue 4
+    const oldSheet = workbook?.getSheetBySheetId('sheet1');
+    if (oldSheet) {
+      workbook?.deleteSheet(oldSheet);
     }
 
-    // Clear all existing data rows (keep header rows 0 and 1)
-    const maxRowsToClear = 500;
-    const rowsToClear = maxRowsToClear - DATA_START_ROW;
-    console.log('[refreshSheet1] Clearing rows from', DATA_START_ROW, 'count:', rowsToClear);
-    sheet.getRange(DATA_START_ROW, 0, rowsToClear, totalColumns)?.clearContent();
+    // Build column data dynamically based on visible columns
+    const columnData: Record<number, { w: number }> = {
+      0: { w: 400 }, // Checklist/Item name (always visible)
+    };
+    for (const col of columnMap) {
+      columnData[col.index] = { w: 100 }; // Standard width for checkbox columns
+    }
 
-    // Build 2D array for batch setValues - update ALL columns including the date picker
-    const dataRowCount = totalRows + 1; // Include all rows from 0 to totalRows
-    console.log('[refreshSheet1] dataRowCount:', dataRowCount);
-    if (dataRowCount > 0) {
-      // Update row 0 (date picker row) and row 1 (headers) and all data rows
-      for (let r = 0; r <= totalRows; r++) {
-        const rowData = cells[r];
-        if (rowData) {
-          const rowArray: (string | number)[] = [];
-          for (let c = 0; c < totalColumns; c++) {
-            rowArray.push(rowData[c]?.v ?? '');
-          }
-          // Set the entire row at once
-          sheet.getRange(r, 0, 1, totalColumns)?.setValues([rowArray]);
-        }
-      }
-      console.log('[refreshSheet1] Updated all rows');
+    const sheetConfig = {
+      id: 'sheet1',
+      name: 'Checklist',
+      columnCount: totalColumns,
+      freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 },
+      rowData: {
+        0: { h: 36, hd: 0 },
+        1: { h: 42, hd: 0 },
+      },
+      columnData,
+      cellData: cells,
+    };
+
+    workbook?.insertSheet('Checklist', {
+      index: 0, // Insert at the beginning
+      sheet: sheetConfig,
+    });
+
+    workbook?.setActiveSheet('sheet1');
+
+    const sheet = workbook?.getSheetBySheetId('sheet1');
+    if (!sheet) {
+      console.error('[refreshSheet1] Failed to create sheet1');
+      return;
     }
 
     // Hide child rows and reset expand state
@@ -1021,7 +1034,7 @@ async function refreshSheet1(date?: string) {
       expandedGroups1.set(categoryName, false);
     }
 
-    // Re-apply date picker validation
+    // Re-apply date picker validation (must be done after sheet recreation)
     const { minDate, maxDate } = calculateValidDateRange();
     const dateValidation = univerAPI
       .newDataValidation()
@@ -1043,7 +1056,7 @@ async function refreshSheet1(date?: string) {
     // Auto-resize rows to fit text-wrapped content
     sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
 
-    console.log('[refreshSheet1] Refresh complete');
+    console.log('[refreshSheet1] Refresh complete (sheet recreated)');
   } finally {
     hideLoadingOverlay();
   }

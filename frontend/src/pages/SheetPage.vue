@@ -966,9 +966,11 @@ async function refreshSheet1(date?: string) {
     return;
   }
 
+  console.log('[refreshSheet1] Called with date:', date);
   showLoadingOverlay();
   try {
     const items = await fetchAllChecklistItems(date, selectedStaffId.value);
+    console.log('[refreshSheet1] Fetched', items.length, 'items for date:', date);
     const { cells, totalRows, columnMap, totalColumns } = await buildSheet1CellData(items, date || '');
 
     console.log(
@@ -979,55 +981,36 @@ async function refreshSheet1(date?: string) {
     console.log('[refreshSheet1] Total columns:', totalColumns);
 
     const workbook = univerAPI.getActiveWorkbook();
-
-    // Instead of updating cells, recreate the entire sheet with new data
-    // This ensures proper row structure and styling
-    // Build column data dynamically based on visible columns
-    const columnData: Record<number, { w: number }> = {
-      0: { w: 400 }, // Checklist/Item name (always visible)
-    };
-    for (const col of columnMap) {
-      columnData[col.index] = { w: 100 }; // Standard width for checkbox columns
-    }
-
-    const sheetConfig = {
-      id: 'sheet1',
-      name: 'Checklist',
-      columnCount: totalColumns,
-      freeze: { xSplit: 0, ySplit: 2, startRow: 2, startColumn: 0 },
-      rowData: {
-        0: { h: 36, hd: 0 },
-        1: { h: 42, hd: 0 },
-      },
-      columnData,
-      cellData: cells,
-    };
-
-    // Delete old sheet and create new one
-    const oldSheet = workbook?.getSheetBySheetId('sheet1');
-    if (oldSheet) {
-      workbook?.deleteSheet(oldSheet);
-    }
-
-    // Important: Add a small delay after deletion to ensure Univer processes it
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    workbook?.insertSheet('Checklist', {
-      index: 0, // Insert at the beginning
-      sheet: sheetConfig,
-    });
-
-    // Ensure Vue and Univer both process the sheet insertion
-    await nextTick();
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    workbook?.setActiveSheet('sheet1');
-
-    // Final tick to ensure activation completes
-    await nextTick();
-
     const sheet = workbook?.getSheetBySheetId('sheet1');
-    if (!sheet) return;
+    if (!sheet) {
+      console.error('[refreshSheet1] Sheet1 not found');
+      return;
+    }
+
+    // Clear all existing data rows (keep header rows 0 and 1)
+    const maxRowsToClear = 500;
+    const rowsToClear = maxRowsToClear - DATA_START_ROW;
+    console.log('[refreshSheet1] Clearing rows from', DATA_START_ROW, 'count:', rowsToClear);
+    sheet.getRange(DATA_START_ROW, 0, rowsToClear, totalColumns)?.clearContent();
+
+    // Build 2D array for batch setValues - update ALL columns including the date picker
+    const dataRowCount = totalRows + 1; // Include all rows from 0 to totalRows
+    console.log('[refreshSheet1] dataRowCount:', dataRowCount);
+    if (dataRowCount > 0) {
+      // Update row 0 (date picker row) and row 1 (headers) and all data rows
+      for (let r = 0; r <= totalRows; r++) {
+        const rowData = cells[r];
+        if (rowData) {
+          const rowArray: (string | number)[] = [];
+          for (let c = 0; c < totalColumns; c++) {
+            rowArray.push(rowData[c]?.v ?? '');
+          }
+          // Set the entire row at once
+          sheet.getRange(r, 0, 1, totalColumns)?.setValues([rowArray]);
+        }
+      }
+      console.log('[refreshSheet1] Updated all rows');
+    }
 
     // Hide child rows and reset expand state
     for (const [categoryName, range] of rowMapping1.childRowRanges) {
@@ -1038,7 +1021,7 @@ async function refreshSheet1(date?: string) {
       expandedGroups1.set(categoryName, false);
     }
 
-    // Re-apply date picker validation (must be done after sheet recreation)
+    // Re-apply date picker validation
     const { minDate, maxDate } = calculateValidDateRange();
     const dateValidation = univerAPI
       .newDataValidation()
@@ -1060,8 +1043,7 @@ async function refreshSheet1(date?: string) {
     // Auto-resize rows to fit text-wrapped content
     sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
 
-    // Final delay to ensure all Univer operations complete before hiding overlay
-    await new Promise(resolve => setTimeout(resolve, 100));
+    console.log('[refreshSheet1] Refresh complete');
   } finally {
     hideLoadingOverlay();
   }

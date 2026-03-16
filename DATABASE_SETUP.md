@@ -8,3 +8,28 @@ gel configure set listen_addresses 0.0.0.0
 gel instance link --trust-tls-cert
 gel instance reset-password --password
 gel query "delete ChecklistRecord; delete DetailMonthlyRecord; delete DetailChecklistItem; delete DetailCategory; delete Area; delete EmployeeSchedule;"
+
+DELETE DetailChecklistItem;
+DELETE ChecklistRecord;
+DELETE DetailMonthlyRecord;
+DELETE EmployeeMonthlyScore;
+
+UPDATE DetailChecklistItem
+FILTER .owner = 'employee'
+SET {
+    owners := {'employee'}
+};
+
+# For items with owner = 'cht'
+UPDATE DetailChecklistItem
+FILTER .owner = 'cht'
+SET {
+    owners := {'cht'}
+};
+
+# For items with owner = 'asm'
+UPDATE DetailChecklistItem
+FILTER .owner = 'asm'
+SET {
+    owners := {'asm'}
+};

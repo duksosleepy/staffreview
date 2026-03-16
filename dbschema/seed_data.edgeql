@@ -84,7 +84,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 1,
     task_type := ShiftType.S,
-    owner := "employee"
+    owners := {'employee', 'cht'}
 };
 
 # Excel row 4 — S — both employee & cht
@@ -101,7 +101,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 2,
     task_type := ShiftType.S,
-    owner := "employee"
+    owners := {'employee', 'cht'}
 };
 
 # Excel row 5 — S — employee only (cht column has "Đặt hàng" which is a separate cht task)
@@ -118,7 +118,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 3,
     task_type := ShiftType.S,
-    owner := "employee"
+    owners := {'employee'}
 };
 
 # Excel row 6 — S — employee only
@@ -135,7 +135,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 4,
     task_type := ShiftType.S,
-    owner := "employee"
+    owners := {'employee'}
 };
 
 # Excel row 10 — C, GC — both employee & cht
@@ -152,7 +152,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 5,
     task_type := ShiftType.C,
-    owner := "employee"
+    owners := {'employee', 'cht'}
 };
 
 # No matching row in Excel — item kept as-is, no task_type/owner
@@ -199,7 +199,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 8,
     task_type := ShiftType.C,
-    owner := "employee"
+    owners := {'employee'}
 };
 
 # Excel row 17 — F — both employee & cht
@@ -216,7 +216,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 9,
     task_type := ShiftType.F,
-    owner := "employee"
+    owners := {'employee'}
 };
 
 # Excel row 18 — F — both employee & cht
@@ -233,7 +233,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 10,
     task_type := ShiftType.F,
-    owner := "employee"
+    owners := {'employee'}
 };
 
 # Excel row 15 — C, GC — cht only
@@ -250,7 +250,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 11,
     task_type := ShiftType.C,
-    owner := "cht"
+    owners := {'employee'}
 };
 
 # Excel row 7 — S — both employee & cht
@@ -267,7 +267,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 12,
     task_type := ShiftType.S,
-    owner := "employee"
+    owners := {'employee', 'cht'}
 };
 
 # Excel row 8 — S — both employee & cht
@@ -284,7 +284,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 13,
     task_type := ShiftType.S,
-    owner := "employee"
+    owners := {'employee', 'cht'}
 };
 
 # Excel row 20 — F — both employee & cht
@@ -301,7 +301,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 14,
     task_type := ShiftType.F,
-    owner := "employee"
+    owners := {'employee', 'cht'}
 };
 
 # Excel row 13 — C, GC — cht only
@@ -318,7 +318,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 15,
     task_type := ShiftType.C,
-    owner := "cht"
+    owners := {'cht'}
 };
 
 # Excel row 14 — C, GC — cht only
@@ -335,7 +335,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 16,
     task_type := ShiftType.C,
-    owner := "cht"
+    owners := {'employee'}
 };
 
 # Excel row 12 — C, GC — both employee & cht
@@ -352,7 +352,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 17,
     task_type := ShiftType.C,
-    owner := "employee"
+    owners := {'employee', 'cht'}
 };
 
 # Excel row 16 — C, GC — employee only
@@ -369,7 +369,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 18,
     task_type := ShiftType.C,
-    owner := "employee"
+    owners := {'employee'}
 };
 
 # Excel row 9 — S — employee only
@@ -386,7 +386,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 19,
     task_type := ShiftType.S,
-    owner := "employee"
+    owners := {'employee'}
 };
 
 
@@ -410,7 +410,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 1,
     task_type := ShiftType.S,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 8, 15, 22, 29]
 };
 
@@ -428,7 +428,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 2,
     task_type := ShiftType.S,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 8, 15, 22, 29]
 };
 
@@ -446,7 +446,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 3,
     task_type := ShiftType.S,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 5, 8, 12, 15, 19, 22, 26, 29]
 };
 
@@ -464,7 +464,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 4,
     task_type := ShiftType.S,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 8, 15, 22, 29]
 };
 
@@ -490,7 +490,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 1,
     task_type := ShiftType.S,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -508,7 +508,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 2,
     task_type := ShiftType.S,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -526,7 +526,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 3,
     task_type := ShiftType.S,
-    owner := "cht",
+    owners := {'cht'},
     applicable_days := [1, 15]
 };
 
@@ -544,7 +544,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 4,
     task_type := ShiftType.S,
-    owner := "cht",
+    owners := {'cht'},
     applicable_days := [1, 15]
 };
 
@@ -562,7 +562,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 5,
     task_type := ShiftType.S,
-    owner := "cht",
+    owners := {'cht'},
     applicable_days := [1, 15]
 };
 
@@ -580,7 +580,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 6,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -598,7 +598,7 @@ insert DetailChecklistItem {
     score := 1,
     order := 7,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee'},
     applicable_days := [1, 15]
 };
 
@@ -616,7 +616,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 8,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -634,7 +634,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 9,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -652,7 +652,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 10,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -670,7 +670,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 11,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -688,7 +688,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 12,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -706,7 +706,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 13,
     task_type := ShiftType.C,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -731,7 +731,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 1,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -749,7 +749,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 2,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -767,7 +767,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 3,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -792,7 +792,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 1,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -810,7 +810,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 2,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -828,7 +828,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 3,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -846,7 +846,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 4,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -864,7 +864,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 5,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -882,7 +882,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 6,
     task_type := ShiftType.F,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -900,7 +900,7 @@ insert DetailChecklistItem {
     score := 3,
     order := 7,
     task_type := ShiftType.C,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -918,7 +918,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 8,
     task_type := ShiftType.C,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 
@@ -936,7 +936,7 @@ insert DetailChecklistItem {
     score := 2,
     order := 9,
     task_type := ShiftType.C,
-    owner := "employee",
+    owners := {'employee', 'cht'},
     applicable_days := [1, 15]
 };
 

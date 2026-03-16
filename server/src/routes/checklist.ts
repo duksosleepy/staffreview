@@ -272,12 +272,13 @@ export const checklistRoutes = new Hono<Env>()
     const roleForFiltering = staff_id && viewedUserRole ? viewedUserRole : user.role;
 
     // Filter tasks based on the role being viewed (not the viewer's role)
+    // Now checking if the role is IN the owners array (multi-role support)
     if (roleForFiltering === 'employee') {
-      itemFilter += " and .owner = 'employee'";
+      itemFilter += " and 'employee' in .owners";
     } else if (roleForFiltering === 'cht') {
-      itemFilter += " and .owner = 'cht'";
+      itemFilter += " and 'cht' in .owners";
     } else if (roleForFiltering === 'asm') {
-      itemFilter += " and .owner = 'asm'";
+      itemFilter += " and 'asm' in .owners";
     }
 
     // Applicable days filter: DISABLED - show all tasks on all days
@@ -617,12 +618,13 @@ export const checklistRoutes = new Hono<Env>()
     const roleForFiltering = staff_id && viewedUserRole ? viewedUserRole : user.role;
 
     // Filter tasks based on the role being viewed (not the viewer's role)
+    // Now checking if the role is IN the owners array (multi-role support)
     if (roleForFiltering === 'employee') {
-      itemOwnerFilter += " and .owner = 'employee'";
+      itemOwnerFilter += " and 'employee' in .owners";
     } else if (roleForFiltering === 'cht') {
-      itemOwnerFilter += " and .owner = 'cht'";
+      itemOwnerFilter += " and 'cht' in .owners";
     } else if (roleForFiltering === 'asm') {
-      itemOwnerFilter += " and .owner = 'asm'";
+      itemOwnerFilter += " and 'asm' in .owners";
     }
 
     // Sheet 2 uses monthly_records backlink for monthly tracking
@@ -720,11 +722,11 @@ export const checklistRoutes = new Hono<Env>()
 
     if (user.role === 'employee') {
       // Employee: count only employee-owned items and those checked today
-      const totalQuery = `select count(DetailChecklistItem filter .is_deleted = false and .owner = 'employee')`;
+      const totalQuery = `select count(DetailChecklistItem filter .is_deleted = false and 'employee' in .owners)`;
       const checkedQuery = `
         select count(
           DetailChecklistItem filter .is_deleted = false
-            and .owner = 'employee'
+            and 'employee' in .owners
             and exists (
               select .checklist_records filter
                 .is_deleted = false
@@ -764,7 +766,7 @@ export const checklistRoutes = new Hono<Env>()
 
     // CHT sees cht-owned tasks; ASM oversees employee tasks
     const ownerForRole = user.role === 'cht' ? 'cht' : 'employee';
-    const totalItemsQuery = `select count(DetailChecklistItem filter .is_deleted = false and .owner = <str>$owner)`;
+    const totalItemsQuery = `select count(DetailChecklistItem filter .is_deleted = false and <str>$owner in .owners)`;
     const totalItems = await db.queryRequiredSingle<number>(totalItemsQuery, { owner: ownerForRole });
 
     // Get all employees from Casdoor for these stores

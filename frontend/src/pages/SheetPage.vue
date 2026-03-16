@@ -7,7 +7,7 @@ import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-v
 import type { FUniver, Univer } from '@univerjs/presets';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { useDebounceFn } from '@vueuse/core';
-import { computed, defineAsyncComponent, nextTick, onErrorCaptured, onMounted, onUnmounted, ref } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch } from 'vue';
 import ImportExcelModal from '@/components/ImportExcelModal.vue';
 import ExportReportModal from '@/components/ExportReportModal.vue';
 import UserMenu from '@/components/UserMenu.vue';
@@ -1078,6 +1078,7 @@ async function refreshSheet1(date?: string) {
 const debouncedRefreshSheet1 = useDebounceFn((date: string) => {
   refreshSheet1(date);
 }, 300);
+
 
 // ===================================================
 // SHEET 2: Detail Checklist
@@ -2266,11 +2267,16 @@ onMounted(async () => {
       return true; // Allow edit
     });
 
-    // Listen for command execution to detect checkbox changes
-    // Checkboxes don't trigger SheetEditEnded - they execute commands directly
+    // Listen for command execution to detect checkbox changes AND date picker changes
+    // Checkboxes and data validation dropdowns don't trigger SheetEditEnded - they execute commands directly
     api.onCommandExecuted(async (command) => {
+      // Log ALL commands to see what fires when date picker changes
+      if (!isInitialLoad) {
+        console.log('[onCommandExecuted] Command:', command.id, command.params);
+      }
+
       if (command.id === 'sheet.command.set-range-values') {
-        if (isInitialLoad || isLoadingSheet1.value || isRevertingValue) return;
+        if (isInitialLoad || isRevertingValue) return;
 
         const params = command.params as any;
         const range = params?.range;
@@ -2281,6 +2287,103 @@ onMounted(async () => {
         const column = range.startColumn;
         const activeSheet = workbook?.getActiveSheet();
         const sheetId = activeSheet?.getSheetId();
+
+        // Handle DATE PICKER changes in Sheet 1 (row 0, column 1)
+        if (sheetId === 'sheet1' && row === DATE_PICKER_ROW && column === DATE_PICKER_VALUE_COL) {
+          console.log('[onCommandExecuted] Date picker cell changed!');
+          console.log('[onCommandExecuted] Command params:', params);
+
+          // Skip if we're reverting the date picker (prevent infinite loop)
+          if (isRevertingDatePicker) {
+            console.log('[onCommandExecuted] Blocked: Reverting date picker');
+            return;
+          }
+
+          // Get the new value from the cell
+          const sheet = workbook.getSheetBySheetId('sheet1');
+          const cellValue = sheet?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)?.getValue();
+
+          console.log('[onCommandExecuted] Cell value:', cellValue, 'Type:', typeof cellValue);
+
+          if (cellValue !== null && cellValue !== undefined && cellValue !== '') {
+            let isoDate = '';
+
+            if (typeof cellValue === 'number') {
+              // Excel serial date number
+              console.log('[onCommandExecuted] Parsing as Excel serial number:', cellValue);
+              isoDate = serialToDate(cellValue);
+            } else if (typeof cellValue === 'string') {
+              const dateStr = cellValue.toString();
+              console.log('[onCommandExecuted] Parsing as string:', dateStr);
+
+              // Check if already in YYYY-MM-DD format
+              if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                console.log('[onCommandExecuted] Already in YYYY-MM-DD format');
+                isoDate = dateStr;
+              } else {
+                // Parse M/D/YYYY or other date string formats
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                  const month = Number.parseInt(parts[0], 10);
+                  const day = Number.parseInt(parts[1], 10);
+                  const year = Number.parseInt(parts[2], 10);
+                  if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+                    isoDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  }
+                }
+              }
+            } else {
+              console.log('[onCommandExecuted] Unknown cell value type:', typeof cellValue, cellValue);
+            }
+
+            console.log('[onCommandExecuted] Parsed date:', isoDate);
+
+            // VALIDATION: Check if selected date is within the 3-day deadline window
+            if (isoDate) {
+              const selectedDateObj = new Date(isoDate);
+              selectedDateObj.setHours(0, 0, 0, 0);
+              const { minDate, maxDate } = calculateValidDateRange();
+
+              // Check if date is outside valid range
+              if (selectedDateObj < minDate || selectedDateObj > maxDate) {
+                // REJECT: Revert to previous valid date
+                const previousDate = selectedDate.value || new Date().toISOString().split('T')[0];
+                const [year, month, day] = previousDate.split('-');
+                const revertFormatted = `${Number.parseInt(month)}/${Number.parseInt(day)}/${year}`;
+
+                isRevertingDatePicker = true;
+                sheet?.getRange(DATE_PICKER_ROW, DATE_PICKER_VALUE_COL, 1, 1)?.setValue(revertFormatted);
+
+                setTimeout(() => {
+                  isRevertingDatePicker = false;
+                }, 100);
+
+                toaster.create({
+                  type: 'error',
+                  title: 'Ngày không hợp lệ',
+                  description: `Chỉ có thể chọn ngày từ ${minDate.toLocaleDateString('vi-VN')} đến ${maxDate.toLocaleDateString('vi-VN')} (3 ngày gần nhất)`,
+                  duration: 5000,
+                });
+
+                return;
+              }
+            }
+
+            // Only refresh if the date actually changed
+            if (isoDate && isoDate !== selectedDate.value) {
+              console.log('[onCommandExecuted] Date changed from', selectedDate.value, 'to', isoDate);
+              selectedDate.value = isoDate;
+              debouncedRefreshSheet1(isoDate);
+            } else {
+              console.log('[onCommandExecuted] Date unchanged, skipping refresh:', isoDate);
+            }
+          }
+
+          return; // Don't process as a checkbox change
+        }
+
+        // Skip checkbox processing if we're loading Sheet 1
+        if (isLoadingSheet1.value) return;
 
         // Handle Sheet1 checkbox changes (columns B=1, C=2, D=3)
         if (sheetId === 'sheet1' && row >= DATA_START_ROW && column >= 1 && column <= 3) {
@@ -2867,21 +2970,34 @@ onMounted(async () => {
     // Listen for cell value changes to detect date picker changes
     // SheetValueChanged fires for data validation (date picker) changes
     api.addEvent(api.Event.SheetValueChanged, (params) => {
-      if (isInitialLoad || isLoadingSheet1.value) {
+      console.log('[SheetValueChanged] Event fired, isInitialLoad:', isInitialLoad, 'isRevertingDatePicker:', isRevertingDatePicker);
+
+      if (isInitialLoad) {
+        console.log('[SheetValueChanged] Blocked: Initial load');
         return;
       }
 
       // Skip if we're reverting the date picker (prevent infinite loop)
       if (isRevertingDatePicker) {
+        console.log('[SheetValueChanged] Blocked: Reverting date picker');
         return;
       }
 
       const { effectedRanges } = params;
+      console.log('[SheetValueChanged] Affected ranges:', effectedRanges.length);
 
       // Check if the date picker cell (row 0, col 1) is in the affected ranges
       let datePickerAffected = false;
       for (const range of effectedRanges) {
         const rangeData = range.getRange();
+        console.log('[SheetValueChanged] Range:', {
+          sheetId: range.getSheetId(),
+          startRow: rangeData.startRow,
+          endRow: rangeData.endRow,
+          startColumn: rangeData.startColumn,
+          endColumn: rangeData.endColumn,
+        });
+
         if (
           rangeData.startRow <= DATE_PICKER_ROW &&
           rangeData.endRow >= DATE_PICKER_ROW &&
@@ -2891,12 +3007,16 @@ onMounted(async () => {
           // Check if this is sheet1
           if (range.getSheetId() === 'sheet1') {
             datePickerAffected = true;
+            console.log('[SheetValueChanged] Date picker cell affected!');
             break;
           }
         }
       }
 
-      if (!datePickerAffected) return;
+      if (!datePickerAffected) {
+        console.log('[SheetValueChanged] Date picker not affected, ignoring');
+        return;
+      }
 
       // Get the new value from the cell
       const sheet = workbook.getSheetBySheetId('sheet1');
@@ -2961,8 +3081,11 @@ onMounted(async () => {
 
         // Only refresh if the date actually changed (with debounce)
         if (isoDate && isoDate !== selectedDate.value) {
+          console.log('[SheetValueChanged] Date changed from', selectedDate.value, 'to', isoDate);
           selectedDate.value = isoDate;
           debouncedRefreshSheet1(isoDate);
+        } else {
+          console.log('[SheetValueChanged] Date unchanged, skipping refresh:', isoDate);
         }
       }
     });

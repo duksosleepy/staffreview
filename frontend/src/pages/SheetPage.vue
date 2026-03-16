@@ -1018,7 +1018,13 @@ async function refreshSheet1(date?: string) {
       sheet: sheetConfig,
     });
 
+    // Wait for Univer to process sheet insertion before setting active
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     workbook?.setActiveSheet('sheet1');
+
+    // Wait for sheet activation to complete
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const sheet = workbook?.getSheetBySheetId('sheet1');
     if (!sheet) {
@@ -1058,20 +1064,14 @@ async function refreshSheet1(date?: string) {
     sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
 
     console.log('[refreshSheet1] Refresh complete (sheet recreated)');
+
+    // CRITICAL: Final delay to ensure Univer's event system is fully ready
+    // This allows the SheetValueChanged listener to work properly after recreation
+    await new Promise(resolve => setTimeout(resolve, 150));
   } finally {
     isLoadingSheet1.value = false;
     hideLoadingOverlay();
   }
-
-  // CRITICAL FIX: Ensure sheet1 stays active and events work after recreation
-  // Use setTimeout to let Univer's event system fully process the new sheet
-  // This ensures the date picker's SheetValueChanged listener fires after recreation
-  setTimeout(() => {
-    const wb = univerAPI?.getActiveWorkbook();
-    if (wb) {
-      wb.setActiveSheet('sheet1');
-    }
-  }, 100);
 }
 
 // Debounced version of refreshSheet1 using VueUse

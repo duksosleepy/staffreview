@@ -988,37 +988,29 @@ async function refreshSheet1(date?: string) {
       return;
     }
 
-    // OPTIMIZED: Clear existing data rows in ONE batch operation (from DATEPICKER.md)
+    // Clear all existing data rows (keep header rows 0 and 1)
     const maxRowsToClear = 500;
     const rowsToClear = maxRowsToClear - DATA_START_ROW;
     console.log('[refreshSheet1] Clearing rows from', DATA_START_ROW, 'count:', rowsToClear);
     sheet.getRange(DATA_START_ROW, 0, rowsToClear, totalColumns)?.clearContent();
 
-    // OPTIMIZED: Build 2D array for batch setValues (from DATEPICKER.md)
-    const dataRowCount = totalRows - DATA_START_ROW + 1;
+    // Build 2D array for batch setValues - update ALL columns including the date picker
+    const dataRowCount = totalRows + 1; // Include all rows from 0 to totalRows
     console.log('[refreshSheet1] dataRowCount:', dataRowCount);
     if (dataRowCount > 0) {
-      const dataArray: (string | number)[][] = [];
-      for (let r = DATA_START_ROW; r <= totalRows; r++) {
+      // Update row 0 (date picker row) and row 1 (headers) and all data rows
+      for (let r = 0; r <= totalRows; r++) {
         const rowData = cells[r];
         if (rowData) {
           const rowArray: (string | number)[] = [];
           for (let c = 0; c < totalColumns; c++) {
             rowArray.push(rowData[c]?.v ?? '');
           }
-          dataArray.push(rowArray);
-        } else {
-          const emptyRow: (string | number)[] = [];
-          for (let c = 0; c < totalColumns; c++) {
-            emptyRow.push('');
-          }
-          dataArray.push(emptyRow);
+          // Set the entire row at once
+          sheet.getRange(r, 0, 1, totalColumns)?.setValues([rowArray]);
         }
       }
-      console.log('[refreshSheet1] Setting', dataArray.length, 'rows of data');
-      // Set all data in ONE batch operation
-      sheet.getRange(DATA_START_ROW, 0, dataArray.length, totalColumns)?.setValues(dataArray);
-      console.log('[refreshSheet1] setValues complete');
+      console.log('[refreshSheet1] Updated all rows');
     }
 
     // Hide child rows and reset expand state

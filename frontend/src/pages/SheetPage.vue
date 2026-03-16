@@ -968,6 +968,7 @@ async function refreshSheet1(date?: string) {
 
   console.log('[refreshSheet1] Called with date:', date);
   showLoadingOverlay();
+  isLoadingSheet1.value = true;
   try {
     const items = await fetchAllChecklistItems(date, selectedStaffId.value);
     console.log('[refreshSheet1] Fetched', items.length, 'items for date:', date);
@@ -1068,6 +1069,7 @@ async function refreshSheet1(date?: string) {
     // This ensures event listeners are ready to fire after sheet recreation
     await nextTick();
   } finally {
+    isLoadingSheet1.value = false;
     hideLoadingOverlay();
   }
 }

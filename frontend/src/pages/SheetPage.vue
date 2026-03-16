@@ -1017,7 +1017,13 @@ async function refreshSheet1(date?: string) {
       sheet: sheetConfig,
     });
 
+    // Wait for Univer to process the sheet insertion
+    await nextTick();
+
     workbook?.setActiveSheet('sheet1');
+
+    // Wait for sheet activation to complete
+    await nextTick();
 
     const sheet = workbook?.getSheetBySheetId('sheet1');
     if (!sheet) {
@@ -1057,6 +1063,10 @@ async function refreshSheet1(date?: string) {
     sheet.autoResizeRows(DATA_START_ROW, totalRows - DATA_START_ROW + 1);
 
     console.log('[refreshSheet1] Refresh complete (sheet recreated)');
+
+    // Final delay to ensure Univer fully processes all operations
+    // This ensures event listeners are ready to fire after sheet recreation
+    await nextTick();
   } finally {
     hideLoadingOverlay();
   }

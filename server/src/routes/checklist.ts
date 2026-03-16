@@ -437,7 +437,7 @@ export const checklistRoutes = new Hono<Env>()
             order,
             notes,
             baseline,
-            owner,
+            owners,
             applicable_days,
             category: { id, name, category_type, classification_criteria },
             record := assert_single((
@@ -478,7 +478,7 @@ export const checklistRoutes = new Hono<Env>()
             order,
             notes,
             baseline,
-            owner,
+            owners,
             applicable_days,
             category: { id, name, category_type, classification_criteria },
             record := assert_single((
@@ -643,7 +643,7 @@ export const checklistRoutes = new Hono<Env>()
         order,
         notes,
         baseline,
-        owner,
+        owners,
         applicable_days,
         category: { id, name, category_type, classification_criteria },
         record := assert_single((
